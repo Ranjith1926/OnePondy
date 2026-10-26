@@ -6,7 +6,7 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": false,
       "bundleIdentifier": "com.onepondy.customer"
@@ -14,7 +14,7 @@
     "android": {
       "package": "com.onepondy.customer",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#0E6F6A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -23,6 +23,49 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0E6F6A",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 140,
+          "dark": {
+            "backgroundColor": "#0E1413",
+            "image": "./assets/splash-icon.png"
+          }
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "android": {
+            "fonts": [
+              {
+                "fontFamily": "PlusJakartaSans",
+                "fontDefinitions": [
+                  { "path": "./assets/fonts/PlusJakartaSans-Regular.ttf", "weight": 400 },
+                  { "path": "./assets/fonts/PlusJakartaSans-Medium.ttf", "weight": 500 },
+                  { "path": "./assets/fonts/PlusJakartaSans-SemiBold.ttf", "weight": 600 },
+                  { "path": "./assets/fonts/PlusJakartaSans-Bold.ttf", "weight": 700 },
+                  { "path": "./assets/fonts/PlusJakartaSans-ExtraBold.ttf", "weight": 800 }
+                ]
+              }
+            ]
+          },
+          "ios": {
+            "fonts": [
+              "./assets/fonts/PlusJakartaSans-Regular.ttf",
+              "./assets/fonts/PlusJakartaSans-Medium.ttf",
+              "./assets/fonts/PlusJakartaSans-SemiBold.ttf",
+              "./assets/fonts/PlusJakartaSans-Bold.ttf",
+              "./assets/fonts/PlusJakartaSans-ExtraBold.ttf"
+            ]
+          }
+        }
+      ],
+      "@react-native-vector-icons/lucide"
+    ]
   }
 }

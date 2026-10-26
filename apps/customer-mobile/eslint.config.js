@@ -2,6 +2,26 @@
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
 const eslintPluginPrettierRecommended = require('eslint-plugin-prettier/recommended');
+const i18next = require('eslint-plugin-i18next');
+
+// Props that carry user-facing text; literal strings in them must come from the locale files.
+const userFacingProps = [
+  'accessibilityLabel',
+  'accessibilityHint',
+  'placeholder',
+  'title',
+  'label',
+  'message',
+  'caption',
+  'subtitle',
+  'areaName',
+  'actionLabel',
+  'retryLabel',
+  'closeLabel',
+  'clearLabel',
+  'dismissLabel',
+  'badgeLabel',
+];
 
 module.exports = defineConfig([
   expoConfig,
@@ -14,6 +34,25 @@ module.exports = defineConfig([
     rules: {
       // Spec §15: do not use `any` to bypass type safety.
       '@typescript-eslint/no-explicit-any': 'error',
+    },
+  },
+  {
+    // Phase 1 acceptance: no user-facing string outside the locale files (spec §10).
+    // The component gallery is a development-only QA screen and is exempt.
+    files: ['src/**/*.tsx'],
+    ignores: ['**/*.test.tsx', 'src/test-utils/**', 'src/features/dev/**'],
+    plugins: { i18next },
+    rules: {
+      'i18next/no-literal-string': [
+        'error',
+        {
+          mode: 'jsx-only',
+          'jsx-attributes': { include: [`^(${userFacingProps.join('|')})$`] },
+          // Allow strings with no letters, such as separators.
+          words: { exclude: ['^[^A-Za-z\\u00C0-\\u024F\\u0B80-\\u0BFF]*$'] },
+          message: 'Move user-facing text to src/i18n/locales/en.json and use t().',
+        },
+      ],
     },
   },
   {
