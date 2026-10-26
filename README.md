@@ -11,15 +11,17 @@ Windows without Docker; production runs on IIS (spec §13).
 ```text
 OnePondy/
 ├── apps/
-│   └── customer-mobile/      # React Native + Expo customer app
+│   ├── customer-mobile/      # React Native + Expo customer app
+│   └── web-console/          # Next.js staff console: content, configuration, staff, audit log
 ├── backend/                  # ASP.NET Core solution: Api, Domain, Application, Infrastructure, Worker
 ├── database/scripts/         # DBA-run SQL scripts (database creation, PostGIS)
+├── docs/                     # Policies code comments point to (retention, ...)
 ├── .config/dotnet-tools.json # pinned dotnet-ef
 ├── .github/workflows/ci.yml  # CI: mobile checks + backend build and tests
 └── package.json              # npm workspaces
 ```
 
-`apps/web-console` (Phase 3) and `apps/driver-mobile` (Phase 8) are added when their phases start.
+`apps/driver-mobile` (Phase 8) is added when that phase starts.
 
 ## Prerequisites
 
@@ -132,17 +134,68 @@ npm start         # later runs: start Metro and open the installed app
 
 The Android emulator reaches your PC at `10.0.2.2`; a physical phone uses your PC's LAN IP.
 
+### Web console (Phase 3)
+
+Staff sign in with a one-time code by email, the same way customers sign in by email (spec D1,
+D20). Give yourself access before anything else exists to grant it: add your email to
+`Console:BootstrapAdministrators` and it becomes an administrator the first time it requests a
+code, but only while no administrator exists yet.
+
+```powershell
+cd backend
+dotnet user-secrets set "Console:BootstrapAdministrators:0" "you@example.com" --project src/OnePondy.Api
+```
+
+Then run the console itself:
+
+```powershell
+cd apps/web-console
+copy .env.example .env.local
+npm run dev
+```
+
+It listens on `http://localhost:3100` and calls the API at `ONEPONDY_API_URL` (`.env.local`,
+default `http://localhost:5080`). Sign-in codes appear wherever the API logs them (console window
+in Development, Event Viewer on IIS; see Sign-in secrets above). Once you hold a staff role, add
+more staff from Staff → Add someone; a new person signs in the same way, with their own code.
+
+Uploaded place photos are written to `Media:RootPath` (defaults to `App_Data/media` under the
+API's folder) and served back through `/media/...` on the API, which the console proxies at its
+own `/media/...` path so the browser never talks to the API directly (spec D8: a local folder for
+now, behind `IMediaStorage`, so S3-compatible storage with a CDN can replace it later without
+touching the console or app).
+
+#### Hosting the console on IIS
+
+Run the console as a Node.js Windows Service behind IIS URL Rewrite and Application Request
+Routing (spec §13); IIS does not run Node.js code directly.
+
+1. Build it: `npm run build --workspace apps/web-console`. With `output: 'standalone'` this
+   produces `apps/web-console/.next/standalone`, a self-contained server that does not need
+   `node_modules` installed on the target machine.
+2. Copy `public` and `.next/static` into the standalone folder (Next.js does not do this for you):
+   `.next/standalone/public` and `.next/standalone/.next/static`.
+3. Set `ONEPONDY_API_URL` and `CONSOLE_SECURE_COOKIES=true` (the default once `NODE_ENV=production`
+   is set) as environment variables for the service, not in a committed file.
+4. Register `node .next/standalone/server.js` as a Windows Service (for example with NSSM) listening
+   on a local port, and point an IIS site with URL Rewrite/ARR at that port. Enable HTTPS on the IIS
+   side; the console's own cookies are marked `Secure` and will not be set over plain HTTP in
+   production.
+
 ## Checks
 
 ```powershell
-npm run format:check    # Prettier
-npm run lint            # ESLint, including spec boundary rules
-npm run typecheck       # TypeScript strict
-npm test                # Jest + React Native Testing Library
+npm run format:check    # Prettier, repository-wide
+npm run lint            # ESLint for every workspace (customer-mobile, web-console)
+npm run typecheck       # TypeScript strict for every workspace
+npm test                # Jest (customer-mobile) and Vitest (web-console) for every workspace
 
 dotnet build backend/OnePondy.sln
 dotnet test backend/OnePondy.sln
 ```
+
+The root `lint`, `typecheck` and `test` scripts run across every `apps/*` workspace
+(`--workspaces --if-present`); use `--workspace apps/web-console` to target one.
 
 Database integration tests are skipped unless `ONEPONDY_TEST_DATABASE` holds a connection string:
 
@@ -202,6 +255,7 @@ the app, so it must never be secret.
 | 0 — Repository, tooling and CI | Done — see verification below |
 | 1 — Design system and app shell | Done — see verification below |
 | 2 — App state, authentication and accounts | Done — see verification below |
+| 3 — Web console and content management | Done — see verification below |
 
 ### Phase 0 verification (2026-10-26)
 
@@ -273,3 +327,38 @@ Known limitations:
   observability work in a later phase.
 - The mobile app sends only plain HTTP in the current test setup; production needs HTTPS.
 - English only until reviewed Tamil and French translations exist (D10).
+
+### Phase 3 verification (2026-10-26)
+
+| Acceptance criterion (spec §10, Phase 3) | Result |
+|---|---|
+| Public APIs return only verified, published places | `/api/v1/places` and `/api/v1/places/{idOrSlug}` query only `is_published AND verification_status = 'verified'`. Any content edit, even to a published place, returns it to draft and takes it off these endpoints until it is verified again. Tested in the API and driven through the console end to end. |
+| Every verification records the user, time and source | `Place.Verify`/`ConfirmStillAccurate` require a non-empty source and set the reviewer, timestamp and source together (a database check constraint also enforces this). Shown on the place page and in the audit log. |
+| Uploaded images are validated, resized and shown with attribution where required | Images are decoded, oriented from EXIF (metadata, including GPS, is then dropped by re-encoding), and written as three WebP sizes (1600/800/400 px long edge); JPEG/PNG/WebP only, minimum size enforced, non-image files rejected. A licence that is not "owned" or "public domain" requires a credit before the upload is accepted, both in the API and the console form. |
+| Console actions are authorized server-side by role; a content editor cannot change configuration | Three ASP.NET Core authorization policies (`content:read`, `content:write`, `administration`) gate every `/api/v1/admin/*` route; the console's own navigation and buttons follow the same role but are not the enforcement. Verified with a live support-agent and content-editor session: write actions return 403, and configuration and staff pages redirect with "denied". |
+| Changing a module flag changes what the customer app shows without a new app release | `/api/v1/config` is public and cached for 60 seconds; the app re-reads it on launch and when it returns to the foreground. A module is shown as available only when both the server flag says so and this app version implements it, so a flag can never promise more than the running app can do. The app also blocks use below `minSupportedAppVersion`, with a link to the Play Store listing. |
+
+Driven live end to end (PowerShell script, no JavaScript, against a running API and console):
+staff sign-in by email code; create, edit (with a field-level validation error), submit, verify,
+publish and re-verify a place; upload a photo and confirm it is served and credited publicly;
+hide and restore a module flag and see `/api/v1/config` change; add a support-agent and confirm
+their console is read-only with no Staff or Audit link; sign out. All 29 steps passed.
+
+Checks: Prettier, ESLint and `tsc` clean across both app workspaces. Mobile: Jest 173/173 across
+19 suites, including new tests for module flags, the minimum-version gate and safe defaults when
+the server cannot be reached. Web console: Vitest 15/15 (pure helpers and the place form). Backend:
+9 architecture, 118 unit and 18 integration tests, the last of these against a real, freshly
+created PostgreSQL 18 database (they skip without `ONEPONDY_TEST_DATABASE`), including that the
+`audit_log` table rejects `UPDATE`, `DELETE` and `TRUNCATE` at the database level.
+
+Known limitations:
+
+- D11 (content sourcing) is still open; the schema and console support any source, so this does
+  not block the phase.
+- No map is shown yet for picking coordinates; latitude and longitude are typed by hand (Phase 4
+  brings the map view and PostGIS-backed nearby search).
+- Media storage is a local folder on the API server (D8); moving to S3-compatible storage needs
+  only a new `IMediaStorage` implementation.
+- The console's HTTPS and cookie-security settings were exercised in Development only; `/health`
+  equivalents and a real IIS hosting run for the console itself are still to be done, same caveat
+  as Phase 2's API hosting.

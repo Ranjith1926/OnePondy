@@ -1,8 +1,8 @@
-# Data retention: sign-in and account data
+# Data retention: sign-in, account and content data
 
-Status: Phase 2 draft. It covers only the data that sign-in and accounts create. Booking, payment
-and review data are added when those phases arrive. Retention periods for financial records need
-the compliance review in spec §21 and are not set here.
+Status: Phase 2 and 3 draft. It covers the data that sign-in, accounts and content management
+create. Booking, payment and review data are added when those phases arrive. Retention periods for
+financial records need the compliance review in spec §21 and are not set here.
 
 ## Sign-in data
 
@@ -32,6 +32,15 @@ Deleting an account (in the app, or on the public page at `/account/delete/`) do
 5. Sends a confirmation to the contact that was used.
 
 The public page never reveals whether an account exists for a phone number or email.
+
+## Content and configuration (Phase 3)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| Places, translations, entry fees | Indefinitely | Never hard-deleted; unpublish instead (spec §9). A place taken off the app for good is unpublished and left as a draft, not removed. |
+| Place photos | Indefinitely, until a staff member removes them | Stored on local disk for now (spec D8); the file and its three sizes are deleted together with the photo's record. |
+| Audit log | Indefinitely | Append-only: the database rejects any `UPDATE`, `DELETE` or `TRUNCATE` on `audit_log` (enforced by a trigger, not just application code). Entries record the staff member's user id, which is kept even if that person's access is later removed, so the trail of who changed what stays intact. |
+| Staff accounts | While they have a role | Removing someone's access revokes their sessions at once (`SessionRevocationReason.RoleChanged`) but does not delete their underlying account; they keep a customer account like anyone else. |
 
 ## Logs
 
