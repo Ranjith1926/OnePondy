@@ -13,3 +13,7 @@ web-build/
 apps/*/android/
 apps/*/ios/
 coverage/
+
+# Next.js build output (apps/web-console)
+apps/*/.next/
+apps/*/out/

@@ -1,0 +1,11 @@
+# Next.js build output
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# Written by `next dev`/`next build` for AI coding agents; not project-specific, regenerated as needed
+AGENTS.md
+
+# Test coverage
+/coverage/

@@ -1,0 +1,35 @@
+@import 'tailwindcss';
+
+/* Brand tokens shared with the customer app's design system (apps/customer-mobile/src/design-system). */
+@theme {
+  --color-brand: #0e6f6a;
+  --color-brand-dark: #0a5853;
+  --color-brand-soft: #d5eeeb;
+  --color-ink: #1c2421;
+  --color-muted: #55615c;
+  --color-line: #e6e0d6;
+  --color-line-strong: #8c8578;
+  --color-canvas: #faf7f2;
+  --color-surface: #ffffff;
+  --color-danger: #b3261e;
+  --color-danger-soft: #fbe1de;
+  --color-ok: #1d7a47;
+  --color-ok-soft: #ddf3e5;
+  --color-warn: #9a5b00;
+  --color-warn-soft: #ffefd2;
+  --color-info: #1f5fad;
+  --color-info-soft: #ddeafb;
+  --font-sans:
+    system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', 'Noto Sans Tamil', sans-serif;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+}
+
+/* A visible focus ring for keyboard users everywhere. */
+:focus-visible {
+  outline: 3px solid var(--color-brand);
+  outline-offset: 2px;
+}
