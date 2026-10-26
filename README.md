@@ -79,6 +79,46 @@ The API listens on `http://localhost:5080`:
 For a physical phone, run with `--urls http://0.0.0.0:5080` and allow port 5080 through Windows
 Firewall.
 
+#### Sign-in secrets (Phase 2)
+
+The API refuses to start without two signing keys. Generate each once and keep them in user
+secrets, never in the repository:
+
+```powershell
+cd backend
+$key = { [Convert]::ToBase64String([System.Security.Cryptography.RandomNumberGenerator]::GetBytes(32)) }
+dotnet user-secrets set "Auth:Jwt:SigningKey" (& $key) --project src/OnePondy.Api
+dotnet user-secrets set "Auth:HashingKey" (& $key) --project src/OnePondy.Api
+```
+
+Create the tables with `dotnet tool run dotnet-ef database update --project src/OnePondy.Infrastructure --startup-project src/OnePondy.Api`.
+
+Until an SMS and email provider is chosen (spec D19), the API cannot deliver one-time codes. In
+Development the `appsettings.Development.json` setting `Auth:Otp:Delivery = Log` prints each code
+to the API console as a `DEVELOPMENT ONLY` warning. The API refuses that setting in any other
+environment except `Testing`. The Worker (`backend/src/OnePondy.Worker`) needs the same
+connection string and `Auth:HashingKey` in its own user secrets; it purges expired sign-in data
+every hour (`docs/data-retention.md`).
+
+#### Hosting the API on IIS
+
+1. Install the ASP.NET Core 10 Hosting Bundle and create a site pointing at the publish folder.
+2. Publish: `dotnet publish backend/src/OnePondy.Api -c Release -o "<folder>"`. For a shared test
+   server add `-p:EnvironmentName=Testing` so one-time codes are written to the log. IIS shows them in
+   Event Viewer > Windows Logs > Application, source ".NET Runtime" (the stdout file stays empty
+   until the process exits).
+3. Put `appsettings.Production.json` (or `appsettings.Testing.json` for a test server) in the
+   publish folder with `ConnectionStrings:OnePondy`, `Auth:Jwt:SigningKey` and `Auth:HashingKey`.
+   Keep it out of source control and restrict who can read the folder.
+4. Create the database with `create-dev-database.sql`, then apply the migrations as the app role
+   (`dotnet ef migrations script --idempotent --output migrate.sql`, then `psql -f migrate.sql`).
+   EF writes a UTF-8 byte-order mark that psql rejects (`syntax error at or near "ï»¿CREATE"`);
+   remove the first three bytes before running it.
+5. Check `/health/ready`. It returns `Healthy` only when the database is reachable.
+
+Point the app at the site with `EXPO_PUBLIC_API_BASE_URL` in `apps/customer-mobile/.env`. Plain
+HTTP is fine for a development network only; real users need HTTPS.
+
 ### Customer app
 
 Start an emulator from Android Studio (Device Manager), then:
@@ -161,7 +201,7 @@ the app, so it must never be secret.
 |---|---|
 | 0 — Repository, tooling and CI | Done — see verification below |
 | 1 — Design system and app shell | Done — see verification below |
-| 2 — App state, authentication and accounts | Next (needs decisions D1 and D2) |
+| 2 — App state, authentication and accounts | Done — see verification below |
 
 ### Phase 0 verification (2026-10-26)
 
@@ -173,14 +213,14 @@ Environment: Windows 11, Node 22.23, npm 11.12, .NET SDK 10.0.403, JDK 17, Expo 
 | A fresh clone can be configured from documented steps | Setup steps above. `npm ci` from a clean state succeeded. |
 | No secrets are committed | Secrets are only in user secrets and git-ignored `.env`; a scan of tracked files found none. |
 | Mobile app, API and database connection verified locally | Development build: `BUILD SUCCESSFUL`, installed and rendered on the emulator. API on `http://localhost:5080`: `/health/live` and `/health/ready` both `Healthy` against a PostgreSQL 18 database created with `create-dev-database.sql`. Worker starts as a console app. |
-| Lint, type-check and baseline tests pass locally and in CI | Prettier, ESLint, `tsc` pass. Jest: 1/1. Backend Release build: 0 warnings (warnings are errors). xUnit: 12 passed, plus 1 database test that passes when `ONEPONDY_TEST_DATABASE` is set. CI workflow added; it runs on the first push to GitHub. |
+| Lint, type-check and baseline tests pass locally and in CI | Prettier, ESLint, `tsc` pass. Jest: 1/1. Backend Release build: 0 warnings (warnings are errors). xUnit: 12 passed, plus 1 database test that passes when `ONEPONDY_TEST_DATABASE` is set. CI workflow added; it runs on every push and pull request. |
 
 Known limitations:
 
 - The database checks ran against a temporary PostgreSQL 18 cluster. Your own `onepondy_dev`
   database still needs the setup step above, because it needs your PostgreSQL admin password.
 - PostGIS is not installed yet; it is needed from Phase 2–4 (see Database).
-- The CI workflow has not run yet, because the repository has no GitHub remote.
+- CI has since run on GitHub: both jobs (mobile on Ubuntu, backend on Windows) passed.
 - The app identifier `com.onepondy.customer` is provisional (spec D17).
 
 ### Phase 1 verification (2026-10-26)
@@ -203,3 +243,33 @@ Known limitations:
 - The selected area is not persisted between app launches; persistent location arrives with
   location permissions in Phase 4.
 - iOS has not been built or run (D4).
+
+### Phase 2 verification (2026-10-26)
+
+| Acceptance criterion (spec §10, Phase 2) | Result |
+|---|---|
+| Reducers are pure and tested; no API or storage side effects inside reducers | Auth reducer tests cover restore, sign-in, name change and sign-out, including no-op cases. ESLint forbids API, storage and navigation imports under `src/state`. |
+| Guests can use public screens; protected screens and actions require a valid session | App-flow tests: guests see sign-in prompts on Saved, Bookings and Profile and make no API calls; Edit profile and Delete account exist only while signed in (conditional navigator groups). |
+| Session clear removes protected user data and the query cache, and handles navigation safely | Sign-out, deletion and server-ended sessions clear SecureStore, the TanStack Query cache and app state; the account screens close because their navigator group unmounts. All three paths are tested. |
+| OTP and login endpoints reject requests above the configured limits | Per-destination (3 per 10 minutes), resend interval (30 s), daily send cap, 5 attempts per code, plus a per-IP limiter on the auth endpoints. Unit and integration tests cover each. |
+| Account deletion revokes sessions and anonymises personal data per the retention policy | Tested in the API (in-app and public routes) against PostgreSQL; policy in `docs/data-retention.md`. |
+| Server state is not duplicated unnecessarily in the root reducer | Only the session summary (id, name, roles) is in app state; the profile is a TanStack Query result. Tokens live only in SecureStore. |
+
+On the emulator against the API hosted on IIS: a new user signed in with an SMS code read from the
+server log, added a name, and Profile showed the name and number with the Account section. The
+database showed one account and one active session for the emulator. On the same API, scripted
+checks confirmed that a missing token gets 401, that refresh rotates the token, and that reusing a
+rotated token revokes the session.
+
+Checks: Prettier, ESLint (0 problems), `tsc` (0 errors), Jest 160/160 across 17 suites. Backend:
+54 unit, 9 architecture and 12 integration tests; the integration tests that need PostgreSQL ran
+against a real PostgreSQL 18 database (they skip without `ONEPONDY_TEST_DATABASE`).
+
+Known limitations:
+
+- No SMS or email provider is chosen (D19), so production cannot deliver codes yet. Test servers
+  write codes to the log.
+- Counters exist (`OnePondy.Auth` meter) but no alerting is wired up for OTP abuse; that needs the
+  observability work in a later phase.
+- The mobile app sends only plain HTTP in the current test setup; production needs HTTPS.
+- English only until reviewed Tamil and French translations exist (D10).

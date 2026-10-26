@@ -2385,8 +2385,8 @@ Every decision has an owner and a phase by which it must be made. Implementation
 
 | ID | Decision | Options | Recommendation | Needed by | Status |
 |---|---|---|---|---|---|
-| D1 | Login method | Mobile number + OTP; email + password; social sign-in | Mobile OTP first, email as a secondary option | Phase 2 | Open |
-| D2 | Token strategy | ASP.NET Core Identity bearer tokens; JWT access tokens with rotating refresh tokens; OpenIddict | Short-lived JWT access tokens with rotating, server-tracked refresh tokens | Phase 2 | Open |
+| D1 | Login method | Mobile number + OTP; email + password; social sign-in | Mobile OTP first, email as a secondary option | Phase 2 | Decided 2026-10-26: passwordless one-time codes by SMS (Indian +91 numbers at first, to limit SMS cost and fraud) or by email; no passwords are stored |
+| D2 | Token strategy | ASP.NET Core Identity bearer tokens; JWT access tokens with rotating refresh tokens; OpenIddict | Short-lived JWT access tokens with rotating, server-tracked refresh tokens | Phase 2 | Decided 2026-10-26: 15-minute JWT access tokens; 30-day refresh tokens stored hashed and rotated on every use; reuse of a rotated token revokes the session |
 | D3 | Payment gateway and methods | Indian payment aggregators (for example Razorpay, Cashfree, PayU); UPI, cards, net banking, wallets, cash | A gateway with UPI, cards and signed webhooks; decide cash on delivery per restaurant | Phase 7 | Open |
 | D4 | iOS in Release 1 | Android only; Android and iOS | Android first; add iOS once EAS Build and an Apple Developer account are set up | Phase 0 | Open |
 | D5 | AI provider | Hosted LLM APIs | A provider with structured output, called from the server only | Phase 5 | Open |
@@ -2403,3 +2403,4 @@ Every decision has an owner and a phase by which it must be made. Implementation
 | D16 | Document owner and approvers | — | — | Now | Open |
 | D17 | App identifiers (Android package, iOS bundle ID) | `com.onepondy.customer` (provisional, used since Phase 0); a domain-based ID such as `in.<your-domain>.onepondy` | Use a reverse domain you own; cannot change after the first store release | Before the first store upload | Open |
 | D18 | Brand identity: logo, app icon, splash artwork, typeface | Placeholders since Phase 1: a sun-over-waves mark on brand teal, and Plus Jakarta Sans (SIL Open Font License); final brand design | Commission final artwork; keep the token structure so it swaps in one place | Before Release 1 | Open |
+| D19 | SMS and email provider for one-time codes | An India SMS aggregator with DLT-registered templates (for example MSG91, Gupshup, Twilio) plus a transactional email service (for example Amazon SES, SendGrid, Postmark) | One SMS provider that supports DLT templates and one email provider, behind the existing `IOtpSender` interface | Before real users sign in (Phase 2 release) | Open: until chosen, production reports "codes unavailable"; development and test servers write codes to the log |
