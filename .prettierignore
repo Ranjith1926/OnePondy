@@ -1,0 +1,15 @@
+# Prettier formats the JavaScript/TypeScript workspaces and repository config only.
+node_modules/
+package-lock.json
+backend/
+database/
+.config/
+*.md
+
+# Expo and native build output
+.expo/
+dist/
+web-build/
+apps/*/android/
+apps/*/ios/
+coverage/

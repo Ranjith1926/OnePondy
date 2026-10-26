@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Environment files and secrets (keep the documented examples)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vs/
+.vscode/*
+!.vscode/extensions.json
+
+# Database dumps and local backups (never commit these, §9)
+*.dump
+*.backup
+*.bak
+*-backup.md
