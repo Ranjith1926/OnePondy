@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Delete your OnePondy account</title>
+    <style>
+      :root {
+        --primary: #0e6f6a;
+        --on-primary: #ffffff;
+        --background: #faf7f2;
+        --surface: #ffffff;
+        --text: #1c2421;
+        --text-secondary: #55615c;
+        --border: #8c8578;
+        --error-bg: #fbe1de;
+        --error-text: #7a1712;
+        --success-bg: #ddf3e5;
+        --success-text: #0f4d2b;
+        --danger-bg: #fbe1de;
+        --danger-text: #7a1712;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --primary: #5cc3b9;
+          --on-primary: #052a27;
+          --background: #0e1413;
+          --surface: #161f1d;
+          --text: #edf2f0;
+          --text-secondary: #a7b3af;
+          --border: #73827d;
+          --error-bg: #45160f;
+          --error-text: #fcd6d1;
+          --success-bg: #143823;
+          --success-text: #c4f0d5;
+          --danger-bg: #45160f;
+          --danger-text: #fcd6d1;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--background);
+        color: var(--text);
+        font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+      }
+      main { max-width: 480px; margin: 0 auto; padding: 32px 16px 48px; }
+      h1 { font-size: 1.6rem; line-height: 1.25; margin: 0 0 12px; }
+      p { margin: 0 0 12px; color: var(--text-secondary); }
+      .card { background: var(--surface); border-radius: 16px; padding: 20px; margin-top: 20px; }
+      fieldset { border: 0; padding: 0; margin: 0 0 16px; display: flex; gap: 16px; }
+      legend { font-weight: 600; margin-bottom: 8px; padding: 0; }
+      label { font-weight: 600; display: block; margin-bottom: 6px; }
+      .choice { display: flex; align-items: center; gap: 6px; font-weight: 400; min-height: 48px; }
+      input[type='text'], input[type='tel'], input[type='email'] {
+        width: 100%; min-height: 48px; padding: 10px 12px; font: inherit; color: var(--text);
+        background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      }
+      input:focus-visible, button:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+      button {
+        width: 100%; min-height: 48px; margin-top: 16px; border: 0; border-radius: 999px; font: inherit;
+        font-weight: 600; cursor: pointer; background: var(--primary); color: var(--on-primary);
+      }
+      button.danger { background: var(--danger-bg); color: var(--danger-text); }
+      button[disabled] { opacity: 0.6; cursor: progress; }
+      .link { background: none; color: var(--primary); min-height: 48px; margin-top: 8px; }
+      .status { border-radius: 12px; padding: 12px; margin-top: 16px; }
+      .status.error { background: var(--error-bg); color: var(--error-text); }
+      .status.success { background: var(--success-bg); color: var(--success-text); }
+      [hidden] { display: none !important; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Delete your OnePondy account</h1>
+      <p>
+        Use this page if you no longer have the app. In the app you can also go to
+        <strong>Profile → Delete account</strong>.
+      </p>
+      <p>
+        We remove your name, phone number and email address and sign you out on every device. Records we are required by
+        law to keep, such as payment records, are retained only for the period the law requires.
+      </p>
+
+      <form id="request-form" class="card" novalidate>
+        <fieldset>
+          <legend>Your account uses</legend>
+          <label class="choice"><input type="radio" name="channel" value="sms" checked /> Mobile number</label>
+          <label class="choice"><input type="radio" name="channel" value="email" /> Email</label>
+        </fieldset>
+        <label for="destination" id="destination-label">Mobile number</label>
+        <input id="destination" name="destination" type="tel" autocomplete="tel" inputmode="tel" required />
+        <button id="request-button" type="submit">Send code</button>
+      </form>
+
+      <form id="confirm-form" class="card" novalidate hidden>
+        <p id="code-intro"></p>
+        <label for="code">6-digit code</label>
+        <input id="code" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required />
+        <button id="confirm-button" type="submit" class="danger">Delete my account</button>
+        <button id="restart-button" type="button" class="link">Use a different number or email</button>
+      </form>
+
+      <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+    </main>
+
+    <script>
+      const messages = {
+        invalid_destination: 'Enter a valid mobile number or email address.',
+        unsupported_country: 'SMS codes are available for Indian mobile numbers. Choose email instead.',
+        too_many_requests: 'Too many codes requested. Please wait and try again.',
+        rate_limited: 'Too many attempts. Please wait and try again.',
+        codes_unavailable: 'Codes are temporarily unavailable. Please try again later.',
+        delivery_unavailable: 'Codes cannot be sent right now. Please try again later.',
+        invalid_code: 'That code is not correct.',
+        code_expired: 'That code has expired. Request a new one.',
+        too_many_attempts: 'Too many incorrect attempts. Request a new code.',
+        deletion_blocked: 'Your account has activity that must finish first, such as a booking in progress.',
+      };
+      const requestForm = document.getElementById('request-form');
+      const confirmForm = document.getElementById('confirm-form');
+      const status = document.getElementById('status');
+      const destination = document.getElementById('destination');
+      let challengeId = null;
+
+      function show(message, kind) {
+        status.textContent = message;
+        status.className = 'status ' + kind;
+        status.hidden = false;
+      }
+
+      async function post(path, body) {
+        const response = await fetch(path, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(messages[data.code] || 'Something went wrong. Please try again.');
+        }
+        return data;
+      }
+
+      requestForm.addEventListener('change', (event) => {
+        if (event.target.name !== 'channel') return;
+        const email = event.target.value === 'email';
+        document.getElementById('destination-label').textContent = email ? 'Email' : 'Mobile number';
+        destination.type = email ? 'email' : 'tel';
+        destination.autocomplete = email ? 'email' : 'tel';
+        destination.inputMode = email ? 'email' : 'tel';
+      });
+
+      requestForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = document.getElementById('request-button');
+        button.disabled = true;
+        status.hidden = true;
+        try {
+          const channel = requestForm.channel.value;
+          const result = await post('/api/v1/account/deletion-requests', { channel, destination: destination.value });
+          challengeId = result.challengeId;
+          document.getElementById('code-intro').textContent =
+            'If an account uses ' + result.maskedDestination + ', we have sent it a code. Enter it to confirm.';
+          requestForm.hidden = true;
+          confirmForm.hidden = false;
+          document.getElementById('code').focus();
+        } catch (error) {
+          show(error.message, 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      confirmForm.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = document.getElementById('confirm-button');
+        button.disabled = true;
+        status.hidden = true;
+        try {
+          await post('/api/v1/account/deletion-requests/confirm', {
+            challengeId,
+            code: document.getElementById('code').value,
+          });
+          confirmForm.hidden = true;
+          show('Done. If an account used these details, it has been deleted and signed out everywhere.', 'success');
+        } catch (error) {
+          show(error.message, 'error');
+        } finally {
+          button.disabled = false;
+        }
+      });
+
+      document.getElementById('restart-button').addEventListener('click', () => {
+        challengeId = null;
+        confirmForm.hidden = true;
+        requestForm.hidden = false;
+        status.hidden = true;
+        destination.focus();
+      });
+    </script>
+  </body>
+</html>

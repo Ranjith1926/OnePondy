@@ -47,6 +47,17 @@ public class LayerDependencyTests
         Assert.True(result.IsSuccessful, $"{layer} depends on: {string.Join(", ", result.FailingTypeNames ?? [])}");
     }
 
+    [Fact]
+    public void Domain_has_no_framework_dependencies()
+    {
+        var result = Types.InAssembly(Assembly.Load("OnePondy.Domain"))
+            .ShouldNot()
+            .HaveDependencyOnAny("Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore", "Microsoft.Extensions")
+            .GetResult();
+
+        Assert.True(result.IsSuccessful, $"Domain depends on: {string.Join(", ", result.FailingTypeNames ?? [])}");
+    }
+
     private static HashSet<string> ReadProjectReferences(string project)
     {
         var projectFile = Path.Combine(FindBackendRoot(), "src", project, $"{project}.csproj");
