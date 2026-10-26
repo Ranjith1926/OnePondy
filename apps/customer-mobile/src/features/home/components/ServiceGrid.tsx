@@ -8,7 +8,8 @@ import {
   type IconName,
   type Theme,
 } from '../../../design-system';
-import { moduleStatus, type ModuleKey } from '../../modules/moduleConfig';
+import { useModuleStatus } from '../../modules/hooks/useAppConfig';
+import type { ModuleKey } from '../../modules/moduleConfig';
 
 const services: { module: ModuleKey; icon: IconName }[] = [
   { module: 'food', icon: 'utensils' },
@@ -24,6 +25,7 @@ interface ServiceGridProps {
 export function ServiceGrid({ onServicePress }: ServiceGridProps) {
   const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
+  const moduleStatus = useModuleStatus();
   // One row of four; two rows of two when the system font is large.
   const perRow = useLargeText() ? 2 : 4;
   const visible = services.filter(({ module }) => moduleStatus[module] !== 'hidden');

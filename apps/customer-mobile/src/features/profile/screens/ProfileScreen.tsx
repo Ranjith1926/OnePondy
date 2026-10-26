@@ -11,6 +11,7 @@ import { useAuthActions } from '../../auth/hooks/useAuthActions';
 import { formatPhone, useProfile } from '../../auth/hooks/useProfile';
 import { useSelectedArea } from '../../location/hooks/useSelectedArea';
 import { ComingSoonSheet } from '../../modules/components/ComingSoonSheet';
+import { useModuleStatus } from '../../modules/hooks/useAppConfig';
 import type { ModuleKey } from '../../modules/moduleConfig';
 import { AppearanceSheet } from '../components/AppearanceSheet';
 import { LanguageSheet } from '../components/LanguageSheet';
@@ -26,6 +27,7 @@ export function ProfileScreen() {
   const profile = useProfile();
   const { signOut } = useAuthActions();
   const signOutRequest = useMutation({ mutationFn: signOut });
+  const modules = useModuleStatus();
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [comingSoon, setComingSoon] = useState<ModuleKey | null>(null);
   const languageName =
@@ -88,14 +90,16 @@ export function ProfileScreen() {
             onPress={() => navigation.navigate('LocationSelector')}
           />
         </ListSection>
-        <ListSection title={t('profile.sections.support')}>
-          <ListItem
-            leadingIcon="life-buoy"
-            title={t('profile.help')}
-            trailing={{ kind: 'chevron' }}
-            onPress={() => setComingSoon('support')}
-          />
-        </ListSection>
+        {modules.support === 'hidden' ? null : (
+          <ListSection title={t('profile.sections.support')}>
+            <ListItem
+              leadingIcon="life-buoy"
+              title={t('profile.help')}
+              trailing={{ kind: 'chevron' }}
+              onPress={() => setComingSoon('support')}
+            />
+          </ListSection>
+        )}
         {version ? (
           <ListSection title={t('profile.sections.about')}>
             <ListItem

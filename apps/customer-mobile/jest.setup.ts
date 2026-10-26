@@ -33,6 +33,12 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// No network in tests: anything a test does not mock answers 404 at once, so requests such as the
+// app config fall back to defaults instead of retrying in the background. Tests replace this as needed.
+globalThis.fetch = jest.fn(() =>
+  Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve('') }),
+) as unknown as typeof fetch;
+
 // TanStack Query drops unused cache entries on five-minute timers. Unref'd timers still fire
 // during a test, but no longer keep a finished Jest worker alive.
 function unref<T>(timer: T): T {

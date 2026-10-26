@@ -6,7 +6,8 @@ import { LocationHeader, OPIconButton, useThemedStyles, type Theme } from '../..
 import { useSelectedArea } from '../../location/hooks/useSelectedArea';
 
 interface HomeHeaderProps {
-  onNotificationsPress: () => void;
+  /** Omitted when the notifications module is hidden. */
+  onNotificationsPress?: () => void;
 }
 
 export function HomeHeader({ onNotificationsPress }: HomeHeaderProps) {
@@ -23,12 +24,14 @@ export function HomeHeader({ onNotificationsPress }: HomeHeaderProps) {
         accessibilityHint={t('location.changeHint')}
         onPress={() => navigation.navigate('LocationSelector')}
       />
-      <OPIconButton
-        icon="bell"
-        variant="tonal"
-        accessibilityLabel={t('home.notifications')}
-        onPress={onNotificationsPress}
-      />
+      {onNotificationsPress ? (
+        <OPIconButton
+          icon="bell"
+          variant="tonal"
+          accessibilityLabel={t('home.notifications')}
+          onPress={onNotificationsPress}
+        />
+      ) : null}
     </View>
   );
 }

@@ -73,7 +73,6 @@
     "activities": "Activities",
     "tripPlanner": "Trip planner",
     "notifications": "Notifications",
-    "account": "Accounts",
     "support": "Help and support"
   },
   "comingSoon": {
@@ -85,7 +84,6 @@
       "activities": "Activity bookings open once local operators publish their time slots.",
       "tripPlanner": "The trip planner will draft plans from verified places once enough places are verified.",
       "notifications": "Notifications will keep you updated about your bookings and orders.",
-      "account": "Signing in will let you save places, keep your plans and manage bookings.",
       "support": "Help articles and support requests are on their way."
     },
     "promise": "We never show a service as available before it is."
@@ -275,5 +273,10 @@
     "sessionExpired": "Your session has ended. Sign in again to continue.",
     "signedOut": "You're signed out.",
     "accountDeleted": "Your account has been deleted."
+  },
+  "updateRequired": {
+    "title": "Update OnePondy",
+    "message": "This version of the app is no longer supported. Update to the latest version to keep using OnePondy.",
+    "action": "Update now"
   }
 }

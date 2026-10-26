@@ -5,6 +5,7 @@ import { StyleSheet, View } from 'react-native';
 
 import { MainTabTemplate, SearchBar, useThemedStyles, type Theme } from '../../../design-system';
 import { ComingSoonSheet } from '../../modules/components/ComingSoonSheet';
+import { useModuleStatus } from '../../modules/hooks/useAppConfig';
 import type { ModuleKey } from '../../modules/moduleConfig';
 import { CuratedCollectionsSection } from '../components/CuratedCollectionsSection';
 import { HomeHeader } from '../components/HomeHeader';
@@ -19,12 +20,19 @@ export function HomeScreen() {
   const navigation = useNavigation();
   const styles = useThemedStyles(createStyles);
   const [comingSoon, setComingSoon] = useState<ModuleKey | null>(null);
+  const modules = useModuleStatus();
   const openExplore = () => navigation.navigate('Main', { screen: 'Explore' });
 
   return (
     <>
       <MainTabTemplate
-        header={<HomeHeader onNotificationsPress={() => setComingSoon('notifications')} />}
+        header={
+          <HomeHeader
+            onNotificationsPress={
+              modules.notifications === 'hidden' ? undefined : () => setComingSoon('notifications')
+            }
+          />
+        }
       >
         <View style={styles.search}>
           <SearchBar
@@ -37,7 +45,9 @@ export function HomeScreen() {
         <HomeHero onExplore={openExplore} />
         <PopularPlacesSection onSeeAll={openExplore} />
         <CuratedCollectionsSection />
-        <TripPlannerCard onPress={() => setComingSoon('tripPlanner')} />
+        {modules.tripPlanner === 'hidden' ? null : (
+          <TripPlannerCard onPress={() => setComingSoon('tripPlanner')} />
+        )}
         <TrustCard />
       </MainTabTemplate>
       <ComingSoonSheet module={comingSoon} onClose={() => setComingSoon(null)} />
