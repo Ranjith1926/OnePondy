@@ -21,6 +21,9 @@ public sealed class ApiFactory(string connectionString, IReadOnlyDictionary<stri
 
     public CapturedCodes Codes { get; } = new();
 
+    /// <summary>Uploaded media go to a temporary folder, never into the repository.</summary>
+    public string MediaRoot { get; } = Path.Combine(Path.GetTempPath(), "onepondy-test-media", Guid.NewGuid().ToString("N"));
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -28,6 +31,7 @@ public sealed class ApiFactory(string connectionString, IReadOnlyDictionary<stri
         builder.UseSetting("Auth:Jwt:SigningKey", SigningKey);
         builder.UseSetting("Auth:HashingKey", HashingKey);
         builder.UseSetting("RateLimiting:Auth:PermitLimit", "1000");
+        builder.UseSetting("Media:RootPath", MediaRoot);
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
         {
             builder.UseSetting(key, value);
@@ -35,6 +39,8 @@ public sealed class ApiFactory(string connectionString, IReadOnlyDictionary<stri
 
         builder.ConfigureTestServices(services => services.AddSingleton<IOtpSender>(Codes));
     }
+
+    public static string NewEmail(string name) => $"{name}.{Guid.NewGuid():N}@onepondy.test";
 
     public static string NewIndianMobile() =>
         "9" + Random.Shared.Next(100_000_000, 999_999_999).ToString(CultureInfo.InvariantCulture);

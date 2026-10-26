@@ -7,6 +7,8 @@ public enum ErrorKind
 {
     Validation,
     Unauthorized,
+    Forbidden,
+    NotFound,
     Conflict,
     TooManyRequests,
     Unavailable,
@@ -14,12 +16,18 @@ public enum ErrorKind
 
 /// <param name="Code">Stable, machine-readable code that clients translate, e.g. <c>invalid_code</c>.</param>
 /// <param name="Detail">English description for logs and developers.</param>
+/// <param name="FieldErrors">Problems per input field, keyed by the field's JSON name, for forms.</param>
 public sealed record AppError(
     string Code,
     ErrorKind Kind,
     string Detail,
     TimeSpan? RetryAfter = null,
-    IReadOnlyList<string>? Reasons = null);
+    IReadOnlyList<string>? Reasons = null,
+    IReadOnlyDictionary<string, string[]>? FieldErrors = null)
+{
+    public static AppError Validation(IReadOnlyDictionary<string, string[]> fieldErrors) =>
+        new("validation_failed", ErrorKind.Validation, "Some fields are not valid.", FieldErrors: fieldErrors);
+}
 
 public sealed class Result<T>
 {

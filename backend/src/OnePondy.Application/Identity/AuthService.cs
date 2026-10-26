@@ -57,6 +57,12 @@ public sealed class AuthService(
         }
 
         var account = await accounts.FindOrCreateAsync(verified.Value.Channel, verified.Value.Destination, cancellationToken);
+        return await StartSessionAsync(account, deviceName, cancellationToken);
+    }
+
+    /// <summary>Starts a session for an account whose code has been verified.</summary>
+    public async Task<SessionTokens> StartSessionAsync(UserAccount account, string? deviceName, CancellationToken cancellationToken)
+    {
         var now = time.GetUtcNow();
         var session = UserSession.Start(account.Id, Truncate(deviceName, 120), now, _refreshLifetime);
         var (refreshToken, refreshPlain) = NewRefreshToken(session.Id, now);

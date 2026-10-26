@@ -44,8 +44,7 @@ public sealed class AuthFlowTests : IAsyncLifetime
             ["Auth:Otp:ResendInterval"] = "00:00:00",
             ["Auth:Otp:MaxPerDestination"] = "100",
         });
-        await using var scope = _factory.Services.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<OnePondyDbContext>().Database.MigrateAsync();
+        await TestDatabase.MigrateOnceAsync(_factory.Services);
     }
 
     public async Task DisposeAsync()

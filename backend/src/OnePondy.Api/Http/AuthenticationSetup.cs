@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OnePondy.Application.Identity;
+using OnePondy.Domain.Identity;
 using OnePondy.Infrastructure.Identity;
 using OnePondy.Infrastructure.Security;
 
@@ -48,7 +49,26 @@ public static class AuthenticationSetup
                 };
             });
 
-        services.AddAuthorization();
+        // Console access by staff role (spec §10, Phase 3). The API decides; the console only hides links.
+        services.AddAuthorizationBuilder()
+            .AddPolicy(StaffPolicies.ContentRead, policy => policy.RequireRole(
+                RoleNames.Administrator,
+                RoleNames.ContentEditor,
+                RoleNames.SupportAgent))
+            .AddPolicy(StaffPolicies.ContentWrite, policy => policy.RequireRole(RoleNames.Administrator, RoleNames.ContentEditor))
+            .AddPolicy(StaffPolicies.Administration, policy => policy.RequireRole(RoleNames.Administrator));
         return services;
     }
+}
+
+public static class StaffPolicies
+{
+    /// <summary>Any staff member: view places, configuration and history.</summary>
+    public const string ContentRead = "content:read";
+
+    /// <summary>Administrators and content editors: edit, verify and publish places and photos.</summary>
+    public const string ContentWrite = "content:write";
+
+    /// <summary>Administrators only: configuration, staff and the audit log.</summary>
+    public const string Administration = "administration";
 }

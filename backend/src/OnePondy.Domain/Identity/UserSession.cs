@@ -5,6 +5,9 @@ public enum SessionRevocationReason
     SignedOut,
     RefreshTokenReuse,
     AccountDeleted,
+
+    /// <summary>A staff role was changed or removed; the person signs in again with the new role.</summary>
+    RoleChanged,
 }
 
 /// <summary>A signed-in device. Access tokens carry the session id so revocation takes effect at once.</summary>

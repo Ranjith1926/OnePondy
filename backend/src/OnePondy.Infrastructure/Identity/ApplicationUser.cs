@@ -20,8 +20,3 @@ public sealed class ApplicationUser : IdentityUser<Guid>
 
     public DateTimeOffset UpdatedAt { get; set; }
 }
-
-public static class RoleNames
-{
-    public const string Customer = "customer";
-}

@@ -23,3 +23,6 @@ Thumbs.db
 *.backup
 *.bak
 *-backup.md
+
+# Uploaded media written by a locally running API (spec D8: local folder for now)
+backend/**/App_Data/

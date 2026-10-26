@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using OnePondy.Domain.Identity;
 using OnePondy.Infrastructure.Identity;
 
 namespace OnePondy.Infrastructure.Persistence.Configurations;
@@ -45,14 +46,22 @@ public sealed class RoleConfiguration : IEntityTypeConfiguration<IdentityRole<Gu
     public void Configure(EntityTypeBuilder<IdentityRole<Guid>> builder)
     {
         builder.ToTable("app_roles");
-        builder.HasData(new IdentityRole<Guid>
-        {
-            Id = new Guid("0193f0c4-6a5e-7b52-9c1d-3f2a1b0c0001"),
-            Name = RoleNames.Customer,
-            NormalizedName = RoleNames.Customer.ToUpperInvariant(),
-            ConcurrencyStamp = "3c9f9a0e-5d1b-4f44-9a52-6d1f0c2b7e01",
-        });
+
+        // Fixed ids and stamps keep the seed stable across migrations.
+        builder.HasData(
+            Role("0193f0c4-6a5e-7b52-9c1d-3f2a1b0c0001", RoleNames.Customer, "3c9f9a0e-5d1b-4f44-9a52-6d1f0c2b7e01"),
+            Role("019a2f3e-1c4d-7e5f-8a6b-2c3d4e5f6a01", RoleNames.Administrator, "5b7c2d1e-8f9a-4b3c-9d2e-1f0a2b3c4d01"),
+            Role("019a2f3e-1c4d-7e5f-8a6b-2c3d4e5f6a02", RoleNames.ContentEditor, "5b7c2d1e-8f9a-4b3c-9d2e-1f0a2b3c4d02"),
+            Role("019a2f3e-1c4d-7e5f-8a6b-2c3d4e5f6a03", RoleNames.SupportAgent, "5b7c2d1e-8f9a-4b3c-9d2e-1f0a2b3c4d03"));
     }
+
+    private static IdentityRole<Guid> Role(string id, string name, string concurrencyStamp) => new()
+    {
+        Id = new Guid(id),
+        Name = name,
+        NormalizedName = name.ToUpperInvariant(),
+        ConcurrencyStamp = concurrencyStamp,
+    };
 }
 
 public sealed class UserRoleConfiguration : IEntityTypeConfiguration<IdentityUserRole<Guid>>

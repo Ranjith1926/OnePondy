@@ -1,0 +1,75 @@
+namespace OnePondy.Domain.Audit;
+
+/// <summary>
+/// One recorded change to content or configuration (spec §10, Phase 3). Append-only: the database
+/// rejects updates and deletes on this table.
+/// </summary>
+public sealed class AuditEntry
+{
+    private AuditEntry()
+    {
+    }
+
+    public Guid Id { get; private set; }
+
+    public DateTimeOffset OccurredAt { get; private set; }
+
+    /// <summary>The staff member who made the change; null for system changes.</summary>
+    public Guid? ActorUserId { get; private set; }
+
+    /// <summary>What happened, e.g. "place.verified". See <see cref="AuditActions"/>.</summary>
+    public string Action { get; private set; } = string.Empty;
+
+    public string EntityType { get; private set; } = string.Empty;
+
+    public string EntityId { get; private set; } = string.Empty;
+
+    /// <summary>JSON with the relevant before/after values or notes; never personal contact data.</summary>
+    public string? Details { get; private set; }
+
+    public static AuditEntry Record(
+        Guid? actorUserId,
+        string action,
+        string entityType,
+        string entityId,
+        string? details,
+        DateTimeOffset now) =>
+        new()
+        {
+            Id = Guid.CreateVersion7(),
+            OccurredAt = now,
+            ActorUserId = actorUserId,
+            Action = action,
+            EntityType = entityType,
+            EntityId = entityId,
+            Details = details,
+        };
+}
+
+public static class AuditEntityTypes
+{
+    public const string Place = "place";
+    public const string Media = "media";
+    public const string ModuleFlag = "module_flag";
+    public const string AppSetting = "app_setting";
+    public const string Staff = "staff";
+}
+
+public static class AuditActions
+{
+    public const string PlaceCreated = "place.created";
+    public const string PlaceUpdated = "place.updated";
+    public const string PlaceSubmitted = "place.submitted";
+    public const string PlaceVerified = "place.verified";
+    public const string PlaceRejected = "place.rejected";
+    public const string PlacePublished = "place.published";
+    public const string PlaceUnpublished = "place.unpublished";
+    public const string PlaceReviewConfirmed = "place.review_confirmed";
+    public const string MediaAdded = "media.added";
+    public const string MediaUpdated = "media.updated";
+    public const string MediaRemoved = "media.removed";
+    public const string ModuleFlagChanged = "config.module_flag_changed";
+    public const string MinAppVersionChanged = "config.min_app_version_changed";
+    public const string StaffRoleGranted = "staff.role_granted";
+    public const string StaffRoleRevoked = "staff.role_revoked";
+}

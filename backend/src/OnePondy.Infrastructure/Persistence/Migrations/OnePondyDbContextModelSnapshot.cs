@@ -60,6 +60,27 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                             ConcurrencyStamp = "3c9f9a0e-5d1b-4f44-9a52-6d1f0c2b7e01",
                             Name = "customer",
                             NormalizedName = "CUSTOMER"
+                        },
+                        new
+                        {
+                            Id = new Guid("019a2f3e-1c4d-7e5f-8a6b-2c3d4e5f6a01"),
+                            ConcurrencyStamp = "5b7c2d1e-8f9a-4b3c-9d2e-1f0a2b3c4d01",
+                            Name = "administrator",
+                            NormalizedName = "ADMINISTRATOR"
+                        },
+                        new
+                        {
+                            Id = new Guid("019a2f3e-1c4d-7e5f-8a6b-2c3d4e5f6a02"),
+                            ConcurrencyStamp = "5b7c2d1e-8f9a-4b3c-9d2e-1f0a2b3c4d02",
+                            Name = "content_editor",
+                            NormalizedName = "CONTENT_EDITOR"
+                        },
+                        new
+                        {
+                            Id = new Guid("019a2f3e-1c4d-7e5f-8a6b-2c3d4e5f6a03"),
+                            ConcurrencyStamp = "5b7c2d1e-8f9a-4b3c-9d2e-1f0a2b3c4d03",
+                            Name = "support_agent",
+                            NormalizedName = "SUPPORT_AGENT"
                         });
                 });
 
@@ -191,6 +212,164 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasName("pk_app_user_tokens");
 
                     b.ToTable("app_user_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Audit.AuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<string>("Details")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("entity_type");
+
+                    b.Property<DateTimeOffset>("OccurredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_log");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("ix_audit_log_actor_user_id");
+
+                    b.HasIndex("OccurredAt")
+                        .HasDatabaseName("ix_audit_log_occurred_at");
+
+                    b.HasIndex("EntityType", "EntityId", "OccurredAt")
+                        .HasDatabaseName("ix_audit_log_entity_type_entity_id_occurred_at");
+
+                    b.ToTable("audit_log", (string)null);
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Configuration.AppSetting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("key");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("value");
+
+                    b.HasKey("Key")
+                        .HasName("pk_app_settings");
+
+                    b.HasIndex("UpdatedByUserId")
+                        .HasDatabaseName("ix_app_settings_updated_by_user_id");
+
+                    b.ToTable("app_settings", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Key = "min_supported_app_version",
+                            Value = "0.1.0"
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Configuration.ModuleFlag", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.HasKey("Key")
+                        .HasName("pk_module_flags");
+
+                    b.HasIndex("UpdatedByUserId")
+                        .HasDatabaseName("ix_module_flags_updated_by_user_id");
+
+                    b.ToTable("module_flags", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_module_flags_status", "status IN ('available', 'coming_soon', 'hidden')");
+                        });
+
+                    b.HasData(
+                        new
+                        {
+                            Key = "food",
+                            Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "rides",
+                            Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "stays",
+                            Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "activities",
+                            Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "tripPlanner",
+                            Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "notifications",
+                            Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "support",
+                            Status = "coming_soon"
+                        });
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Identity.OtpChallenge", b =>
@@ -343,6 +522,299 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_user_sessions_user_id");
 
                     b.ToTable("user_sessions", (string)null);
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .HasColumnType("text")
+                        .HasColumnName("address");
+
+                    b.Property<string>("CategoryCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("category_code");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsPublished")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_published");
+
+                    b.Property<DateTimeOffset?>("LastReviewedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_reviewed_at");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("OpeningHours")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("opening_hours");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("slug");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("verification_status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UpdatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_user_id");
+
+                    b.Property<string>("VerificationSource")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("verification_source");
+
+                    b.Property<DateTimeOffset?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("VerifiedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by_user_id");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("VisitorGuidance")
+                        .HasColumnType("text")
+                        .HasColumnName("visitor_guidance");
+
+                    b.HasKey("Id")
+                        .HasName("pk_places");
+
+                    b.HasIndex("CategoryCode")
+                        .HasDatabaseName("ix_places_public_category")
+                        .HasFilter("is_published");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_places_created_by_user_id");
+
+                    b.HasIndex("LastReviewedAt")
+                        .HasDatabaseName("ix_places_review_due")
+                        .HasFilter("is_published");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_places_slug");
+
+                    b.HasIndex("UpdatedByUserId")
+                        .HasDatabaseName("ix_places_updated_by_user_id");
+
+                    b.HasIndex("VerifiedByUserId")
+                        .HasDatabaseName("ix_places_verified_by_user_id");
+
+                    b.HasIndex("Status", "UpdatedAt")
+                        .HasDatabaseName("ix_places_console_list");
+
+                    b.ToTable("places", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_places_coordinates", "(latitude IS NULL) = (longitude IS NULL)");
+
+                            t.HasCheckConstraint("ck_places_latitude", "latitude IS NULL OR latitude BETWEEN -90 AND 90");
+
+                            t.HasCheckConstraint("ck_places_longitude", "longitude IS NULL OR longitude BETWEEN -180 AND 180");
+
+                            t.HasCheckConstraint("ck_places_publish_requires_verified", "NOT is_published OR verification_status = 'verified'");
+
+                            t.HasCheckConstraint("ck_places_verification_provenance", "verification_status <> 'verified' OR (verified_by_user_id IS NOT NULL AND verified_at IS NOT NULL AND verification_source IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_places_verification_status", "verification_status IN ('draft', 'pending', 'verified', 'rejected')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Places.PlaceCategory", b =>
+                {
+                    b.Property<string>("Code")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.HasKey("Code")
+                        .HasName("pk_place_categories");
+
+                    b.ToTable("place_categories", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Code = "beach",
+                            IsActive = true,
+                            Name = "Beach",
+                            SortOrder = 1
+                        },
+                        new
+                        {
+                            Code = "heritage",
+                            IsActive = true,
+                            Name = "Heritage",
+                            SortOrder = 2
+                        },
+                        new
+                        {
+                            Code = "spiritual",
+                            IsActive = true,
+                            Name = "Spiritual",
+                            SortOrder = 3
+                        },
+                        new
+                        {
+                            Code = "museum",
+                            IsActive = true,
+                            Name = "Museum",
+                            SortOrder = 4
+                        },
+                        new
+                        {
+                            Code = "nature",
+                            IsActive = true,
+                            Name = "Nature",
+                            SortOrder = 5
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Places.PlaceMedia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AltText")
+                        .IsRequired()
+                        .HasMaxLength(250)
+                        .HasColumnType("character varying(250)")
+                        .HasColumnName("alt_text");
+
+                    b.Property<string>("Attribution")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("attribution");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("caption");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("integer")
+                        .HasColumnName("height");
+
+                    b.Property<string>("Licence")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("licence");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("place_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("SourceUrl")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("source_url");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("storage_key");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("integer")
+                        .HasColumnName("width");
+
+                    b.HasKey("Id")
+                        .HasName("pk_place_media");
+
+                    b.HasIndex("CreatedByUserId")
+                        .HasDatabaseName("ix_place_media_created_by_user_id");
+
+                    b.HasIndex("PlaceId", "SortOrder")
+                        .HasDatabaseName("ix_place_media_place_id_sort_order");
+
+                    b.ToTable("place_media", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_place_media_attribution", "licence IN ('owned', 'cc0') OR attribution IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_place_media_licence", "licence IN ('owned', 'partner_supplied', 'cc_by', 'cc_by_sa', 'cc0', 'licensed_stock', 'other')");
+                        });
                 });
 
             modelBuilder.Entity("OnePondy.Infrastructure.Identity.ApplicationUser", b =>
@@ -525,6 +997,33 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_app_user_tokens_app_users_user_id");
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Audit.AuditEntry", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_audit_log_app_users_actor_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Configuration.AppSetting", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_app_settings_app_users_updated_by_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Configuration.ModuleFlag", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_module_flags_app_users_updated_by_user_id");
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Identity.RefreshToken", b =>
                 {
                     b.HasOne("OnePondy.Domain.Identity.UserSession", null)
@@ -543,6 +1042,135 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_user_sessions_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Places.PlaceCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryCode")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_places_place_categories_category_code");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_places_app_users_created_by_user_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UpdatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_places_app_users_updated_by_user_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("VerifiedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_places_app_users_verified_by_user_id");
+
+                    b.OwnsMany("OnePondy.Domain.Places.PlaceEntryFee", "EntryFees", b1 =>
+                        {
+                            b1.Property<Guid>("PlaceId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("place_id");
+
+                            b1.Property<string>("Category")
+                                .HasMaxLength(24)
+                                .HasColumnType("character varying(24)")
+                                .HasColumnName("visitor_category");
+
+                            b1.Property<decimal>("Amount")
+                                .HasPrecision(12, 2)
+                                .HasColumnType("numeric(12,2)")
+                                .HasColumnName("amount");
+
+                            b1.Property<string>("Currency")
+                                .IsRequired()
+                                .ValueGeneratedOnAdd()
+                                .HasMaxLength(3)
+                                .HasColumnType("character(3)")
+                                .HasDefaultValue("INR")
+                                .HasColumnName("currency")
+                                .IsFixedLength();
+
+                            b1.HasKey("PlaceId", "Category")
+                                .HasName("pk_place_entry_fees");
+
+                            b1.ToTable("place_entry_fees", null, t =>
+                                {
+                                    t.HasCheckConstraint("ck_place_entry_fee_amount", "amount >= 0");
+
+                                    t.HasCheckConstraint("ck_place_entry_fee_category", "visitor_category IN ('standard', 'indian_adult', 'foreign_adult', 'child', 'student', 'senior')");
+                                });
+
+                            b1.WithOwner()
+                                .HasForeignKey("PlaceId")
+                                .HasConstraintName("fk_place_entry_fees_places_place_id");
+                        });
+
+                    b.OwnsMany("OnePondy.Domain.Places.PlaceTranslation", "Translations", b1 =>
+                        {
+                            b1.Property<Guid>("PlaceId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("place_id");
+
+                            b1.Property<string>("Language")
+                                .HasMaxLength(8)
+                                .HasColumnType("character varying(8)")
+                                .HasColumnName("language");
+
+                            b1.Property<string>("Description")
+                                .HasColumnType("text")
+                                .HasColumnName("description");
+
+                            b1.Property<string>("Name")
+                                .IsRequired()
+                                .HasMaxLength(180)
+                                .HasColumnType("character varying(180)")
+                                .HasColumnName("name");
+
+                            b1.Property<string>("VisitorGuidance")
+                                .HasColumnType("text")
+                                .HasColumnName("visitor_guidance");
+
+                            b1.HasKey("PlaceId", "Language")
+                                .HasName("pk_place_translations");
+
+                            b1.ToTable("place_translations", null, t =>
+                                {
+                                    t.HasCheckConstraint("ck_place_translation_language", "language IN ('ta', 'fr')");
+                                });
+
+                            b1.WithOwner()
+                                .HasForeignKey("PlaceId")
+                                .HasConstraintName("fk_place_translations_places_place_id");
+                        });
+
+                    b.Navigation("EntryFees");
+
+                    b.Navigation("Translations");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Places.PlaceMedia", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_place_media_app_users_created_by_user_id");
+
+                    b.HasOne("OnePondy.Domain.Places.Place", null)
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_place_media_places_place_id");
                 });
 #pragma warning restore 612, 618
         }

@@ -18,6 +18,8 @@ public static class ProblemResults
         {
             ErrorKind.Validation => StatusCodes.Status400BadRequest,
             ErrorKind.Unauthorized => StatusCodes.Status401Unauthorized,
+            ErrorKind.Forbidden => StatusCodes.Status403Forbidden,
+            ErrorKind.NotFound => StatusCodes.Status404NotFound,
             ErrorKind.Conflict => StatusCodes.Status409Conflict,
             ErrorKind.TooManyRequests => StatusCodes.Status429TooManyRequests,
             ErrorKind.Unavailable => StatusCodes.Status503ServiceUnavailable,
@@ -35,6 +37,12 @@ public static class ProblemResults
         if (error.Reasons is { Count: > 0 } reasons)
         {
             extensions["reasons"] = reasons;
+        }
+
+        // Same shape as ASP.NET Core validation problems, so forms can show messages per field.
+        if (error.FieldErrors is { Count: > 0 } fieldErrors)
+        {
+            extensions["errors"] = fieldErrors;
         }
 
         return Results.Problem(

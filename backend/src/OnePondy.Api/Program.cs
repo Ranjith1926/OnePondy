@@ -1,9 +1,12 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.FileProviders;
+using Microsoft.Extensions.Options;
 using OnePondy.Api.Http;
 using OnePondy.Application;
 using OnePondy.Infrastructure;
+using OnePondy.Infrastructure.Media;
 using OnePondy.Infrastructure.Persistence;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -34,6 +37,16 @@ if (app.Environment.IsDevelopment())
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
+// Uploaded place photos. File names include a unique id and never change, so they cache for a year.
+var mediaRoot = app.Services.GetRequiredService<IOptions<MediaStorageOptions>>().Value.RootPath!;
+Directory.CreateDirectory(mediaRoot);
+app.UseStaticFiles(new StaticFileOptions
+{
+    FileProvider = new PhysicalFileProvider(mediaRoot),
+    RequestPath = MediaStorageOptions.RequestPath,
+    OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable",
+});
+
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
@@ -44,5 +57,9 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check 
 
 app.MapAuthEndpoints();
 app.MapAccountEndpoints();
+app.MapPublicContentEndpoints();
+app.MapStaffAuthEndpoints();
+app.MapAdminPlaceEndpoints();
+app.MapAdminSettingsEndpoints();
 
 app.Run();

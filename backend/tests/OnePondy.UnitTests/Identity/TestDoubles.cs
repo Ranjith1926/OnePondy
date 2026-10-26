@@ -1,11 +1,17 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
+using OnePondy.Domain.Audit;
+using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
+using OnePondy.Domain.Places;
+using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
 
 namespace OnePondy.UnitTests.Identity;
@@ -25,14 +31,60 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
+    public DbSet<Place> Places => Set<Place>();
+
+    public DbSet<PlaceCategory> PlaceCategories => Set<PlaceCategory>();
+
+    public DbSet<PlaceMedia> PlaceMedia => Set<PlaceMedia>();
+
+    public DbSet<ModuleFlag> ModuleFlags => Set<ModuleFlag>();
+
+    public DbSet<AppSetting> AppSettings => Set<AppSetting>();
+
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
     public static TestDbContext Create() =>
-        new(new DbContextOptionsBuilder<TestDbContext>().UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+        new(new DbContextOptionsBuilder<TestDbContext>()
+            .UseInMemoryDatabase(Guid.NewGuid().ToString())
+            .ConfigureWarnings(warnings => warnings.Ignore(InMemoryEventId.TransactionIgnoredWarning))
+            .Options);
+
+    // The in-memory provider has no xmin, so version checks are covered by the PostgreSQL integration tests.
+    public void ExpectVersion(Place place, uint version)
+    {
+    }
+
+    public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
+        Database.BeginTransactionAsync(cancellationToken);
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<OtpChallenge>().HasKey(c => c.Id);
         modelBuilder.Entity<UserSession>().HasKey(s => s.Id);
         modelBuilder.Entity<RefreshToken>().HasKey(t => t.Id);
+        modelBuilder.Entity<PlaceCategory>().HasKey(c => c.Code);
+        modelBuilder.Entity<PlaceMedia>().HasKey(m => m.Id);
+        modelBuilder.Entity<ModuleFlag>().HasKey(f => f.Key);
+        modelBuilder.Entity<AppSetting>().HasKey(s => s.Key);
+        modelBuilder.Entity<AuditEntry>().HasKey(e => e.Id);
+        modelBuilder.Entity<Place>(place =>
+        {
+            place.HasKey(p => p.Id);
+            place.Ignore(p => p.Location);
+            place.Property(p => p.OpeningHours).HasConversion(OpeningHoursJson.Converter, OpeningHoursJson.Comparer);
+            place.OwnsMany(p => p.Translations, translation =>
+            {
+                translation.WithOwner().HasForeignKey("PlaceId");
+                translation.HasKey("PlaceId", nameof(PlaceTranslation.Language));
+            });
+            place.OwnsMany(p => p.EntryFees, fee =>
+            {
+                fee.WithOwner().HasForeignKey("PlaceId");
+                fee.HasKey("PlaceId", nameof(PlaceEntryFee.Category));
+            });
+            place.Navigation(p => p.Translations).UsePropertyAccessMode(PropertyAccessMode.Field);
+            place.Navigation(p => p.EntryFees).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
     }
 }
 
@@ -75,6 +127,7 @@ public sealed class FakeUserAccountStore(TimeProvider time) : IUserAccountStore
         public required AccountContact Contact { get; set; }
         public string DisplayName { get; set; } = string.Empty;
         public string Language { get; set; } = "en";
+        public string? StaffRole { get; set; }
         public DateTimeOffset? DeletedAt { get; set; }
         public DateTimeOffset CreatedAt { get; init; }
     }
@@ -136,12 +189,28 @@ public sealed class FakeUserAccountStore(TimeProvider time) : IUserAccountStore
 
     public bool IsDeleted(Guid userId) => _accounts.Single(a => a.Id == userId).DeletedAt is not null;
 
+    public void SetStaffRole(Guid userId, string? role) => _accounts.Single(a => a.Id == userId).StaffRole = role;
+
+    public IEnumerable<OnePondy.Application.Staff.StaffMember> StaffMembers() =>
+        _accounts
+            .Where(a => a.DeletedAt is null && a.StaffRole is not null)
+            .Select(a => new OnePondy.Application.Staff.StaffMember(
+                a.Id,
+                NameOf(a.Id)!,
+                a.Contact.Channel == OtpChannel.Email ? a.Contact.Destination : null,
+                a.StaffRole!));
+
+    public string? NameOf(Guid userId) => _accounts.SingleOrDefault(a => a.Id == userId) is { } account
+        ? (account.DisplayName.Length > 0 ? account.DisplayName : account.Contact.Destination)
+        : null;
+
     private StoredAccount? Find(OtpChannel channel, string destination) =>
         _accounts.SingleOrDefault(a => a.DeletedAt is null && a.Contact == new AccountContact(channel, destination));
 
     private StoredAccount? Active(Guid userId) => _accounts.SingleOrDefault(a => a.Id == userId && a.DeletedAt is null);
 
-    private static UserAccount ToAccount(StoredAccount account) => new(account.Id, account.DisplayName, ["customer"]);
+    private static UserAccount ToAccount(StoredAccount account) =>
+        new(account.Id, account.DisplayName, account.StaffRole is { } role ? ["customer", role] : ["customer"]);
 
     private static AccountProfile ToProfile(StoredAccount account) => new(
         account.Id,

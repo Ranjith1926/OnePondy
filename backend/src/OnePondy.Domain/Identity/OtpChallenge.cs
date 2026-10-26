@@ -10,6 +10,9 @@ public enum OtpPurpose
 {
     SignIn = 1,
     AccountDeletion = 2,
+
+    /// <summary>Web console sign-in; codes are only sent to staff accounts.</summary>
+    StaffSignIn = 3,
 }
 
 public enum OtpVerificationResult
