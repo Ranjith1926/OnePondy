@@ -1,32 +1,18 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 
-// Phase 0 placeholder. Phase 1 replaces this with the providers and navigation shell (§5).
+import '../i18n';
+import { AppNavigation } from '../navigation/AppNavigation';
+import { AppProviders } from './providers/AppProviders';
+import { BannerHost } from './providers/BannerHost';
+
+// Keep the native splash screen up until saved preferences are restored.
+void SplashScreen.preventAutoHideAsync();
+
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text accessibilityRole="header" style={styles.title}>
-        OnePondy
-      </Text>
-      <Text style={styles.subtitle}>Development build</Text>
-      <StatusBar style="auto" />
-    </View>
+    <AppProviders>
+      <AppNavigation />
+      <BannerHost />
+    </AppProviders>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-  },
-  subtitle: {
-    marginTop: 8,
-    fontSize: 16,
-  },
-});
