@@ -1,0 +1,198 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "clearSearch": "Clear search",
+    "gotIt": "Got it",
+    "retry": "Try again",
+    "comingSoon": "Coming soon",
+    "soon": "Soon",
+    "sample": "Sample",
+    "seeAll": "See all",
+    "dismiss": "Dismiss",
+    "placeSubtitle": "{{category}} · {{area}}"
+  },
+  "tabs": {
+    "home": "Home",
+    "explore": "Explore",
+    "bookings": "Bookings",
+    "saved": "Saved",
+    "profile": "Profile",
+    "accessibilityLabel": "{{label}}, tab, {{position}} of {{total}}"
+  },
+  "onboarding": {
+    "skip": "Skip",
+    "next": "Next",
+    "getStarted": "Get started",
+    "progress": "Step {{current}} of {{total}}",
+    "steps": {
+      "discover": {
+        "title": "Discover Puducherry",
+        "body": "Heritage streets, quiet beaches, spiritual spaces and local favourites, gathered in one place."
+      },
+      "plan": {
+        "title": "Plan your days",
+        "body": "Save the places you love and shape them into a plan that fits your pace."
+      },
+      "oneApp": {
+        "title": "One app for Pondy",
+        "body": "Food, rides, stays and activities will join as trusted local partners come on board."
+      }
+    }
+  },
+  "home": {
+    "searchPlaceholder": "Where do you want to go?",
+    "searchHint": "Opens search",
+    "notifications": "Notifications",
+    "servicesLabel": "Services",
+    "hero": {
+      "eyebrow": "Vanakkam",
+      "title": "Discover Puducherry",
+      "body": "French Quarter lanes, sunrise on the Promenade and calm beaches nearby.",
+      "action": "Explore places"
+    },
+    "popular": {
+      "title": "Popular places"
+    },
+    "collections": {
+      "title": "Curated for you"
+    },
+    "tripPlanner": {
+      "title": "Plan my Pondy trip",
+      "body": "Share your dates and interests, and we'll draft a plan from verified places for you to review."
+    },
+    "trust": {
+      "title": "Verified information only",
+      "body": "Opening hours, prices and availability appear only after a partner or our team has confirmed them."
+    }
+  },
+  "modules": {
+    "food": "Food",
+    "rides": "Rides",
+    "stays": "Stays",
+    "activities": "Activities",
+    "tripPlanner": "Trip planner",
+    "notifications": "Notifications",
+    "account": "Accounts",
+    "support": "Help and support"
+  },
+  "comingSoon": {
+    "title": "{{module}} is coming soon",
+    "messages": {
+      "food": "Food ordering opens once restaurant partners and delivery are ready in your area.",
+      "rides": "Rides open only after transport partners and the required approvals are in place.",
+      "stays": "Stay bookings open once hotels can confirm availability directly.",
+      "activities": "Activity bookings open once local operators publish their time slots.",
+      "tripPlanner": "The trip planner will draft plans from verified places once enough places are verified.",
+      "notifications": "Notifications will keep you updated about your bookings and orders.",
+      "account": "Signing in will let you save places, keep your plans and manage bookings.",
+      "support": "Help articles and support requests are on their way."
+    },
+    "promise": "We never show a service as available before it is."
+  },
+  "location": {
+    "title": "Choose your area",
+    "description": "Pick the area you're in or want to explore. Using your current location will come later.",
+    "yourArea": "Your area",
+    "changeHint": "Opens the area picker",
+    "wholeCity": "Anywhere in the city"
+  },
+  "areas": {
+    "puducherry": "Puducherry",
+    "whiteTown": "White Town",
+    "tamilQuarter": "Tamil Quarter",
+    "auroville": "Auroville",
+    "lawspet": "Lawspet",
+    "muthialpet": "Muthialpet",
+    "reddiarpalayam": "Reddiarpalayam",
+    "ariyankuppam": "Ariyankuppam",
+    "villianur": "Villianur"
+  },
+  "categories": {
+    "all": "All",
+    "beach": "Beaches",
+    "heritage": "Heritage",
+    "spiritual": "Spiritual",
+    "museum": "Museums",
+    "nature": "Nature"
+  },
+  "categoryNames": {
+    "beach": "Beach",
+    "heritage": "Heritage",
+    "spiritual": "Spiritual",
+    "museum": "Museum",
+    "nature": "Nature"
+  },
+  "explore": {
+    "title": "Explore",
+    "categoriesLabel": "Categories",
+    "sampleNotice": "Sample places are shown while verified listings are prepared.",
+    "empty": {
+      "title": "No places here yet",
+      "message": "Places in this category will appear once they are verified.",
+      "action": "Show all places"
+    }
+  },
+  "search": {
+    "placeholder": "Search places and areas",
+    "suggestionsTitle": "Try searching for",
+    "suggestions": {
+      "beach": "Beach",
+      "temple": "Temple",
+      "auroville": "Auroville"
+    },
+    "resultsCount_one": "{{count}} place",
+    "resultsCount_other": "{{count}} places",
+    "noResults": {
+      "title": "No matches for “{{query}}”",
+      "message": "Try a different spelling or a nearby area."
+    }
+  },
+  "bookings": {
+    "title": "Bookings",
+    "empty": {
+      "title": "No bookings yet",
+      "message": "Bookings for activities, stays and events will appear here once they open.",
+      "action": "Explore places"
+    }
+  },
+  "saved": {
+    "title": "Saved",
+    "empty": {
+      "title": "Nothing saved yet",
+      "message": "Places and plans you save will appear here.",
+      "action": "Explore places"
+    }
+  },
+  "profile": {
+    "title": "Profile",
+    "guestName": "Guest",
+    "guestMessage": "Sign in to save places, keep your plans and manage bookings.",
+    "signIn": "Sign in",
+    "sections": {
+      "preferences": "Preferences",
+      "support": "Support",
+      "about": "About",
+      "developer": "Developer"
+    },
+    "language": "Language",
+    "appearance": "Appearance",
+    "area": "Your area",
+    "help": "Help and support",
+    "version": "App version",
+    "componentGallery": "Component gallery"
+  },
+  "appearance": {
+    "title": "Appearance",
+    "system": "Use device setting",
+    "light": "Light",
+    "dark": "Dark"
+  },
+  "language": {
+    "title": "Language",
+    "translationPending": "Translation in progress"
+  },
+  "banners": {
+    "preferencesSaveFailed": "We couldn't save your settings on this device."
+  }
+}
