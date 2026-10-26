@@ -8,11 +8,14 @@ React Native + Expo (SDK 58) app using development builds and React Navigation. 
 
 ```powershell
 # From this folder, with an emulator running (Android Studio > Device Manager)
-npm run android   # first run builds and installs the development build (several minutes)
+npm run android   # builds and installs the development build (rebuild after native changes)
 npm start         # later runs: start Metro and open the installed OnePondy app
 ```
 
 Copy `.env.example` to `.env` to point the app at your local API.
+
+In development builds, **Profile > Developer > Component gallery** shows every design-system
+component and state (loading, empty, error, offline) for visual QA in light and dark mode.
 
 ## Scripts
 
@@ -20,22 +23,35 @@ Copy `.env.example` to `.env` to point the app at your local API.
 |---|---|
 | `npm run android` | Build and install the development build on an emulator or device |
 | `npm start` | Start Metro for the installed development build |
-| `npm run lint` | ESLint (Expo config + Prettier + spec boundary rules) |
+| `npm run lint` | ESLint (Expo config + Prettier + spec rules below) |
 | `npm run typecheck` | TypeScript strict type-check |
 | `npm test` | Jest with React Native Testing Library |
 
-## Folder conventions (spec §5–§6)
+## Rules enforced by tooling
 
-Folders are created when the phase that needs them starts.
+| Rule | Enforced by |
+|---|---|
+| The design system never imports from `features/` (spec §5) | ESLint `no-restricted-imports` |
+| App state never imports API, storage or navigation code (spec §6) | ESLint `no-restricted-imports` |
+| No `any` (spec §15) | ESLint `@typescript-eslint/no-explicit-any` |
+| No user-facing text outside `src/i18n/locales/en.json` | ESLint `i18next/no-literal-string` (JSX text and label-type props) |
+| Translation keys exist | TypeScript (`src/i18n/i18next.d.ts`) |
+| Text and control colours meet WCAG AA in light and dark mode | `src/design-system/tokens/colors.test.ts` |
+
+## Folder conventions (spec §5–§6)
 
 | Folder | Holds | Rules |
 |---|---|---|
 | `src/app/` | `App.tsx` and `providers/` | Not an Expo Router routes directory |
-| `src/navigation/` | Root, auth and tab navigators | Phase 1 |
-| `src/design-system/` | `tokens/`, `atoms/`, `molecules/`, `organisms/`, `templates/` | Domain-agnostic; must not import `features/` (lint-enforced) |
-| `src/features/<feature>/` | `screens/`, `components/`, `hooks/`, `services/`, `schemas/`, `types/` | Feature organisms live in `components/` |
-| `src/state/` | Root reducer, actions, action types, `AppStateContext.tsx` | Pure; no API, storage or navigation imports (lint-enforced) |
-| `src/i18n/` | i18next setup and `locales/` | All user-facing strings |
-| `src/api/` | API client, endpoints, error parsing | Server state goes through TanStack Query |
+| `src/navigation/` | Root stack and bottom tabs (static React Navigation config) | Auth navigator joins in Phase 2 |
+| `src/design-system/` | `tokens/`, `theme/`, `atoms/`, `molecules/`, `organisms/`, `templates/` | Domain-agnostic; takes all text through props |
+| `src/features/<feature>/` | `screens/`, `components/`, `hooks/`, `data/` | Feature organisms live in `components/` |
+| `src/state/` | Root reducer, slice reducers, actions, action types, `AppStateContext.tsx` | Pure reducers; separate state and dispatch contexts |
+| `src/storage/` | Local persistence (AsyncStorage for non-sensitive preferences) | Never tokens or personal data |
+| `src/i18n/` | i18next setup and `locales/` | English source; Tamil and French fall back until reviewed |
+| `src/api/` | API client, endpoints, error parsing | Phase 2, with TanStack Query |
+
+Sample places and collections in `src/features/*/data/` exist only in development builds and are
+always labelled "Sample" in the UI (spec §4).
 
 Tests sit next to the code they cover as `*.test.ts(x)`.

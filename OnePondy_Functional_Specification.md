@@ -2402,3 +2402,4 @@ Every decision has an owner and a phase by which it must be made. Implementation
 | D15 | Non-functional targets | Values proposed in §20 | — | Phase 1 | Open |
 | D16 | Document owner and approvers | — | — | Now | Open |
 | D17 | App identifiers (Android package, iOS bundle ID) | `com.onepondy.customer` (provisional, used since Phase 0); a domain-based ID such as `in.<your-domain>.onepondy` | Use a reverse domain you own; cannot change after the first store release | Before the first store upload | Open |
+| D18 | Brand identity: logo, app icon, splash artwork, typeface | Placeholders since Phase 1: a sun-over-waves mark on brand teal, and Plus Jakarta Sans (SIL Open Font License); final brand design | Commission final artwork; keep the token structure so it swaps in one place | Before Release 1 | Open |
