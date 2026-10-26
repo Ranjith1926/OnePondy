@@ -31,7 +31,9 @@ export function ModalScreenTemplate({
         </OPText>
         <OPIconButton icon="x" accessibilityLabel={closeLabel} onPress={onClose} variant="tonal" />
       </View>
-      <ScrollView contentContainerStyle={styles.content}>{children}</ScrollView>
+      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        {children}
+      </ScrollView>
     </SafeAreaView>
   );
 }

@@ -4,6 +4,7 @@ import { StyleSheet, TextInput, View, type TextInputProps } from 'react-native';
 import { useTheme, useThemedStyles } from '../theme/ThemeProvider';
 import type { Theme } from '../theme/theme';
 import { OPIcon, type IconName } from './OPIcon';
+import { OPText } from './OPText';
 
 export interface OPInputProps extends Omit<
   TextInputProps,
@@ -12,6 +13,8 @@ export interface OPInputProps extends Omit<
   leadingIcon?: IconName;
   trailing?: ReactNode;
   hasError?: boolean;
+  /** Fixed text before the input, such as a country code. */
+  prefix?: string;
   ref?: Ref<ComponentRef<typeof TextInput>>;
 }
 
@@ -19,6 +22,7 @@ export function OPInput({
   leadingIcon,
   trailing,
   hasError = false,
+  prefix,
   editable = true,
   onFocus,
   onBlur,
@@ -45,6 +49,11 @@ export function OPInput({
     >
       {leadingIcon ? (
         <OPIcon name={leadingIcon} size={20} color={theme.colors.text.secondary} />
+      ) : null}
+      {prefix ? (
+        <OPText tone="secondary" accessibilityElementsHidden importantForAccessibility="no">
+          {prefix}
+        </OPText>
       ) : null}
       <TextInput
         {...rest}

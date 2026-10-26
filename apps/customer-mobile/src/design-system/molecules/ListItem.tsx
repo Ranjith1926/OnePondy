@@ -21,6 +21,8 @@ interface ListItemProps {
   trailing?: Trailing;
   onPress?: () => void;
   disabled?: boolean;
+  /** For irreversible actions such as deleting an account. */
+  destructive?: boolean;
   accessibilityHint?: string;
   testID?: string;
 }
@@ -32,6 +34,7 @@ export function ListItem({
   trailing,
   onPress,
   disabled = false,
+  destructive = false,
   accessibilityHint,
   testID,
 }: ListItemProps) {
@@ -60,16 +63,22 @@ export function ListItem({
       style={({ pressed }) => [styles.row, pressed && onPress ? styles.pressed : null]}
     >
       {leadingIcon ? (
-        <View style={styles.leading}>
+        <View style={[styles.leading, destructive ? styles.leadingDestructive : null]}>
           <OPIcon
             name={leadingIcon}
             size={20}
-            color={disabled ? theme.colors.text.disabled : theme.colors.brand.primary}
+            color={
+              disabled
+                ? theme.colors.text.disabled
+                : destructive
+                  ? theme.colors.onErrorContainer
+                  : theme.colors.brand.primary
+            }
           />
         </View>
       ) : null}
       <View style={styles.text}>
-        <OPText tone={disabled ? 'disabled' : 'primary'}>{title}</OPText>
+        <OPText tone={disabled ? 'disabled' : destructive ? 'error' : 'primary'}>{title}</OPText>
         {subtitle ? (
           <OPText variant="caption" tone={disabled ? 'disabled' : 'secondary'}>
             {subtitle}
@@ -122,6 +131,9 @@ const createStyles = (theme: Theme) =>
       justifyContent: 'center',
       borderRadius: theme.radii.md,
       backgroundColor: theme.colors.brand.primaryContainer,
+    },
+    leadingDestructive: {
+      backgroundColor: theme.colors.errorContainer,
     },
     text: {
       flex: 1,

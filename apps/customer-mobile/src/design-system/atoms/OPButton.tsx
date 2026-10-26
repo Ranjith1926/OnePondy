@@ -5,7 +5,7 @@ import type { Theme } from '../theme/theme';
 import { OPIcon, type IconName } from './OPIcon';
 import { OPText } from './OPText';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'tertiary';
+export type ButtonVariant = 'primary' | 'secondary' | 'tertiary' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 export interface OPButtonProps {
@@ -48,6 +48,13 @@ function colorsFor(theme: Theme, variant: ButtonVariant, disabled: boolean) {
       };
     case 'tertiary':
       return { background: 'transparent', pressedBackground: surfaceMuted, foreground: text.link };
+    case 'danger':
+      // Destructive actions such as deleting an account; contrast-tested container colours.
+      return {
+        background: theme.colors.errorContainer,
+        pressedBackground: undefined,
+        foreground: theme.colors.onErrorContainer,
+      };
   }
 }
 
