@@ -65,7 +65,8 @@
           }
         }
       ],
-      "@react-native-vector-icons/lucide"
+      "@react-native-vector-icons/lucide",
+      "expo-secure-store"
     ]
   }
 }

@@ -1,5 +1,24 @@
 import { ActionTypes } from './actionTypes';
-import type { Banner, Language, PreferencesState, ThemePreference } from './appState';
+import type { Banner, Language, PreferencesState, SessionUser, ThemePreference } from './appState';
+
+export const sessionRestored = (user: SessionUser) => ({
+  type: ActionTypes.sessionRestored,
+  payload: { user },
+});
+
+export const signedIn = (user: SessionUser) => ({
+  type: ActionTypes.signedIn,
+  payload: { user },
+});
+
+export const sessionCleared = () => ({
+  type: ActionTypes.sessionCleared,
+});
+
+export const userUpdated = (changes: Pick<SessionUser, 'displayName'>) => ({
+  type: ActionTypes.userUpdated,
+  payload: changes,
+});
 
 export const preferencesRestored = (preferences: Partial<PreferencesState>) => ({
   type: ActionTypes.preferencesRestored,
@@ -35,6 +54,10 @@ export const hideBanner = () => ({
 });
 
 export type AppAction =
+  | ReturnType<typeof sessionRestored>
+  | ReturnType<typeof signedIn>
+  | ReturnType<typeof sessionCleared>
+  | ReturnType<typeof userUpdated>
   | ReturnType<typeof preferencesRestored>
   | ReturnType<typeof setLanguage>
   | ReturnType<typeof setTheme>

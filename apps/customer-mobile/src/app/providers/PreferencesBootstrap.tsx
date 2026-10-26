@@ -1,4 +1,3 @@
-import * as SplashScreen from 'expo-splash-screen';
 import { useEffect, useState, type ReactNode } from 'react';
 
 import { preferencesRestored, showBanner, useAppDispatch, useAppState } from '../../state';
@@ -6,7 +5,8 @@ import { loadStoredPreferences, saveStoredPreferences } from '../../storage/pref
 
 /**
  * Restores saved preferences behind the native splash screen, then keeps them persisted.
- * Storage side effects live here, never in reducers (spec §6).
+ * Storage side effects live here, never in reducers (spec §6). The splash screen is hidden once
+ * the session has been restored too (SessionBootstrap).
  */
 export function PreferencesBootstrap({ children }: { children: ReactNode }) {
   const dispatch = useAppDispatch();
@@ -36,10 +36,6 @@ export function PreferencesBootstrap({ children }: { children: ReactNode }) {
       dispatch(showBanner({ kind: 'error', messageKey: 'banners.preferencesSaveFailed' }));
     });
   }, [restored, preferences, dispatch]);
-
-  useEffect(() => {
-    if (restored) SplashScreen.hide();
-  }, [restored]);
 
   return restored ? children : null;
 }

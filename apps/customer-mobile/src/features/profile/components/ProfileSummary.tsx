@@ -4,12 +4,33 @@ import { StyleSheet, View } from 'react-native';
 import { OPAvatar, OPButton, OPText, useThemedStyles, type Theme } from '../../../design-system';
 
 interface ProfileSummaryProps {
+  /** The signed-in account. Guests see a sign-in prompt instead. */
+  account?: { displayName: string; contact?: string };
   onSignIn: () => void;
 }
 
-export function ProfileSummary({ onSignIn }: ProfileSummaryProps) {
+export function ProfileSummary({ account, onSignIn }: ProfileSummaryProps) {
   const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
+
+  if (account) {
+    return (
+      <View style={styles.card}>
+        <View style={styles.row}>
+          <OPAvatar name={account.displayName} />
+          <View style={styles.text}>
+            <OPText variant="heading">{account.displayName || t('profile.unnamed')}</OPText>
+            {account.contact ? (
+              <OPText variant="caption" tone="secondary">
+                {account.contact}
+              </OPText>
+            ) : null}
+          </View>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.card}>
       <View style={styles.row}>

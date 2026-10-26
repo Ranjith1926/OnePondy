@@ -1,4 +1,5 @@
 import { useNavigation } from '@react-navigation/native';
+import { useMutation } from '@tanstack/react-query';
 import Constants from 'expo-constants';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { ListItem, ListSection, MainTabTemplate } from '../../../design-system';
 import { languageOptions } from '../../../i18n';
 import { useAppState } from '../../../state';
+import { useAuthActions } from '../../auth/hooks/useAuthActions';
+import { formatPhone, useProfile } from '../../auth/hooks/useProfile';
 import { useSelectedArea } from '../../location/hooks/useSelectedArea';
 import { ComingSoonSheet } from '../../modules/components/ComingSoonSheet';
 import type { ModuleKey } from '../../modules/moduleConfig';
@@ -18,18 +21,53 @@ type OpenSheet = 'appearance' | 'language' | null;
 export function ProfileScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { preferences } = useAppState();
+  const { preferences, auth } = useAppState();
   const area = useSelectedArea();
+  const profile = useProfile();
+  const { signOut } = useAuthActions();
+  const signOutRequest = useMutation({ mutationFn: signOut });
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [comingSoon, setComingSoon] = useState<ModuleKey | null>(null);
   const languageName =
     languageOptions.find((option) => option.code === preferences.language)?.nativeName ?? '';
   const version = Constants.expoConfig?.version;
 
+  const contact = profile.data?.phoneNumber
+    ? formatPhone(profile.data.phoneNumber)
+    : (profile.data?.email ?? undefined);
+  const account =
+    auth.status === 'authenticated' && auth.user
+      ? { displayName: auth.user.displayName, contact }
+      : undefined;
+
   return (
     <>
       <MainTabTemplate title={t('profile.title')}>
-        <ProfileSummary onSignIn={() => setComingSoon('account')} />
+        <ProfileSummary account={account} onSignIn={() => navigation.navigate('SignIn')} />
+        {account ? (
+          <ListSection title={t('profile.sections.account')}>
+            <ListItem
+              leadingIcon="user-round-pen"
+              title={t('profile.editProfile')}
+              subtitle={account.displayName ? undefined : t('profile.addName')}
+              trailing={{ kind: 'chevron' }}
+              onPress={() => navigation.navigate('EditProfile')}
+            />
+            <ListItem
+              leadingIcon="log-out"
+              title={t('profile.signOut')}
+              onPress={() => signOutRequest.mutate()}
+              disabled={signOutRequest.isPending}
+            />
+            <ListItem
+              leadingIcon="trash-2"
+              title={t('profile.deleteAccount')}
+              trailing={{ kind: 'chevron' }}
+              onPress={() => navigation.navigate('DeleteAccount')}
+              destructive
+            />
+          </ListSection>
+        ) : null}
         <ListSection title={t('profile.sections.preferences')}>
           <ListItem
             leadingIcon="languages"

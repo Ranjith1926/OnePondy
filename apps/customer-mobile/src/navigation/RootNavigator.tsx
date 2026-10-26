@@ -1,6 +1,11 @@
 import { createStaticNavigation } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { CompleteProfileScreen } from '../features/auth/screens/CompleteProfileScreen';
+import { DeleteAccountScreen } from '../features/auth/screens/DeleteAccountScreen';
+import { EditProfileScreen } from '../features/auth/screens/EditProfileScreen';
+import { SignInScreen } from '../features/auth/screens/SignInScreen';
+import { VerifyCodeScreen } from '../features/auth/screens/VerifyCodeScreen';
 import { ComponentGalleryScreen } from '../features/dev/screens/ComponentGalleryScreen';
 import { LocationSelectorScreen } from '../features/location/screens/LocationSelectorScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
@@ -16,11 +21,22 @@ function useIsOnboarded(): boolean {
   return useAppState().preferences.onboardingCompleted;
 }
 
+/** Sign-in screens exist only for guests, so signing in closes them and returns to where the user was. */
+function useIsGuest(): boolean {
+  const { preferences, auth } = useAppState();
+  return preferences.onboardingCompleted && auth.status !== 'authenticated';
+}
+
+/** Account screens exist only with a valid session, so they close when the session ends (spec §10, Phase 2). */
+function useIsSignedIn(): boolean {
+  const { preferences, auth } = useAppState();
+  return preferences.onboardingCompleted && auth.status === 'authenticated';
+}
+
 function useIsDevelopmentBuild(): boolean {
   return __DEV__;
 }
 
-// The auth navigator joins in Phase 2; guests keep using the public screens (spec §4).
 export const RootStack = createNativeStackNavigator({
   screenOptions: {
     headerShown: false,
@@ -48,6 +64,28 @@ export const RootStack = createNativeStackNavigator({
           screen: ComponentGalleryScreen,
           if: useIsDevelopmentBuild,
         },
+      },
+    },
+    Guest: {
+      if: useIsGuest,
+      screens: {
+        SignIn: {
+          screen: SignInScreen,
+          options: { presentation: 'modal' },
+        },
+        VerifyCode: VerifyCodeScreen,
+        CompleteProfile: {
+          screen: CompleteProfileScreen,
+          options: { gestureEnabled: false },
+        },
+      },
+    },
+    Account: {
+      if: useIsSignedIn,
+      screenOptions: { presentation: 'modal' },
+      screens: {
+        EditProfile: EditProfileScreen,
+        DeleteAccount: DeleteAccountScreen,
       },
     },
   },

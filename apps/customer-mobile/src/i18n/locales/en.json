@@ -154,6 +154,10 @@
       "title": "No bookings yet",
       "message": "Bookings for activities, stays and events will appear here once they open.",
       "action": "Explore places"
+    },
+    "guest": {
+      "title": "Sign in to see your bookings",
+      "message": "Your bookings for activities, stays and events stay with your account."
     }
   },
   "saved": {
@@ -162,25 +166,99 @@
       "title": "Nothing saved yet",
       "message": "Places and plans you save will appear here.",
       "action": "Explore places"
+    },
+    "guest": {
+      "title": "Sign in to save places",
+      "message": "Keep the places you love and your trip plans in one list, on any device."
     }
+  },
+  "guestPrompt": {
+    "action": "Sign in"
   },
   "profile": {
     "title": "Profile",
     "guestName": "Guest",
     "guestMessage": "Sign in to save places, keep your plans and manage bookings.",
     "signIn": "Sign in",
+    "unnamed": "Your account",
     "sections": {
+      "account": "Account",
       "preferences": "Preferences",
       "support": "Support",
       "about": "About",
       "developer": "Developer"
     },
+    "editProfile": "Edit profile",
+    "addName": "Add your name",
+    "signOut": "Sign out",
+    "deleteAccount": "Delete account",
     "language": "Language",
     "appearance": "Appearance",
     "area": "Your area",
     "help": "Help and support",
     "version": "App version",
     "componentGallery": "Component gallery"
+  },
+  "auth": {
+    "signInTitle": "Sign in or sign up",
+    "signInIntro": "We'll send you a one-time code. If you're new to OnePondy, verifying it creates your account.",
+    "phoneLabel": "Mobile number",
+    "phoneHint": "SMS codes work with Indian mobile numbers.",
+    "emailLabel": "Email address",
+    "useEmail": "Use email instead",
+    "usePhone": "Use mobile number instead",
+    "sendCode": "Send code",
+    "smsNote": "We'll text you a 6-digit code. Standard SMS rates may apply.",
+    "emailNote": "We'll email you a 6-digit code.",
+    "verifyTitle": "Enter your code",
+    "verifyIntro": "We sent a 6-digit code to {{destination}}.",
+    "codeLabel": "6-digit code",
+    "verify": "Verify",
+    "resend": "Send a new code",
+    "resendIn": "Send a new code in {{seconds}}s",
+    "changeDestination": "Use a different number or email",
+    "completeTitle": "What should we call you?",
+    "completeIntro": "Partners see this name on your bookings. You can change it later in your profile.",
+    "nameLabel": "Your name",
+    "continue": "Continue",
+    "skip": "Skip for now",
+    "validation": {
+      "phone": "Enter a 10-digit mobile number.",
+      "email": "Enter a valid email address.",
+      "code": "Enter the 6-digit code.",
+      "name": "Enter your name, up to 120 characters."
+    },
+    "errors": {
+      "invalid_destination": "Check the number or email address and try again.",
+      "unsupported_country": "SMS codes work with Indian mobile numbers. Use email instead.",
+      "too_many_requests": "You've asked for several codes. Wait a few minutes, then try again.",
+      "rate_limited": "Too many attempts from this device. Wait a minute, then try again.",
+      "codes_unavailable": "Sign-in codes are unavailable right now. Try again later.",
+      "delivery_unavailable": "We couldn't send a code right now. Try again later.",
+      "invalid_code": "That code isn't right. Check it and try again.",
+      "code_expired": "That code has expired. Request a new one.",
+      "too_many_attempts": "Too many incorrect codes. Request a new one.",
+      "deletion_blocked": "You have bookings, orders or refunds in progress. Once they're finished, you can delete your account.",
+      "offline": "You're offline. Check your connection and try again.",
+      "timeout": "This is taking too long. Check your connection and try again.",
+      "generic": "Something went wrong. Try again."
+    }
+  },
+  "editProfile": {
+    "title": "Edit profile",
+    "save": "Save"
+  },
+  "deleteAccount": {
+    "title": "Delete account",
+    "intro": "Deleting your account is permanent. Here's what happens:",
+    "points": {
+      "data": "Your name, mobile number and email are removed, along with your saved places and plans.",
+      "sessions": "You're signed out on every device.",
+      "records": "Invoices and payment records that tax law requires us to keep are retained, without your contact details."
+    },
+    "sendCode": "Send confirmation code",
+    "codeIntro": "Enter the code we sent to {{destination}} to confirm.",
+    "confirm": "Delete my account"
   },
   "appearance": {
     "title": "Appearance",
@@ -193,6 +271,9 @@
     "translationPending": "Translation in progress"
   },
   "banners": {
-    "preferencesSaveFailed": "We couldn't save your settings on this device."
+    "preferencesSaveFailed": "We couldn't save your settings on this device.",
+    "sessionExpired": "Your session has ended. Sign in again to continue.",
+    "signedOut": "You're signed out.",
+    "accountDeleted": "Your account has been deleted."
   }
 }

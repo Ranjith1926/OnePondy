@@ -3,10 +3,14 @@ import {
   completeOnboarding,
   hideBanner,
   preferencesRestored,
+  sessionCleared,
+  sessionRestored,
   setLanguage,
   setSelectedLocation,
   setTheme,
   showBanner,
+  signedIn,
+  userUpdated,
 } from './rootActions';
 import { rootReducer } from './rootReducer';
 
@@ -53,6 +57,29 @@ describe('rootReducer', () => {
     expect(shown.ui.banner).toEqual({ kind: 'error', messageKey: 'banners.preferencesSaveFailed' });
 
     expect(rootReducer(shown, hideBanner()).ui.banner).toBeNull();
+  });
+
+  it('starts by restoring the session, then tracks sign-in, name changes and sign-out', () => {
+    const user = { id: 'u1', displayName: '', roles: ['customer'] };
+    expect(initialAppState.auth).toEqual({ status: 'loading', user: null });
+
+    const restored = rootReducer(initialAppState, sessionRestored(user));
+    expect(restored.auth).toEqual({ status: 'authenticated', user });
+
+    const named = rootReducer(restored, userUpdated({ displayName: 'Asha' }));
+    expect(named.auth.user).toEqual({ ...user, displayName: 'Asha' });
+
+    const signedOut = rootReducer(named, sessionCleared());
+    expect(signedOut.auth).toEqual({ status: 'unauthenticated', user: null });
+
+    expect(rootReducer(signedOut, signedIn(user)).auth.status).toBe('authenticated');
+  });
+
+  it('ignores name changes and repeated sign-outs without a session', () => {
+    const signedOut = rootReducer(initialAppState, sessionCleared());
+
+    expect(rootReducer(signedOut, sessionCleared())).toBe(signedOut);
+    expect(rootReducer(signedOut, userUpdated({ displayName: 'Asha' }))).toBe(signedOut);
   });
 
   it('returns the same state object when nothing changes', () => {
