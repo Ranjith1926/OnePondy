@@ -2,6 +2,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using OnePondy.Application.Audit;
+using OnePondy.Application.Businesses;
 using OnePondy.Application.Configuration;
 using OnePondy.Application.Identity;
 using OnePondy.Application.Itineraries;
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddScoped<SavedPlacesService>();
         services.AddScoped<ItineraryService>();
         services.AddScoped<TripPlannerService>();
+        services.AddScoped<BusinessService>();
 
         return services;
     }

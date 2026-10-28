@@ -24,6 +24,9 @@ public sealed class ApiFactory(string connectionString, IReadOnlyDictionary<stri
     /// <summary>Uploaded media go to a temporary folder, never into the repository.</summary>
     public string MediaRoot { get; } = Path.Combine(Path.GetTempPath(), "onepondy-test-media", Guid.NewGuid().ToString("N"));
 
+    /// <summary>Uploaded business documents go to a temporary folder, never into the repository.</summary>
+    public string BusinessDocumentsRoot { get; } = Path.Combine(Path.GetTempPath(), "onepondy-test-business-documents", Guid.NewGuid().ToString("N"));
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
@@ -32,6 +35,7 @@ public sealed class ApiFactory(string connectionString, IReadOnlyDictionary<stri
         builder.UseSetting("Auth:HashingKey", HashingKey);
         builder.UseSetting("RateLimiting:Auth:PermitLimit", "1000");
         builder.UseSetting("Media:RootPath", MediaRoot);
+        builder.UseSetting("BusinessDocuments:RootPath", BusinessDocumentsRoot);
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())
         {
             builder.UseSetting(key, value);

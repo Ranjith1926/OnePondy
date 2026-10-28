@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using OnePondy.Domain.Audit;
+using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
@@ -36,11 +37,15 @@ public interface IOnePondyDbContext
 
     DbSet<TripPlannerRequestLog> TripPlannerRequestLogs { get; }
 
+    DbSet<Business> Businesses { get; }
+
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an
-    /// edit based on stale data is rejected instead of overwriting someone else's change.
+    /// edit based on stale data is rejected instead of overwriting someone else's change. Works for
+    /// any entity with a <c>Version</c> row-version property, real or shadow.
     /// </summary>
-    void ExpectVersion(Place place, uint version);
+    void ExpectVersion<TEntity>(TEntity entity, uint version)
+        where TEntity : class;
 
     /// <summary>
     /// Tells the next save this entity is new, for one added directly to an owned collection (such as

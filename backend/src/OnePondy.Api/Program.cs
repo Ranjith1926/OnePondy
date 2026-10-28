@@ -64,5 +64,6 @@ app.MapAdminSettingsEndpoints();
 app.MapSavedPlaceEndpoints();
 app.MapItineraryEndpoints();
 app.MapTripPlannerEndpoints();
+app.MapBusinessEndpoints();
 
 app.Run();

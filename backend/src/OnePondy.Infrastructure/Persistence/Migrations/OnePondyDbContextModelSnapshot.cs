@@ -265,6 +265,122 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_log", (string)null);
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Businesses.Business", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("approval_status");
+
+                    b.Property<string>("BusinessType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("business_type");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Email")
+                        .HasMaxLength(320)
+                        .HasColumnType("character varying(320)")
+                        .HasColumnName("email");
+
+                    b.Property<string>("FssaiLicenseNumber")
+                        .HasMaxLength(14)
+                        .HasColumnType("character varying(14)")
+                        .HasColumnName("fssai_license_number");
+
+                    b.Property<string>("Gstin")
+                        .HasMaxLength(15)
+                        .HasColumnType("character varying(15)")
+                        .HasColumnName("gstin");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OwnerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_user_id");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("phone_number");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_businesses");
+
+                    b.HasIndex("OwnerUserId")
+                        .HasDatabaseName("ix_businesses_owner_user_id");
+
+                    b.HasIndex("BusinessType", "ApprovalStatus", "IsActive")
+                        .HasDatabaseName("ix_businesses_type_status");
+
+                    b.ToTable("businesses", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_business_active_requires_approval", "NOT is_active OR approval_status = 'approved'");
+
+                            t.HasCheckConstraint("ck_business_approval_status", "approval_status IN ('pending', 'approved', 'rejected', 'suspended')");
+
+                            t.HasCheckConstraint("ck_business_coordinates", "(latitude IS NULL) = (longitude IS NULL)");
+
+                            t.HasCheckConstraint("ck_business_latitude", "latitude IS NULL OR latitude BETWEEN -90 AND 90");
+
+                            t.HasCheckConstraint("ck_business_longitude", "longitude IS NULL OR longitude BETWEEN -180 AND 180");
+
+                            t.HasCheckConstraint("ck_business_restaurant_fssai", "business_type <> 'restaurant' OR approval_status <> 'approved' OR fssai_license_number IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_business_type", "business_type IN ('restaurant', 'hotel', 'activity', 'shop', 'tour_operator', 'service')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Configuration.AppSetting", b =>
                 {
                     b.Property<string>("Key")
@@ -1155,6 +1271,66 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("ActorUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_audit_log_app_users_actor_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Businesses.Business", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_businesses_app_users_owner_user_id");
+
+                    b.OwnsMany("OnePondy.Domain.Businesses.BusinessDocument", "Documents", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<Guid>("BusinessId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("business_id");
+
+                            b1.Property<string>("ContentType")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("content_type");
+
+                            b1.Property<string>("Kind")
+                                .IsRequired()
+                                .HasMaxLength(24)
+                                .HasColumnType("character varying(24)")
+                                .HasColumnName("kind");
+
+                            b1.Property<string>("StorageKey")
+                                .IsRequired()
+                                .HasMaxLength(200)
+                                .HasColumnType("character varying(200)")
+                                .HasColumnName("storage_key");
+
+                            b1.Property<DateTimeOffset>("UploadedAt")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("uploaded_at");
+
+                            b1.HasKey("Id")
+                                .HasName("pk_business_documents");
+
+                            b1.HasIndex("BusinessId")
+                                .HasDatabaseName("ix_business_documents_business_id");
+
+                            b1.ToTable("business_documents", null, t =>
+                                {
+                                    t.HasCheckConstraint("ck_business_document_kind", "kind IN ('gstin', 'fssai_licence', 'other')");
+                                });
+
+                            b1.WithOwner()
+                                .HasForeignKey("BusinessId")
+                                .HasConstraintName("fk_business_documents_businesses_business_id");
+                        });
+
+                    b.Navigation("Documents");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Configuration.AppSetting", b =>

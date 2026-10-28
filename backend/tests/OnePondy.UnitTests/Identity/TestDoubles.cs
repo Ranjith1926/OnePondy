@@ -8,6 +8,7 @@ using Microsoft.Extensions.Time.Testing;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Domain.Audit;
+using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
@@ -51,6 +52,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<TripPlannerRequestLog> TripPlannerRequestLogs => Set<TripPlannerRequestLog>();
 
+    public DbSet<Business> Businesses => Set<Business>();
+
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -58,7 +61,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
             .Options);
 
     // The in-memory provider has no xmin, so version checks are covered by the PostgreSQL integration tests.
-    public void ExpectVersion(Place place, uint version)
+    public void ExpectVersion<TEntity>(TEntity entity, uint version)
+        where TEntity : class
     {
     }
 
@@ -107,6 +111,16 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
                 stop.HasKey(s => s.Id);
             });
             itinerary.Navigation(i => i.Stops).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+        modelBuilder.Entity<Business>(business =>
+        {
+            business.HasKey(b => b.Id);
+            business.OwnsMany(b => b.Documents, document =>
+            {
+                document.WithOwner().HasForeignKey("BusinessId");
+                document.HasKey(d => d.Id);
+            });
+            business.Navigation(b => b.Documents).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
     }
 }

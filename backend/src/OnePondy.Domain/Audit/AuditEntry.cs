@@ -53,6 +53,7 @@ public static class AuditEntityTypes
     public const string ModuleFlag = "module_flag";
     public const string AppSetting = "app_setting";
     public const string Staff = "staff";
+    public const string Business = "business";
 }
 
 public static class AuditActions
@@ -72,4 +73,12 @@ public static class AuditActions
     public const string MinAppVersionChanged = "config.min_app_version_changed";
     public const string StaffRoleGranted = "staff.role_granted";
     public const string StaffRoleRevoked = "staff.role_revoked";
+    public const string BusinessApplied = "business.applied";
+    public const string BusinessUpdated = "business.updated";
+    public const string BusinessApproved = "business.approved";
+    public const string BusinessRejected = "business.rejected";
+    public const string BusinessSuspended = "business.suspended";
+    public const string BusinessReinstated = "business.reinstated";
+    public const string BusinessDocumentAdded = "business.document_added";
+    public const string BusinessDocumentRemoved = "business.document_removed";
 }

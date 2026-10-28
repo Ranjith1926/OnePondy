@@ -3,11 +3,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
+using OnePondy.Application.Businesses;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Application.Media;
 using OnePondy.Application.Staff;
 using OnePondy.Application.TripPlanner;
+using OnePondy.Infrastructure.Businesses;
 using OnePondy.Infrastructure.Identity;
 using OnePondy.Infrastructure.Media;
 using OnePondy.Infrastructure.Messaging;
@@ -49,6 +51,11 @@ public static class DependencyInjection
             .PostConfigure(options => options.RootPath ??= Path.Combine(environment.ContentRootPath, "App_Data", "media"));
         services.AddSingleton<IMediaStorage, LocalMediaStorage>();
         services.AddSingleton<IImageProcessor, SkiaImageProcessor>();
+
+        services.AddOptions<BusinessDocumentStorageOptions>()
+            .Bind(configuration.GetSection(BusinessDocumentStorageOptions.SectionName))
+            .PostConfigure(options => options.RootPath ??= Path.Combine(environment.ContentRootPath, "App_Data", "business-documents"));
+        services.AddSingleton<IBusinessDocumentStorage, LocalBusinessDocumentStorage>();
 
         services.AddOptions<JwtOptions>()
             .Bind(configuration.GetSection(JwtOptions.SectionName))

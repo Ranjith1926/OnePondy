@@ -6,6 +6,7 @@ using OnePondy.Application.Common;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
+using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
@@ -40,11 +41,15 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
 
     public DbSet<TripPlannerRequestLog> TripPlannerRequestLogs => Set<TripPlannerRequestLog>();
 
+    public DbSet<Business> Businesses => Set<Business>();
+
     /// <summary>Provider settings shared by the app and the design-time factory used for migrations.</summary>
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>
         options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention();
 
-    public void ExpectVersion(Place place, uint version) => Entry(place).Property(p => p.Version).OriginalValue = version;
+    public void ExpectVersion<TEntity>(TEntity entity, uint version)
+        where TEntity : class =>
+        Entry(entity).Property("Version").OriginalValue = version;
 
     public void MarkAdded<TEntity>(TEntity entity)
         where TEntity : class =>
