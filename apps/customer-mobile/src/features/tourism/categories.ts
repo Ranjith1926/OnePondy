@@ -11,3 +11,8 @@ export const categoryIcons: Record<PlaceCategoryId, IconName> = {
   museum: 'landmark',
   nature: 'trees',
 };
+
+/** The server may add categories the console supports before this app's next release. */
+export function isKnownCategory(code: string): code is PlaceCategoryId {
+  return (placeCategoryIds as readonly string[]).includes(code);
+}

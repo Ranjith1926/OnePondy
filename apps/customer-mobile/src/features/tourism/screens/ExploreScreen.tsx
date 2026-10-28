@@ -5,16 +5,17 @@ import { ScrollView, StyleSheet, View } from 'react-native';
 
 import {
   EmptyState,
+  ErrorState,
+  LoadingState,
   MainTabTemplate,
   OPChip,
-  OPText,
   SearchBar,
   useThemedStyles,
   type Theme,
 } from '../../../design-system';
-import { categoryIcons, placeCategoryIds, type PlaceCategoryId } from '../categories';
+import { placeCategoryIds, type PlaceCategoryId } from '../categories';
 import { PlaceSummaryCard } from '../components/PlaceSummaryCard';
-import { samplePlaces } from '../data/samplePlaces';
+import { usePlaces } from '../hooks/usePlaces';
 
 type CategoryFilter = PlaceCategoryId | 'all';
 
@@ -23,10 +24,7 @@ export function ExploreScreen() {
   const navigation = useNavigation();
   const styles = useThemedStyles(createStyles);
   const [category, setCategory] = useState<CategoryFilter>('all');
-  const places =
-    category === 'all'
-      ? samplePlaces
-      : samplePlaces.filter((place) => place.categoryId === category);
+  const places = usePlaces({ category: category === 'all' ? undefined : category, pageSize: 50 });
 
   return (
     <MainTabTemplate title={t('explore.title')}>
@@ -52,19 +50,32 @@ export function ExploreScreen() {
           <OPChip
             key={id}
             label={t(`categories.${id}`)}
-            icon={categoryIcons[id]}
             selected={category === id}
             onPress={() => setCategory(id)}
           />
         ))}
       </ScrollView>
-      {places.length > 0 ? (
+      {places.isPending ? (
         <View style={styles.list}>
-          <OPText variant="caption" tone="secondary">
-            {t('explore.sampleNotice')}
-          </OPText>
-          {places.map((place) => (
-            <PlaceSummaryCard key={place.id} place={place} variant="list" />
+          <LoadingState accessibilityLabel={t('explore.loading')} />
+        </View>
+      ) : places.isError ? (
+        <ErrorState
+          title={t('explore.error.title')}
+          message={t('explore.error.message')}
+          retryLabel={t('common.retry')}
+          onRetry={() => void places.refetch()}
+          retrying={places.isFetching}
+        />
+      ) : places.data.items.length > 0 ? (
+        <View style={styles.list}>
+          {places.data.items.map((place) => (
+            <PlaceSummaryCard
+              key={place.id}
+              place={place}
+              variant="list"
+              onPress={() => navigation.navigate('PlaceDetail', { idOrSlug: place.slug })}
+            />
           ))}
         </View>
       ) : (

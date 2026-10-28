@@ -12,6 +12,17 @@ export function locationReducer(state: LocationState, action: AppAction): Locati
         longitude: null,
         source: 'manual',
       };
+    case ActionTypes.setGpsLocation:
+      return {
+        ...state,
+        latitude: action.payload.latitude,
+        longitude: action.payload.longitude,
+        source: 'gps',
+      };
+    case ActionTypes.clearGpsLocation:
+      return state.source === 'gps'
+        ? { ...state, latitude: null, longitude: null, source: null }
+        : state;
     default:
       return state;
   }

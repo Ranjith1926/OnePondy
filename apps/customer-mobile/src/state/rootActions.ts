@@ -44,6 +44,16 @@ export const setSelectedLocation = (areaId: string) => ({
   payload: { areaId },
 });
 
+/** GPS coordinates are in-memory only; never persisted (spec §12). */
+export const setGpsLocation = (latitude: number, longitude: number) => ({
+  type: ActionTypes.setGpsLocation,
+  payload: { latitude, longitude },
+});
+
+export const clearGpsLocation = () => ({
+  type: ActionTypes.clearGpsLocation,
+});
+
 export const showBanner = (banner: Banner) => ({
   type: ActionTypes.showBanner,
   payload: banner,
@@ -63,5 +73,7 @@ export type AppAction =
   | ReturnType<typeof setTheme>
   | ReturnType<typeof completeOnboarding>
   | ReturnType<typeof setSelectedLocation>
+  | ReturnType<typeof setGpsLocation>
+  | ReturnType<typeof clearGpsLocation>
   | ReturnType<typeof showBanner>
   | ReturnType<typeof hideBanner>;

@@ -8,6 +8,8 @@ export const ActionTypes = {
   setTheme: 'PREFERENCES/SET_THEME',
   completeOnboarding: 'PREFERENCES/COMPLETE_ONBOARDING',
   setSelectedLocation: 'LOCATION/SET_SELECTED',
+  setGpsLocation: 'LOCATION/SET_GPS',
+  clearGpsLocation: 'LOCATION/CLEAR_GPS',
   showBanner: 'UI/SHOW_BANNER',
   hideBanner: 'UI/HIDE_BANNER',
 } as const;

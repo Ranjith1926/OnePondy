@@ -9,6 +9,7 @@ import { VerifyCodeScreen } from '../features/auth/screens/VerifyCodeScreen';
 import { ComponentGalleryScreen } from '../features/dev/screens/ComponentGalleryScreen';
 import { LocationSelectorScreen } from '../features/location/screens/LocationSelectorScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
+import { PlaceDetailScreen } from '../features/tourism/screens/PlaceDetailScreen';
 import { SearchScreen } from '../features/tourism/screens/SearchScreen';
 import { useAppState } from '../state';
 import { MainTabs } from './MainTabNavigator';
@@ -56,6 +57,7 @@ export const RootStack = createNativeStackNavigator({
           screen: SearchScreen,
           options: { animation: 'fade' },
         },
+        PlaceDetail: PlaceDetailScreen,
         LocationSelector: {
           screen: LocationSelectorScreen,
           options: { presentation: 'modal' },

@@ -4,14 +4,23 @@ export class ApiError extends Error {
   readonly code: string;
   readonly retryAfterSeconds?: number;
   readonly reasons?: string[];
+  /** Validation problems keyed by field name, e.g. {"title": ["Required."]}. */
+  readonly fieldErrors?: Record<string, string[]>;
 
-  constructor(status: number, code: string, retryAfterSeconds?: number, reasons?: string[]) {
+  constructor(
+    status: number,
+    code: string,
+    retryAfterSeconds?: number,
+    reasons?: string[],
+    fieldErrors?: Record<string, string[]>,
+  ) {
     super(code);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.retryAfterSeconds = retryAfterSeconds;
     this.reasons = reasons;
+    this.fieldErrors = fieldErrors;
   }
 }
 

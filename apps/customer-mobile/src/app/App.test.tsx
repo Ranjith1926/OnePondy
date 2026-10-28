@@ -8,6 +8,52 @@ const STORAGE_KEY = 'onepondy.preferences.v1';
 /** React Navigation names tab buttons "<Label>, tab, <n> of <total>". */
 const tab = (label: string) => screen.getByRole('button', { name: new RegExp(`^${label}, tab`) });
 
+interface FixturePlace {
+  id: string;
+  slug: string;
+  name: string;
+  categoryCode: string;
+}
+
+// Verified-looking fixture content standing in for the real API (spec §10, Phase 4).
+const placeFixtures: FixturePlace[] = [
+  { id: 'place-1', slug: 'promenade-beach', name: 'Promenade Beach', categoryCode: 'beach' },
+  {
+    id: 'place-2',
+    slug: 'manakula-vinayagar-temple',
+    name: 'Manakula Vinayagar Temple',
+    categoryCode: 'spiritual',
+  },
+  { id: 'place-3', slug: 'pondicherry-museum', name: 'Pondicherry Museum', categoryCode: 'museum' },
+];
+
+function installFakePlacesApi() {
+  globalThis.fetch = jest.fn((input: string) => {
+    const url = new URL(input);
+    if (url.pathname === '/api/v1/places') {
+      const category = url.searchParams.get('category');
+      const q = url.searchParams.get('q')?.toLocaleLowerCase();
+      const items = placeFixtures
+        .filter((place) => !category || place.categoryCode === category)
+        .filter((place) => !q || place.name.toLocaleLowerCase().includes(q))
+        .map((place) => ({
+          ...place,
+          latitude: null,
+          longitude: null,
+          coverImage: null,
+          distanceKm: null,
+        }));
+      const body = { items, page: 1, pageSize: items.length, totalCount: items.length };
+      return Promise.resolve({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve(JSON.stringify(body)),
+      });
+    }
+    return Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve('') });
+  }) as unknown as typeof fetch;
+}
+
 async function launchOnboarded() {
   await AsyncStorage.setItem(
     STORAGE_KEY,
@@ -20,6 +66,7 @@ async function launchOnboarded() {
 describe('<App />', () => {
   beforeEach(async () => {
     await AsyncStorage.clear();
+    installFakePlacesApi();
   });
 
   it('shows onboarding on first launch and remembers it is complete', async () => {
@@ -76,7 +123,7 @@ describe('<App />', () => {
 
     await user.type(field, 'temple');
     expect(await screen.findByText('Manakula Vinayagar Temple')).toBeOnTheScreen();
-    expect(screen.getByText('1 place')).toBeOnTheScreen();
+    expect(await screen.findByText('1 place')).toBeOnTheScreen();
 
     await user.clear(field);
     await user.type(field, 'zzz');

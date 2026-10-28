@@ -1,10 +1,12 @@
 import { useNavigation } from '@react-navigation/native';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlatList, StyleSheet, View } from 'react-native';
 
 import {
   EmptyState,
+  ErrorState,
+  LoadingState,
   OPChip,
   OPIconButton,
   OPSearchField,
@@ -14,7 +16,8 @@ import {
   type Theme,
 } from '../../../design-system';
 import { PlaceSummaryCard } from '../components/PlaceSummaryCard';
-import { filterPlaces, samplePlaces } from '../data/samplePlaces';
+import { useDebouncedValue } from '../hooks/useDebouncedValue';
+import { usePlaces } from '../hooks/usePlaces';
 
 const suggestionKeys = ['beach', 'temple', 'auroville'] as const;
 
@@ -24,15 +27,9 @@ export function SearchScreen() {
   const styles = useThemedStyles(createStyles);
   const [query, setQuery] = useState('');
   const trimmed = query.trim();
+  const debounced = useDebouncedValue(trimmed, 350);
 
-  const results = useMemo(
-    () =>
-      filterPlaces(samplePlaces, trimmed, (place) => [
-        t(`areas.${place.areaId}`),
-        t(`categoryNames.${place.categoryId}`),
-      ]),
-    [trimmed, t],
-  );
+  const results = usePlaces({ q: debounced || undefined, pageSize: 50 });
 
   return (
     <SearchResultsTemplate
@@ -70,16 +67,34 @@ export function SearchScreen() {
             ))}
           </View>
         </View>
-      ) : results.length > 0 ? (
+      ) : results.isPending ? (
+        <View style={styles.results}>
+          <LoadingState accessibilityLabel={t('explore.loading')} />
+        </View>
+      ) : results.isError ? (
+        <ErrorState
+          title={t('explore.error.title')}
+          message={t('explore.error.message')}
+          retryLabel={t('common.retry')}
+          onRetry={() => void results.refetch()}
+          retrying={results.isFetching}
+        />
+      ) : results.data.items.length > 0 ? (
         <FlatList
-          data={results}
+          data={results.data.items}
           keyExtractor={(place) => place.id}
-          renderItem={({ item }) => <PlaceSummaryCard place={item} variant="list" />}
+          renderItem={({ item }) => (
+            <PlaceSummaryCard
+              place={item}
+              variant="list"
+              onPress={() => navigation.navigate('PlaceDetail', { idOrSlug: item.slug })}
+            />
+          )}
           keyboardShouldPersistTaps="handled"
           contentContainerStyle={styles.results}
           ListHeaderComponent={
             <OPText variant="caption" tone="secondary" accessibilityLiveRegion="polite">
-              {t('search.resultsCount', { count: results.length })}
+              {t('search.resultsCount', { count: results.data.totalCount })}
             </OPText>
           }
         />

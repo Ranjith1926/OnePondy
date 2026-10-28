@@ -40,8 +40,9 @@ function installFakeApi() {
     const route = `${init.method ?? 'GET'} ${new URL(input).pathname}`;
     const body = init.body ? JSON.parse(init.body as string) : undefined;
     const headers = init.headers as Record<string, string>;
-    // Every launch reads the public app config; these tests track account requests only.
-    if (route !== 'GET /api/v1/config') {
+    // Every launch reads the public app config and the home screen's popular places; these tests
+    // track account requests only.
+    if (route !== 'GET /api/v1/config' && route !== 'GET /api/v1/places') {
       requests.push({ route, body, authorization: headers.Authorization ?? null });
     }
     const handler = routes[route];

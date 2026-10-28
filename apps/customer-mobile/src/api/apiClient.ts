@@ -16,7 +16,7 @@ export function configureApiAuth(hooks: ApiAuthHooks | null): void {
 }
 
 export interface ApiRequestOptions {
-  method?: 'GET' | 'POST' | 'PATCH';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   /** Attach the access token, and refresh and retry once on a 401. */
   auth?: boolean;
@@ -78,6 +78,7 @@ interface ProblemBody {
   code?: string;
   retryAfterSeconds?: number;
   reasons?: string[];
+  errors?: Record<string, string[]>;
 }
 
 async function parse<T>(response: Response): Promise<T> {
@@ -96,6 +97,7 @@ async function parse<T>(response: Response): Promise<T> {
       problem.code ?? `http_${response.status}`,
       problem.retryAfterSeconds,
       problem.reasons,
+      problem.errors,
     );
   }
   return data as T;

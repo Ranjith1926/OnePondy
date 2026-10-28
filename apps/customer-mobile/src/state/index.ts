@@ -1,10 +1,12 @@
 export { AppStateProvider, useAppDispatch, useAppState } from './AppStateContext';
 export {
+  clearGpsLocation,
   completeOnboarding,
   hideBanner,
   preferencesRestored,
   sessionCleared,
   sessionRestored,
+  setGpsLocation,
   setLanguage,
   setSelectedLocation,
   setTheme,

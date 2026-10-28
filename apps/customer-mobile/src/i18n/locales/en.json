@@ -10,7 +10,8 @@
     "sample": "Sample",
     "seeAll": "See all",
     "dismiss": "Dismiss",
-    "placeSubtitle": "{{category}} · {{area}}"
+    "placeSubtitle": "{{category}} · {{area}}",
+    "placeSubtitleWithDistance": "{{category}} · {{distance}} away"
   },
   "tabs": {
     "home": "Home",
@@ -125,6 +126,11 @@
     "title": "Explore",
     "categoriesLabel": "Categories",
     "sampleNotice": "Sample places are shown while verified listings are prepared.",
+    "loading": "Loading places",
+    "error": {
+      "title": "Couldn't load places",
+      "message": "Check your connection and try again."
+    },
     "empty": {
       "title": "No places here yet",
       "message": "Places in this category will appear once they are verified.",
@@ -172,6 +178,50 @@
   },
   "guestPrompt": {
     "action": "Sign in"
+  },
+  "itineraries": {
+    "addToTitle": "Add to a trip",
+    "stopCount_one": "{{count}} stop",
+    "stopCount_other": "{{count}} stops",
+    "noneYet": "You haven't started a trip yet.",
+    "newTrip": "Start a new trip",
+    "titleLabel": "Trip name",
+    "createAndAdd": "Create and add"
+  },
+  "placeDetail": {
+    "loading": "Loading place",
+    "error": {
+      "title": "Couldn't load this place",
+      "message": "Check your connection and try again."
+    },
+    "about": "About",
+    "visitorGuidance": "Visitor guidance",
+    "openingHours": "Opening hours",
+    "alwaysOpen": "Open every day",
+    "entryFees": "Entry fees",
+    "directions": "Directions",
+    "noCoordinates": "Location not available yet",
+    "save": "Save place",
+    "saved": "Saved",
+    "addToTrip": "Add to trip",
+    "addedToTrip": "Added to {{title}}"
+  },
+  "days": {
+    "monday": "Monday",
+    "tuesday": "Tuesday",
+    "wednesday": "Wednesday",
+    "thursday": "Thursday",
+    "friday": "Friday",
+    "saturday": "Saturday",
+    "sunday": "Sunday"
+  },
+  "visitorCategories": {
+    "standard": "Standard",
+    "indianAdult": "Indian adult",
+    "foreignAdult": "Foreign adult",
+    "child": "Child",
+    "student": "Student",
+    "senior": "Senior citizen"
   },
   "profile": {
     "title": "Profile",
