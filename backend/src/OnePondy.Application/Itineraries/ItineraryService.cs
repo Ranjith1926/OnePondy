@@ -47,6 +47,46 @@ public sealed class ItineraryService(IOnePondyDbContext db, PlaceCatalogService 
         return await ToDetailAsync(itinerary, language, cancellationToken);
     }
 
+    /// <summary>
+    /// Creates an AI-assisted draft with its stops already placed (spec Phase 5). The trip planner has
+    /// already restricted and validated these stops against published, verified places, so they are
+    /// trusted here.
+    /// </summary>
+    public async Task<ItineraryDetail> CreateAiDraftAsync(
+        Guid userId,
+        string title,
+        DateRange dates,
+        IReadOnlyList<(Guid PlaceId, int DayNumber)> stops,
+        string? language,
+        CancellationToken cancellationToken)
+    {
+        var now = time.GetUtcNow();
+        var itinerary = Itinerary.Create(userId, title, dates, ItinerarySource.AiAssisted, now);
+        foreach (var stop in stops)
+        {
+            var added = itinerary.AddStop(stop.PlaceId, stop.DayNumber, notes: null, plannedArrival: null, now);
+            db.MarkAdded(added);
+        }
+
+        db.Itineraries.Add(itinerary);
+        await db.SaveChangesAsync(cancellationToken);
+        return await ToDetailAsync(itinerary, language, cancellationToken);
+    }
+
+    /// <summary>Moves an AI-assisted draft to saved once the user has reviewed it (spec §7 step 5).</summary>
+    public async Task<Result<ItineraryDetail>> ConfirmAsync(Guid id, Guid userId, string? language, CancellationToken cancellationToken)
+    {
+        var itinerary = await Find(id, userId, cancellationToken);
+        if (itinerary is null)
+        {
+            return ItineraryErrors.NotFound;
+        }
+
+        itinerary.Save(time.GetUtcNow());
+        await db.SaveChangesAsync(cancellationToken);
+        return await ToDetailAsync(itinerary, language, cancellationToken);
+    }
+
     public async Task<Result<ItineraryDetail>> UpdateAsync(
         Guid id,
         Guid userId,

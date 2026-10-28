@@ -31,6 +31,7 @@ public static class ItineraryEndpoints
         itineraries.MapGet("/{id:guid}", Get);
         itineraries.MapPut("/{id:guid}", Update);
         itineraries.MapDelete("/{id:guid}", Delete);
+        itineraries.MapPost("/{id:guid}/save", Save);
         itineraries.MapPost("/{id:guid}/archive", Archive);
         itineraries.MapPost("/{id:guid}/unarchive", Unarchive);
         itineraries.MapPost("/{id:guid}/stops", AddStop);
@@ -91,6 +92,15 @@ public static class ItineraryEndpoints
         HttpContext httpContext,
         CancellationToken ct) =>
         EndpointResults.NoContent(await service.DeleteAsync(id, user.GetUserId(), ct), httpContext);
+
+    private static async Task<IResult> Save(
+        Guid id,
+        ClaimsPrincipal user,
+        string? lang,
+        ItineraryService service,
+        HttpContext httpContext,
+        CancellationToken ct) =>
+        EndpointResults.Ok(await service.ConfirmAsync(id, user.GetUserId(), Language(lang, httpContext), ct), httpContext);
 
     private static async Task<IResult> Archive(
         Guid id,

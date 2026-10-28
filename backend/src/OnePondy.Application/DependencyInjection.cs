@@ -8,6 +8,7 @@ using OnePondy.Application.Itineraries;
 using OnePondy.Application.Media;
 using OnePondy.Application.Places;
 using OnePondy.Application.Staff;
+using OnePondy.Application.TripPlanner;
 
 namespace OnePondy.Application;
 
@@ -20,6 +21,7 @@ public static class DependencyInjection
         services.Configure<ContentOptions>(configuration.GetSection(ContentOptions.SectionName));
         services.Configure<MediaOptions>(configuration.GetSection(MediaOptions.SectionName));
         services.Configure<ConsoleOptions>(configuration.GetSection(ConsoleOptions.SectionName));
+        services.Configure<TripPlannerOptions>(configuration.GetSection(TripPlannerOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IAccountDeletionGuard, NoCommitmentsDeletionGuard>();
@@ -39,6 +41,7 @@ public static class DependencyInjection
         services.AddScoped<ConfigService>();
         services.AddScoped<SavedPlacesService>();
         services.AddScoped<ItineraryService>();
+        services.AddScoped<TripPlannerService>();
 
         return services;
     }

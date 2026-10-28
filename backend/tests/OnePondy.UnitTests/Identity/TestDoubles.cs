@@ -12,6 +12,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Places;
+using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
 
@@ -47,6 +48,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<SavedPlace> SavedPlaces => Set<SavedPlace>();
 
     public DbSet<Itinerary> Itineraries => Set<Itinerary>();
+
+    public DbSet<TripPlannerRequestLog> TripPlannerRequestLogs => Set<TripPlannerRequestLog>();
 
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()

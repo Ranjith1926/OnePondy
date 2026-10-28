@@ -5,6 +5,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Places;
+using OnePondy.Domain.TripPlanner;
 
 namespace OnePondy.Application.Common;
 
@@ -32,6 +33,8 @@ public interface IOnePondyDbContext
     DbSet<SavedPlace> SavedPlaces { get; }
 
     DbSet<Itinerary> Itineraries { get; }
+
+    DbSet<TripPlannerRequestLog> TripPlannerRequestLogs { get; }
 
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an

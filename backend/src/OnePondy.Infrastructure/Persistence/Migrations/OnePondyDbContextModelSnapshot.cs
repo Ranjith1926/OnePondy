@@ -910,6 +910,64 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.ToTable("saved_places", (string)null);
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.TripPlanner.TripPlannerRequestLog", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("CandidateCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("candidate_count");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("DayCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_count");
+
+                    b.Property<decimal>("EstimatedCostUsd")
+                        .HasPrecision(10, 4)
+                        .HasColumnType("numeric(10,4)")
+                        .HasColumnName("estimated_cost_usd");
+
+                    b.Property<string>("Interests")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("interests");
+
+                    b.Property<string>("Outcome")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("outcome");
+
+                    b.Property<int>("SuggestedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("suggested_count");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_trip_planner_request_logs");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_trip_planner_request_logs_user_id");
+
+                    b.HasIndex("CreatedAt", "UserId")
+                        .HasDatabaseName("ix_trip_planner_request_logs_created_at_user_id");
+
+                    b.ToTable("trip_planner_request_logs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_trip_planner_log_outcome", "outcome IN ('suggested', 'no_candidates', 'provider_unavailable')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1356,6 +1414,16 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_saved_places_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.TripPlanner.TripPlannerRequestLog", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_trip_planner_request_logs_app_users_user_id");
                 });
 #pragma warning restore 612, 618
         }

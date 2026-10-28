@@ -159,6 +159,49 @@ public sealed class PlaceCatalogService(IOnePondyDbContext db, IMediaStorage sto
     public Task<bool> IsVisibleAsync(Guid placeId, CancellationToken cancellationToken) =>
         Visible().AnyAsync(p => p.Id == placeId, cancellationToken);
 
+    /// <summary>
+    /// Verified, published places offered to the AI trip planner as candidates (spec §7): the same set
+    /// a guest could already browse, nearest-first when a point is given, capped so the prompt and the
+    /// validation pass afterward both stay small.
+    /// </summary>
+    public async Task<IReadOnlyList<PublicPlaceSummary>> GetCandidatesAsync(
+        IReadOnlyList<string> categoryCodes,
+        GeoPoint? near,
+        int maxCandidates,
+        string? language,
+        CancellationToken cancellationToken)
+    {
+        var places = Visible();
+        if (categoryCodes.Count > 0)
+        {
+            places = places.Where(p => categoryCodes.Contains(p.CategoryCode));
+        }
+
+        var all = await places.ToListAsync(cancellationToken);
+        var ordered = near is { } point
+            ? all.OrderBy(p => DistanceKm(point, p.Latitude, p.Longitude) ?? double.MaxValue)
+            : all.OrderBy(p => p.Name);
+        var selected = ordered.Take(maxCandidates).ToList();
+
+        var ids = selected.Select(p => p.Id).ToList();
+        var covers = (await db.PlaceMedia.AsNoTracking().Where(m => ids.Contains(m.PlaceId)).ToListAsync(cancellationToken))
+            .GroupBy(m => m.PlaceId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(m => m.SortOrder).First());
+
+        var lang = Language(language);
+        return selected
+            .Select(p => new PublicPlaceSummary(
+                p.Id,
+                p.Slug,
+                Translation(p, lang)?.Name ?? p.Name,
+                p.CategoryCode,
+                p.Latitude,
+                p.Longitude,
+                covers.TryGetValue(p.Id, out var cover) ? PublicImage.From(cover, storage) : null,
+                near is null ? null : DistanceKm(near, p.Latitude, p.Longitude)))
+            .ToList();
+    }
+
     /// <summary>Great-circle distance in kilometres; null when the place has no coordinates.</summary>
     private static double? DistanceKm(GeoPoint from, double? latitude, double? longitude)
     {

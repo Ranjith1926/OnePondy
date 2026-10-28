@@ -2,15 +2,18 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Application.Media;
 using OnePondy.Application.Staff;
+using OnePondy.Application.TripPlanner;
 using OnePondy.Infrastructure.Identity;
 using OnePondy.Infrastructure.Media;
 using OnePondy.Infrastructure.Messaging;
 using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
+using OnePondy.Infrastructure.TripPlanner;
 
 namespace OnePondy.Infrastructure;
 
@@ -57,6 +60,7 @@ public static class DependencyInjection
         services.AddSingleton<ISecretHasher, HmacSecretHasher>();
 
         AddOtpDelivery(services, configuration, environment);
+        AddTripPlannerProvider(services, configuration);
         return services;
     }
 
@@ -76,6 +80,26 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<IOtpSender, LoggingOtpSender>();
+    }
+
+    /// <summary>
+    /// Falls back to a planner that reports itself unavailable until an API key is configured (spec
+    /// D5), the same way <see cref="AddOtpDelivery"/> falls back for one-time codes.
+    /// </summary>
+    private static void AddTripPlannerProvider(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<GeminiOptions>().Bind(configuration.GetSection(GeminiOptions.SectionName));
+
+        if (string.IsNullOrWhiteSpace(configuration[$"{GeminiOptions.SectionName}:ApiKey"]))
+        {
+            services.AddSingleton<IItineraryPlanner, UnavailableItineraryPlanner>();
+            return;
+        }
+
+        services.AddHttpClient<IItineraryPlanner, GeminiItineraryPlanner>((provider, client) =>
+        {
+            client.Timeout = provider.GetRequiredService<IOptions<GeminiOptions>>().Value.Timeout;
+        });
     }
 
     private static string MissingKeyMessage(string key) =>

@@ -2,17 +2,43 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using OnePondy.Application.Audit;
+using OnePondy.Application.Common;
 using OnePondy.Application.Configuration;
 using OnePondy.Application.Itineraries;
 using OnePondy.Application.Media;
 using OnePondy.Application.Places;
 using OnePondy.Application.Staff;
+using OnePondy.Application.TripPlanner;
+using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Places;
 using OnePondy.Infrastructure.Media;
 using OnePondy.UnitTests.Identity;
 
 namespace OnePondy.UnitTests.Content;
+
+/// <summary>A planner whose response is set per test, so <see cref="TripPlannerService"/>'s own logic
+/// (candidate restriction, validation, caps) can be tested without calling a real provider.</summary>
+public sealed class FakeItineraryPlanner : IItineraryPlanner
+{
+    public Result<IReadOnlyList<PlannerSuggestion>> NextResult { get; set; } =
+        Result<IReadOnlyList<PlannerSuggestion>>.Success([]);
+
+    /// <summary>The candidate set passed on the last call, so a test can assert what the provider was shown.</summary>
+    public IReadOnlyList<PlannerCandidate>? LastCandidates { get; private set; }
+
+    public int CallCount { get; private set; }
+
+    public Task<Result<IReadOnlyList<PlannerSuggestion>>> SuggestAsync(
+        TripPlanRequest request,
+        IReadOnlyList<PlannerCandidate> candidates,
+        CancellationToken cancellationToken)
+    {
+        CallCount++;
+        LastCandidates = candidates;
+        return Task.FromResult(NextResult);
+    }
+}
 
 /// <summary>Keeps staff roles on the fake account store, so sign-in sees the same roles.</summary>
 public sealed class FakeStaffDirectory(FakeUserAccountStore accounts) : IStaffDirectory
@@ -76,6 +102,15 @@ public sealed class ContentHarness
         StaffService = new StaffService(Db, Staff, Accounts, Audit, Time);
         SavedPlaces = new SavedPlacesService(Db, Catalog, Time);
         Itineraries = new ItineraryService(Db, Catalog, Time);
+        Planner = new FakeItineraryPlanner();
+        TripPlanner = new TripPlannerService(
+            Db,
+            Catalog,
+            Itineraries,
+            Planner,
+            Options.Create(TripPlannerOptionsForTests),
+            Time,
+            NullLogger<TripPlannerService>.Instance);
 
         foreach (var (code, index) in new[] { "beach", "heritage", "spiritual", "museum", "nature" }.Select((c, i) => (c, i)))
         {
@@ -113,6 +148,22 @@ public sealed class ContentHarness
     public SavedPlacesService SavedPlaces { get; }
 
     public ItineraryService Itineraries { get; }
+
+    public FakeItineraryPlanner Planner { get; }
+
+    public TripPlannerService TripPlanner { get; }
+
+    public static TripPlannerOptions TripPlannerOptionsForTests { get; } = new()
+    {
+        DailyRequestLimitPerUser = 2,
+        DailyCostCapUsd = 0.05m,
+        EstimatedCostPerRequestUsd = 0.02m,
+        MaxCandidates = 40,
+        MaxDays = 14,
+    };
+
+    /// <summary>Trip planner calls need the module flag turned on first (off by default, like every module).</summary>
+    public Task EnableTripPlannerAsync() => Config.SetModuleStatusAsync("tripPlanner", ModuleStatus.Available, Administrator, default);
 
     public Guid Administrator { get; }
 

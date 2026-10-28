@@ -8,6 +8,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Places;
+using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Identity;
 
 namespace OnePondy.Infrastructure.Persistence;
@@ -36,6 +37,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<SavedPlace> SavedPlaces => Set<SavedPlace>();
 
     public DbSet<Itinerary> Itineraries => Set<Itinerary>();
+
+    public DbSet<TripPlannerRequestLog> TripPlannerRequestLogs => Set<TripPlannerRequestLog>();
 
     /// <summary>Provider settings shared by the app and the design-time factory used for migrations.</summary>
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>
