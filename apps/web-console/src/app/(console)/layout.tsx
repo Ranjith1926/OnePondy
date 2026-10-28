@@ -18,6 +18,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
     ...(isAdministrator(user.role)
       ? [
           { href: '/partners', label: 'Partners' },
+          { href: '/listings', label: 'Listings' },
           { href: '/staff', label: 'Staff' },
           { href: '/audit', label: 'Audit log' },
         ]

@@ -13,6 +13,7 @@ const areas: Record<string, string> = {
   '': 'Everything',
   place: 'Places and photos',
   business: 'Partners',
+  listing: 'Listings',
   module_flag: 'Module settings',
   app_setting: 'App version',
   staff: 'Staff access',
@@ -30,6 +31,13 @@ function entityLink(entry: AuditEntry) {
     return (
       <Link href={`/partners/${entry.entityId}`} className="font-semibold text-brand hover:underline">
         Open partner
+      </Link>
+    );
+  }
+  if (entry.entityType === 'listing') {
+    return (
+      <Link href={`/listings/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+        Open listing
       </Link>
     );
   }

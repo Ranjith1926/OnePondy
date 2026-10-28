@@ -252,3 +252,146 @@ export interface BusinessApplicationInput {
   gstin: string | null;
   fssaiLicenseNumber: string | null;
 }
+
+export type ListingType = 'activity' | 'stay' | 'event' | 'service' | 'shop';
+
+export type ListingStatus = 'draft' | 'pending' | 'published' | 'suspended';
+
+export interface CancellationPolicy {
+  freeCancellationHours: number;
+  refundPercentage: number;
+  notes: string | null;
+}
+
+export interface ListingSummary {
+  id: string;
+  businessId: string;
+  listingType: ListingType;
+  title: string;
+  isBookable: boolean;
+  basePrice: number | null;
+  currency: string;
+  status: ListingStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ListingDetail {
+  id: string;
+  version: number;
+  businessId: string;
+  listingType: ListingType;
+  title: string;
+  description: string | null;
+  isBookable: boolean;
+  basePrice: number | null;
+  currency: string;
+  cancellationPolicy: CancellationPolicy | null;
+  status: ListingStatus;
+  reviewNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The body of POST .../listings and the "listing" part of PUT .../listings/{id}. */
+export interface ListingApplicationInput {
+  listingType: ListingType;
+  title: string;
+  description: string | null;
+  isBookable: boolean;
+  basePrice: number | null;
+  freeCancellationHours: number | null;
+  refundPercentage: number | null;
+  cancellationNotes: string | null;
+}
+
+export interface AvailabilitySlot {
+  id: string;
+  listingId: string;
+  version: number;
+  startAt: string;
+  endAt: string;
+  capacity: number;
+  reservedCount: number;
+  availableCount: number;
+}
+
+export type BookingStatus =
+  | 'pending'
+  | 'awaitingPayment'
+  | 'confirmed'
+  | 'failed'
+  | 'expired'
+  | 'rejected'
+  | 'cancelled'
+  | 'refundPending'
+  | 'refunded'
+  | 'completed';
+
+export type BookingActorType = 'customer' | 'partner' | 'admin' | 'system';
+
+export interface PriceSnapshot {
+  unitPrice: number;
+  quantity: number;
+  subtotal: number;
+  fees: number;
+  taxAmount: number;
+  discountAmount: number;
+  totalAmount: number;
+  currency: string;
+}
+
+export interface BookingSummary {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  businessId: string;
+  businessName: string;
+  bookingType: ListingType;
+  status: BookingStatus;
+  expiresAt: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  guestCount: number;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+}
+
+export interface BookingSlotView {
+  slotId: string;
+  startAt: string;
+  endAt: string;
+  quantity: number;
+}
+
+export interface BookingHistoryView {
+  previousStatus: BookingStatus | null;
+  newStatus: BookingStatus;
+  actorType: BookingActorType;
+  actorUserId: string | null;
+  reason: string | null;
+  createdAt: string;
+}
+
+export interface BookingDetail {
+  id: string;
+  version: number;
+  listingId: string;
+  listingTitle: string;
+  businessId: string;
+  businessName: string;
+  bookingType: ListingType;
+  status: BookingStatus;
+  expiresAt: string | null;
+  startAt: string | null;
+  endAt: string | null;
+  guestCount: number;
+  priceSnapshot: PriceSnapshot;
+  cancellationPolicySnapshot: CancellationPolicy;
+  cancellationReason: string | null;
+  slots: BookingSlotView[];
+  history: BookingHistoryView[];
+  createdAt: string;
+  updatedAt: string;
+}

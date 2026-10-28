@@ -1,8 +1,11 @@
 import type {
+  BookingStatus,
   BusinessApprovalStatus,
   BusinessDocumentKind,
   BusinessType,
   DayOfWeek,
+  ListingStatus,
+  ListingType,
   MediaLicence,
   ModuleStatus,
   VerificationStatus,
@@ -101,6 +104,41 @@ export const auditActionLabels: Record<string, string> = {
   'business.reinstated': 'Reinstated',
   'business.document_added': 'Document added',
   'business.document_removed': 'Document removed',
+  'listing.created': 'Listing created',
+  'listing.updated': 'Listing edited',
+  'listing.submitted': 'Listing submitted for review',
+  'listing.published': 'Listing published',
+  'listing.sent_back': 'Listing sent back for changes',
+  'listing.suspended': 'Listing suspended',
+  'listing.reinstated': 'Listing reinstated',
+};
+
+export const listingTypeLabels: Record<ListingType, string> = {
+  activity: 'Activity',
+  stay: 'Stay',
+  event: 'Event',
+  service: 'Service',
+  shop: 'Shop',
+};
+
+export const listingStatusLabels: Record<ListingStatus, string> = {
+  draft: 'Draft',
+  pending: 'Pending review',
+  published: 'Published',
+  suspended: 'Suspended',
+};
+
+export const bookingStatusLabels: Record<BookingStatus, string> = {
+  pending: 'Awaiting partner response',
+  awaitingPayment: 'Awaiting payment',
+  confirmed: 'Confirmed',
+  failed: 'Payment failed',
+  expired: 'Expired',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+  refundPending: 'Refund in progress',
+  refunded: 'Refunded',
+  completed: 'Completed',
 };
 
 export const businessTypeLabels: Record<BusinessType, string> = {

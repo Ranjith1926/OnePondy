@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
-import { Alert, Card, PageHeader } from '@/components/Display';
+import { Alert, Card, linkButton, PageHeader } from '@/components/Display';
 import { ApiError, partnerApi } from '@/lib/api';
 import type { BusinessDetail } from '@/lib/apiTypes';
 import { businessStatusLabels } from '@/lib/labels';
@@ -53,6 +53,17 @@ export default async function PartnerBusinessPage({ params }: { params: Promise<
       {business.approvalStatus === 'suspended' && business.reviewNote ? (
         <div className="mb-6">
           <Alert kind="warning">Suspended: {business.reviewNote}</Alert>
+        </div>
+      ) : null}
+
+      {business.approvalStatus === 'approved' ? (
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Link className={linkButton} href={`/partner/businesses/${business.id}/listings`}>
+            Listings
+          </Link>
+          <Link className={linkButton} href={`/partner/businesses/${business.id}/bookings`}>
+            Bookings
+          </Link>
         </div>
       ) : null}
 
