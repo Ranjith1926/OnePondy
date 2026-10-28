@@ -92,6 +92,12 @@ export const itinerariesApi = {
 
   remove: (id: string) => apiRequest<void>(`${base}/${id}`, { method: 'DELETE', auth: true }),
 
+  confirm: (id: string, lang: string) =>
+    apiRequest<ItineraryDetail>(`${base}/${id}/save?${withLang(lang)}`, {
+      method: 'POST',
+      auth: true,
+    }),
+
   archive: (id: string, lang: string) =>
     apiRequest<ItineraryDetail>(`${base}/${id}/archive?${withLang(lang)}`, {
       method: 'POST',

@@ -209,6 +209,52 @@ describe('accounts and guest access', () => {
       expect(await screen.findByRole('header', { name: 'Nothing saved yet' })).toBeOnTheScreen();
     });
 
+    it('shows saved places and trips together on the Saved tab', async () => {
+      routes['GET /api/v1/saved-places'] = () => ({
+        status: 200,
+        body: [
+          {
+            place: {
+              id: 'place-1',
+              slug: 'paradise-beach',
+              name: 'Paradise Beach',
+              categoryCode: 'beach',
+              latitude: null,
+              longitude: null,
+              coverImage: null,
+              distanceKm: null,
+            },
+            savedAt: '2026-10-01T00:00:00Z',
+          },
+        ],
+      });
+      routes['GET /api/v1/itineraries'] = () => ({
+        status: 200,
+        body: [
+          {
+            id: 'trip-1',
+            title: 'Weekend trip',
+            startDate: null,
+            endDate: null,
+            status: 'saved',
+            source: 'manual',
+            isShared: false,
+            stopCount: 2,
+            createdAt: '2026-10-01T00:00:00Z',
+            updatedAt: '2026-10-01T00:00:00Z',
+          },
+        ],
+      });
+      const user = userEvent.setup();
+      await launch();
+
+      await user.press(tab('Saved'));
+
+      expect(await screen.findByText('Weekend trip')).toBeOnTheScreen();
+      expect(screen.getByText('2 stops')).toBeOnTheScreen();
+      expect(screen.getByText('Paradise Beach')).toBeOnTheScreen();
+    });
+
     it('signs out, clears the stored session and returns to guest views', async () => {
       const user = userEvent.setup();
       await launch();

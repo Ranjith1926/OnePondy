@@ -64,6 +64,16 @@ export function useDeleteItinerary() {
   });
 }
 
+/** Moves an AI-assisted draft to saved (spec §7 step 5); a no-op server-side once already saved. */
+export function useConfirmItinerary(id: string) {
+  const { i18n } = useTranslation();
+  const invalidate = useInvalidateItinerary(id);
+  return useMutation({
+    mutationFn: () => itinerariesApi.confirm(id, i18n.language),
+    onSuccess: invalidate,
+  });
+}
+
 export function useSetItineraryArchived(id: string) {
   const { i18n } = useTranslation();
   const invalidate = useInvalidateItinerary(id);

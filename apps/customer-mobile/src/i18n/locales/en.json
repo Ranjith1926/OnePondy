@@ -166,6 +166,8 @@
   },
   "saved": {
     "title": "Saved",
+    "placesTitle": "Saved places",
+    "tripsTitle": "Your trips",
     "empty": {
       "title": "Nothing saved yet",
       "message": "Places and plans you save will appear here.",
@@ -186,7 +188,78 @@
     "noneYet": "You haven't started a trip yet.",
     "newTrip": "Start a new trip",
     "titleLabel": "Trip name",
-    "createAndAdd": "Create and add"
+    "createAndAdd": "Create and add",
+    "loading": "Loading trip",
+    "error": {
+      "title": "Couldn't load this trip",
+      "message": "Check your connection and try again."
+    },
+    "aiAssistedLabel": "AI-assisted",
+    "aiAssistedBanner": "AI-assisted — review before you save or share it.",
+    "rename": "Rename trip",
+    "saveTrip": "Save trip",
+    "saved": "Trip saved",
+    "noStops": "No stops yet. Add places from Explore or search.",
+    "dayLabel": "Day {{day}}",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "removeStop": "Remove stop",
+    "status": {
+      "draft": "Draft",
+      "saved": "Saved",
+      "archived": "Archived"
+    },
+    "share": {
+      "title": "Share this trip",
+      "description": "Anyone with the link can see this trip, but never your name or contact details.",
+      "enable": "Create link",
+      "disable": "Turn off link",
+      "copy": "Copy link",
+      "copied": "Link copied"
+    },
+    "archive": "Archive trip",
+    "unarchive": "Restore trip",
+    "delete": "Delete trip",
+    "deleteConfirm": {
+      "title": "Delete this trip?",
+      "message": "This can't be undone.",
+      "confirm": "Delete",
+      "cancel": "Cancel"
+    }
+  },
+  "tripPlanner": {
+    "title": "Plan my Pondy trip",
+    "intro": "Share your dates and interests, and we'll draft a plan from verified places for you to review.",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "datePlaceholder": "YYYY-MM-DD",
+    "interests": "Interests",
+    "pace": {
+      "title": "Pace",
+      "relaxed": "Relaxed",
+      "balanced": "Balanced",
+      "packed": "Packed"
+    },
+    "budgetBand": {
+      "title": "Budget",
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High"
+    },
+    "mobilityNeeds": "Mobility needs (optional)",
+    "submit": "Plan my trip",
+    "loading": "Planning your trip",
+    "errors": {
+      "disabled": "The trip planner isn't available right now. Build your trip manually from Explore instead.",
+      "providerUnavailable": "The trip planner couldn't reach its provider. Build your trip manually from Explore instead.",
+      "dailyCapReached": "The trip planner has reached today's limit. Build your trip manually from Explore instead.",
+      "rateLimited": "You've asked for several trip plans today. Try again tomorrow.",
+      "noCandidates": "No verified places match these dates and interests yet. Try different interests.",
+      "validation": "Check the highlighted fields.",
+      "offline": "You're offline. Check your connection and try again.",
+      "timeout": "This is taking too long. Check your connection and try again.",
+      "generic": "Something went wrong. Try again."
+    }
   },
   "placeDetail": {
     "loading": "Loading place",

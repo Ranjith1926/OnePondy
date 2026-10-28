@@ -46,7 +46,14 @@ export function HomeScreen() {
         <PopularPlacesSection onSeeAll={openExplore} />
         <CuratedCollectionsSection />
         {modules.tripPlanner === 'hidden' ? null : (
-          <TripPlannerCard onPress={() => setComingSoon('tripPlanner')} />
+          <TripPlannerCard
+            available={modules.tripPlanner === 'available'}
+            onPress={() =>
+              modules.tripPlanner === 'available'
+                ? navigation.navigate('TripPlanner')
+                : setComingSoon('tripPlanner')
+            }
+          />
         )}
         <TrustCard />
       </MainTabTemplate>

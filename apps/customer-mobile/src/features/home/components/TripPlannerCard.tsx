@@ -11,11 +11,12 @@ import {
 } from '../../../design-system';
 
 interface TripPlannerCardProps {
+  available: boolean;
   onPress: () => void;
 }
 
-/** Entry point for the AI trip planner (Phase 5); explains its status until then. */
-export function TripPlannerCard({ onPress }: TripPlannerCardProps) {
+/** Entry point for the AI trip planner (spec §7, Phase 5); explains its status until it is available. */
+export function TripPlannerCard({ available, onPress }: TripPlannerCardProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -23,7 +24,11 @@ export function TripPlannerCard({ onPress }: TripPlannerCardProps) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`${t('home.tripPlanner.title')}, ${t('common.comingSoon')}`}
+      accessibilityLabel={
+        available
+          ? t('home.tripPlanner.title')
+          : `${t('home.tripPlanner.title')}, ${t('common.comingSoon')}`
+      }
       accessibilityHint={t('home.tripPlanner.body')}
       onPress={onPress}
       style={({ pressed }) => [styles.card, pressed ? styles.pressed : null]}
@@ -36,7 +41,7 @@ export function TripPlannerCard({ onPress }: TripPlannerCardProps) {
         <OPText variant="caption" tone="secondary">
           {t('home.tripPlanner.body')}
         </OPText>
-        <OPBadge label={t('common.comingSoon')} tone="accent" />
+        {available ? null : <OPBadge label={t('common.comingSoon')} tone="accent" />}
       </View>
       <OPIcon name="chevron-right" size={20} color={theme.colors.text.secondary} />
     </Pressable>
