@@ -150,6 +150,13 @@ public sealed class AccountService(
             session.Revoke(SessionRevocationReason.AccountDeleted, now);
         }
 
+        // Account rows are anonymised, never hard-deleted, so the saved_places/itineraries foreign
+        // keys never cascade; deleting them explicitly is what spec §17.3 means by "account deletion
+        // deletes saved places ... and itineraries". Loaded and removed rather than ExecuteDelete, so
+        // this works the same against every provider, including the in-memory one tests use.
+        db.SavedPlaces.RemoveRange(await db.SavedPlaces.Where(s => s.UserId == userId).ToListAsync(cancellationToken));
+        db.Itineraries.RemoveRange(await db.Itineraries.Where(i => i.UserId == userId).ToListAsync(cancellationToken));
+
         await db.SaveChangesAsync(cancellationToken);
         await accounts.AnonymizeAsync(userId, now, cancellationToken);
         logger.LogInformation("Account {UserId} deleted; {SessionCount} sessions revoked", userId, sessions.Count);

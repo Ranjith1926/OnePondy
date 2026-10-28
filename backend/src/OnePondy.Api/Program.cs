@@ -61,5 +61,7 @@ app.MapPublicContentEndpoints();
 app.MapStaffAuthEndpoints();
 app.MapAdminPlaceEndpoints();
 app.MapAdminSettingsEndpoints();
+app.MapSavedPlaceEndpoints();
+app.MapItineraryEndpoints();
 
 app.Run();

@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using OnePondy.Application.Identity;
@@ -107,6 +108,11 @@ public sealed class AuthFlowTests : IAsyncLifetime
         var phone = ApiFactory.NewIndianMobile();
         var session = await SignInAsync(client, phone);
 
+        // Deletion must also remove saved places and itineraries (spec §17.3), since the account row
+        // itself is anonymised rather than hard-deleted, so the foreign keys never cascade.
+        var itinerary = await SendAsync(client, HttpMethod.Post, "/api/v1/itineraries", session.AccessToken, new { title = "Weekend trip" });
+        var itineraryId = (await itinerary.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("id").GetGuid();
+
         var requested = await SendAsync(client, HttpMethod.Post, "/api/v1/account/deletion/code", session.AccessToken);
         Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
         var challenge = (await requested.Content.ReadFromJsonAsync<OtpRequested>())!;
@@ -122,6 +128,13 @@ public sealed class AuthFlowTests : IAsyncLifetime
         Assert.Equal(
             HttpStatusCode.Unauthorized,
             (await SendAsync(client, HttpMethod.Get, "/api/v1/profile", session.AccessToken)).StatusCode);
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
+            Assert.False(await db.Itineraries.AnyAsync(i => i.Id == itineraryId));
+            Assert.False(await db.SavedPlaces.AnyAsync(s => s.UserId == session.User.Id));
+        }
 
         // The number is free again: signing in creates a new, empty account.
         var again = await SignInAsync(client, phone);

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using OnePondy.Application.Audit;
 using OnePondy.Application.Configuration;
 using OnePondy.Application.Identity;
+using OnePondy.Application.Itineraries;
 using OnePondy.Application.Media;
 using OnePondy.Application.Places;
 using OnePondy.Application.Staff;
@@ -36,6 +37,8 @@ public static class DependencyInjection
         services.AddScoped<PlaceCatalogService>();
         services.AddScoped<MediaService>();
         services.AddScoped<ConfigService>();
+        services.AddScoped<SavedPlacesService>();
+        services.AddScoped<ItineraryService>();
 
         return services;
     }

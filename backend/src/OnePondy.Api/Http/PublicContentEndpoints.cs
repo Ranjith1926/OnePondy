@@ -1,5 +1,7 @@
+using OnePondy.Application.Common;
 using OnePondy.Application.Configuration;
 using OnePondy.Application.Places;
+using OnePondy.Domain.Places;
 
 namespace OnePondy.Api.Http;
 
@@ -25,12 +27,46 @@ public static class PublicContentEndpoints
         string? category,
         string? q,
         string? lang,
+        double? lat,
+        double? lng,
         int? page,
         int? pageSize,
         PlaceCatalogService catalog,
         HttpContext httpContext,
-        CancellationToken cancellationToken) =>
-        Results.Ok(await catalog.ListAsync(category, q, lang ?? PreferredLanguage(httpContext), page, pageSize, cancellationToken));
+        CancellationToken cancellationToken)
+    {
+        GeoPoint? near = null;
+        if (lat is { } latitude || lng is { } longitude)
+        {
+            if (lat is not { } la || lng is not { } lo)
+            {
+                return ProblemResults.From(
+                    AppError.Validation(new Dictionary<string, string[]>
+                    {
+                        ["lat"] = ["Provide both lat and lng, or neither."],
+                    }),
+                    httpContext);
+            }
+
+            near = new GeoPoint(la, lo);
+            if (!near.IsValid)
+            {
+                return ProblemResults.From(
+                    AppError.Validation(new Dictionary<string, string[]> { ["lat"] = ["Enter a valid latitude and longitude."] }),
+                    httpContext);
+            }
+        }
+
+        var result = await catalog.ListAsync(
+            category,
+            q,
+            lang ?? EndpointResults.PreferredLanguage(httpContext),
+            near,
+            page,
+            pageSize,
+            cancellationToken);
+        return Results.Ok(result);
+    }
 
     private static async Task<IResult> Get(
         string idOrSlug,
@@ -39,14 +75,7 @@ public static class PublicContentEndpoints
         HttpContext httpContext,
         CancellationToken cancellationToken)
     {
-        var place = await catalog.GetAsync(idOrSlug, lang ?? PreferredLanguage(httpContext), cancellationToken);
+        var place = await catalog.GetAsync(idOrSlug, lang ?? EndpointResults.PreferredLanguage(httpContext), cancellationToken);
         return place is null ? Results.NotFound() : Results.Ok(place);
     }
-
-    /// <summary>The first language in Accept-Language, e.g. "ta" from "ta-IN,ta;q=0.9".</summary>
-    private static string? PreferredLanguage(HttpContext httpContext) =>
-        httpContext.Request.GetTypedHeaders().AcceptLanguage
-            .OrderByDescending(language => language.Quality ?? 1)
-            .Select(language => language.Value.Value?.Split('-')[0])
-            .FirstOrDefault();
 }

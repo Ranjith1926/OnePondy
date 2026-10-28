@@ -524,6 +524,76 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.ToTable("user_sessions", (string)null);
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Itineraries.Itinerary", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateOnly?>("EndDate")
+                        .HasColumnType("date")
+                        .HasColumnName("end_date");
+
+                    b.Property<string>("ShareToken")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("share_token");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("source");
+
+                    b.Property<DateOnly?>("StartDate")
+                        .HasColumnType("date")
+                        .HasColumnName("start_date");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_itineraries");
+
+                    b.HasIndex("ShareToken")
+                        .IsUnique()
+                        .HasDatabaseName("ix_itineraries_share_token")
+                        .HasFilter("share_token IS NOT NULL");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_itineraries_user_id");
+
+                    b.ToTable("itineraries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_itinerary_dates", "end_date IS NULL OR start_date IS NULL OR end_date >= start_date");
+
+                            t.HasCheckConstraint("ck_itinerary_source", "source IN ('manual', 'ai_assisted')");
+
+                            t.HasCheckConstraint("ck_itinerary_status", "status IN ('draft', 'saved', 'archived')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>
                 {
                     b.Property<Guid>("Id")
@@ -817,6 +887,29 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Places.SavedPlace", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("PlaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("place_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.HasKey("UserId", "PlaceId")
+                        .HasName("pk_saved_places");
+
+                    b.HasIndex("PlaceId")
+                        .HasDatabaseName("ix_saved_places_place_id");
+
+                    b.ToTable("saved_places", (string)null);
+                });
+
             modelBuilder.Entity("OnePondy.Infrastructure.Identity.ApplicationUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1044,6 +1137,81 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_user_sessions_app_users_user_id");
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Itineraries.Itinerary", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_itineraries_app_users_user_id");
+
+                    b.OwnsMany("OnePondy.Domain.Itineraries.ItineraryStop", "Stops", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("created_at");
+
+                            b1.Property<int>("DayNumber")
+                                .HasColumnType("integer")
+                                .HasColumnName("day_number");
+
+                            b1.Property<Guid>("ItineraryId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("itinerary_id");
+
+                            b1.Property<string>("Notes")
+                                .HasMaxLength(1000)
+                                .HasColumnType("character varying(1000)")
+                                .HasColumnName("notes");
+
+                            b1.Property<Guid>("PlaceId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("place_id");
+
+                            b1.Property<DateTimeOffset?>("PlannedArrival")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("planned_arrival");
+
+                            b1.Property<int>("StopOrder")
+                                .HasColumnType("integer")
+                                .HasColumnName("stop_order");
+
+                            b1.HasKey("Id")
+                                .HasName("pk_itinerary_stops");
+
+                            b1.HasIndex("PlaceId")
+                                .HasDatabaseName("ix_itinerary_stops_place_id");
+
+                            b1.HasIndex("ItineraryId", "DayNumber", "StopOrder")
+                                .HasDatabaseName("ix_itinerary_stops_itinerary_id_day_number_stop_order");
+
+                            b1.ToTable("itinerary_stops", null, t =>
+                                {
+                                    t.HasCheckConstraint("ck_itinerary_stop_day", "day_number >= 1");
+
+                                    t.HasCheckConstraint("ck_itinerary_stop_order", "stop_order >= 0");
+                                });
+
+                            b1.WithOwner()
+                                .HasForeignKey("ItineraryId")
+                                .HasConstraintName("fk_itinerary_stops_itineraries_itinerary_id");
+
+                            b1.HasOne("OnePondy.Domain.Places.Place", null)
+                                .WithMany()
+                                .HasForeignKey("PlaceId")
+                                .OnDelete(DeleteBehavior.Cascade)
+                                .IsRequired()
+                                .HasConstraintName("fk_itinerary_stops_places_place_id");
+                        });
+
+                    b.Navigation("Stops");
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>
                 {
                     b.HasOne("OnePondy.Domain.Places.PlaceCategory", null)
@@ -1171,6 +1339,23 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_place_media_places_place_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Places.SavedPlace", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Places.Place", null)
+                        .WithMany()
+                        .HasForeignKey("PlaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_saved_places_places_place_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_saved_places_app_users_user_id");
                 });
 #pragma warning restore 612, 618
         }

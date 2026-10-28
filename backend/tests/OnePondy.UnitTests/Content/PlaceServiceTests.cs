@@ -175,7 +175,7 @@ public class PlaceCatalogTests
         var unpublished = await _harness.PublishedPlaceAsync(ContentHarness.Input(name: "Serenity Beach"));
         await _harness.Places.UnpublishAsync(unpublished.Id, unpublished.Version, _harness.Editor, default);
 
-        var list = await _harness.Catalog.ListAsync(null, null, null, null, null, default);
+        var list = await _harness.Catalog.ListAsync(null, null, null, null, null, null, default);
 
         Assert.Equal(published.Id, Assert.Single(list.Items).Id);
         Assert.Null(await _harness.Catalog.GetAsync(draft.Id.ToString(), null, default));
@@ -195,6 +195,28 @@ public class PlaceCatalogTests
         Assert.Equal(("ta", "பாரடைஸ் கடற்கரை"), (tamil.Language, tamil.Name));
         Assert.Equal("A quiet beach reached by boat from Chunnambar.", tamil.Description);
         Assert.Equal(("en", "Paradise Beach"), (french.Language, french.Name));
-        Assert.Equal("பாரடைஸ் கடற்கரை", Assert.Single((await _harness.Catalog.ListAsync(null, "பாரடைஸ்", "ta", null, null, default)).Items).Name);
+        Assert.Equal("பாரடைஸ் கடற்கரை", Assert.Single((await _harness.Catalog.ListAsync(null, "பாரடைஸ்", "ta", null, null, null, default)).Items).Name);
+    }
+
+    [Fact]
+    public async Task Listing_near_a_point_sorts_closest_first_and_reports_the_distance()
+    {
+        // Roughly the real layout: the beach and the lake are a few km apart in Puducherry. A place
+        // without coordinates can never be verified (Place.IsReadyForReview), so every published
+        // place that reaches this list necessarily has them.
+        var beach = await _harness.PublishedPlaceAsync(ContentHarness.Input(name: "Paradise Beach", latitude: 11.8915, longitude: 79.8257));
+        var lake = await _harness.PublishedPlaceAsync(ContentHarness.Input(name: "Ousteri Lake", latitude: 11.9562, longitude: 79.7429));
+
+        var near = new GeoPoint(11.9, 79.83);
+        var result = await _harness.Catalog.ListAsync(null, null, null, near, null, null, default);
+
+        Assert.Equal([beach.Id, lake.Id], result.Items.Select(p => p.Id));
+        Assert.True(result.Items[0].DistanceKm is > 0 and < 15);
+        Assert.True(result.Items[1].DistanceKm > result.Items[0].DistanceKm);
+
+        var farAway = new GeoPoint(28.6139, 77.2090); // Delhi
+        var fromDelhi = await _harness.Catalog.ListAsync(null, null, null, farAway, null, null, default);
+        Assert.Equal([lake.Id, beach.Id], fromDelhi.Items.Select(p => p.Id));
+        Assert.True(fromDelhi.Items[0].DistanceKm > 1000);
     }
 }

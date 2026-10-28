@@ -66,4 +66,11 @@ internal static class EndpointResults
     public static bool TryParse<TEnum>(string? value, out TEnum parsed)
         where TEnum : struct, Enum =>
         Enum.TryParse(value, ignoreCase: true, out parsed) && Enum.IsDefined(parsed) && !int.TryParse(value, out _);
+
+    /// <summary>The first language in Accept-Language, e.g. "ta" from "ta-IN,ta;q=0.9".</summary>
+    public static string? PreferredLanguage(HttpContext httpContext) =>
+        httpContext.Request.GetTypedHeaders().AcceptLanguage
+            .OrderByDescending(language => language.Quality ?? 1)
+            .Select(language => language.Value.Value?.Split('-')[0])
+            .FirstOrDefault();
 }

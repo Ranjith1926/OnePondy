@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
+using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Places;
 
 namespace OnePondy.Application.Common;
@@ -28,11 +29,23 @@ public interface IOnePondyDbContext
 
     DbSet<AuditEntry> AuditEntries { get; }
 
+    DbSet<SavedPlace> SavedPlaces { get; }
+
+    DbSet<Itinerary> Itineraries { get; }
+
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an
     /// edit based on stale data is rejected instead of overwriting someone else's change.
     /// </summary>
     void ExpectVersion(Place place, uint version);
+
+    /// <summary>
+    /// Tells the next save this entity is new, for one added directly to an owned collection (such as
+    /// <see cref="Itinerary.Stops"/>) on an already-tracked parent: change detection alone can mark
+    /// such an entity Modified instead of Added, since it has no earlier snapshot to diff against.
+    /// </summary>
+    void MarkAdded<TEntity>(TEntity entity)
+        where TEntity : class;
 
     /// <summary>For changes that span several saves, such as Identity role updates plus their audit entry.</summary>
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken);

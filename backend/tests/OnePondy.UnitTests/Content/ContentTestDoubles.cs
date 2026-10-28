@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.Extensions.Time.Testing;
 using OnePondy.Application.Audit;
 using OnePondy.Application.Configuration;
+using OnePondy.Application.Itineraries;
 using OnePondy.Application.Media;
 using OnePondy.Application.Places;
 using OnePondy.Application.Staff;
@@ -73,6 +74,8 @@ public sealed class ContentHarness
         Media = new MediaService(Db, Storage, new SkiaImageProcessor(media), Audit, media, Time, NullLogger<MediaService>.Instance);
         Config = new ConfigService(Db, Audit, Time);
         StaffService = new StaffService(Db, Staff, Accounts, Audit, Time);
+        SavedPlaces = new SavedPlacesService(Db, Catalog, Time);
+        Itineraries = new ItineraryService(Db, Catalog, Time);
 
         foreach (var (code, index) in new[] { "beach", "heritage", "spiritual", "museum", "nature" }.Select((c, i) => (c, i)))
         {
@@ -82,6 +85,7 @@ public sealed class ContentHarness
         Db.SaveChanges();
         Administrator = AddStaff("admin@onepondy.test", RoleNames.Administrator, "Admin");
         Editor = AddStaff("editor@onepondy.test", RoleNames.ContentEditor, "Asha");
+        Customer = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919876543210", CancellationToken.None).Result.Id;
     }
 
     public FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 10, 26, 4, 0, 0, TimeSpan.Zero));
@@ -106,9 +110,16 @@ public sealed class ContentHarness
 
     public StaffService StaffService { get; }
 
+    public SavedPlacesService SavedPlaces { get; }
+
+    public ItineraryService Itineraries { get; }
+
     public Guid Administrator { get; }
 
     public Guid Editor { get; }
+
+    /// <summary>A plain customer account (not staff), for saved places and itineraries.</summary>
+    public Guid Customer { get; }
 
     public Guid AddStaff(string email, string role, string name = "")
     {

@@ -10,6 +10,7 @@ using OnePondy.Application.Identity;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
+using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Places;
 using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
@@ -43,6 +44,10 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
 
+    public DbSet<SavedPlace> SavedPlaces => Set<SavedPlace>();
+
+    public DbSet<Itinerary> Itineraries => Set<Itinerary>();
+
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -53,6 +58,10 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public void ExpectVersion(Place place, uint version)
     {
     }
+
+    public void MarkAdded<TEntity>(TEntity entity)
+        where TEntity : class =>
+        Entry(entity).State = EntityState.Added;
 
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         Database.BeginTransactionAsync(cancellationToken);
@@ -84,6 +93,17 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
             });
             place.Navigation(p => p.Translations).UsePropertyAccessMode(PropertyAccessMode.Field);
             place.Navigation(p => p.EntryFees).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+        modelBuilder.Entity<SavedPlace>().HasKey(s => new { s.UserId, s.PlaceId });
+        modelBuilder.Entity<Itinerary>(itinerary =>
+        {
+            itinerary.HasKey(i => i.Id);
+            itinerary.OwnsMany(i => i.Stops, stop =>
+            {
+                stop.WithOwner().HasForeignKey("ItineraryId");
+                stop.HasKey(s => s.Id);
+            });
+            itinerary.Navigation(i => i.Stops).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
     }
 }
