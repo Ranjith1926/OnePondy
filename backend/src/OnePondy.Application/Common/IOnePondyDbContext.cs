@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using OnePondy.Domain.Audit;
+using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
+using OnePondy.Domain.Listings;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
 
@@ -38,6 +40,16 @@ public interface IOnePondyDbContext
     DbSet<TripPlannerRequestLog> TripPlannerRequestLogs { get; }
 
     DbSet<Business> Businesses { get; }
+
+    DbSet<Listing> Listings { get; }
+
+    DbSet<AvailabilitySlot> AvailabilitySlots { get; }
+
+    DbSet<SavedListing> SavedListings { get; }
+
+    DbSet<Booking> Bookings { get; }
+
+    DbSet<BookingSlot> BookingSlots { get; }
 
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an

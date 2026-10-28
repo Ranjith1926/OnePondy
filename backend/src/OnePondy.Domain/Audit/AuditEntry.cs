@@ -54,6 +54,7 @@ public static class AuditEntityTypes
     public const string AppSetting = "app_setting";
     public const string Staff = "staff";
     public const string Business = "business";
+    public const string Listing = "listing";
 }
 
 public static class AuditActions
@@ -81,4 +82,11 @@ public static class AuditActions
     public const string BusinessReinstated = "business.reinstated";
     public const string BusinessDocumentAdded = "business.document_added";
     public const string BusinessDocumentRemoved = "business.document_removed";
+    public const string ListingCreated = "listing.created";
+    public const string ListingUpdated = "listing.updated";
+    public const string ListingSubmitted = "listing.submitted";
+    public const string ListingPublished = "listing.published";
+    public const string ListingSentBack = "listing.sent_back";
+    public const string ListingSuspended = "listing.suspended";
+    public const string ListingReinstated = "listing.reinstated";
 }

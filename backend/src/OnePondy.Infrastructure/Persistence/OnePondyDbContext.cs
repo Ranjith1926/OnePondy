@@ -4,10 +4,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using OnePondy.Application.Common;
 using OnePondy.Domain.Audit;
+using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Itineraries;
+using OnePondy.Domain.Listings;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Identity;
@@ -42,6 +44,16 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<TripPlannerRequestLog> TripPlannerRequestLogs => Set<TripPlannerRequestLog>();
 
     public DbSet<Business> Businesses => Set<Business>();
+
+    public DbSet<Listing> Listings => Set<Listing>();
+
+    public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();
+
+    public DbSet<SavedListing> SavedListings => Set<SavedListing>();
+
+    public DbSet<Booking> Bookings => Set<Booking>();
+
+    public DbSet<BookingSlot> BookingSlots => Set<BookingSlot>();
 
     /// <summary>Provider settings shared by the app and the design-time factory used for migrations.</summary>
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>

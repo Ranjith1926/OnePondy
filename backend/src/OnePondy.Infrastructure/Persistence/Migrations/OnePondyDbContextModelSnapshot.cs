@@ -265,6 +265,183 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_log", (string)null);
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Bookings.Booking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BookingType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("booking_type");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("CancellationPolicySnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("cancellation_policy_snapshot");
+
+                    b.Property<string>("CancellationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_reason");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("CustomerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_user_id");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<DateTimeOffset?>("EndAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_at");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<decimal>("Fees")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("fees");
+
+                    b.Property<int>("GuestCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("guest_count");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("listing_id");
+
+                    b.Property<string>("PriceSnapshot")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("price_snapshot");
+
+                    b.Property<DateTimeOffset?>("StartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("subtotal");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("tax_amount");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_bookings");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_bookings_hold_expiry")
+                        .HasFilter("status IN ('pending', 'awaiting_payment')");
+
+                    b.HasIndex("CustomerUserId", "CreatedAt")
+                        .HasDatabaseName("ix_bookings_customer_created");
+
+                    b.HasIndex("CustomerUserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_bookings_idempotency");
+
+                    b.HasIndex("ListingId", "BusinessId")
+                        .HasDatabaseName("ix_bookings_listing_id_business_id");
+
+                    b.HasIndex("BusinessId", "Status", "StartAt")
+                        .HasDatabaseName("ix_bookings_business_status");
+
+                    b.ToTable("bookings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_booking_amounts", "subtotal >= 0 AND fees >= 0 AND tax_amount >= 0 AND discount_amount >= 0 AND total_amount >= 0");
+
+                            t.HasCheckConstraint("ck_booking_dates", "end_at IS NULL OR start_at IS NULL OR end_at > start_at");
+
+                            t.HasCheckConstraint("ck_booking_guest_count", "guest_count > 0");
+
+                            t.HasCheckConstraint("ck_booking_hold", "status NOT IN ('pending', 'awaiting_payment') OR expires_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_booking_status", "status IN ('pending', 'awaiting_payment', 'confirmed', 'failed', 'expired', 'rejected', 'cancelled', 'refund_pending', 'refunded', 'completed')");
+
+                            t.HasCheckConstraint("ck_booking_total", "total_amount = subtotal + fees + tax_amount - discount_amount");
+
+                            t.HasCheckConstraint("ck_booking_type", "booking_type IN ('activity', 'stay', 'event', 'service')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Bookings.BookingSlot", b =>
+                {
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid>("SlotId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("slot_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.HasKey("BookingId", "SlotId")
+                        .HasName("pk_booking_slots");
+
+                    b.HasIndex("SlotId")
+                        .HasDatabaseName("ix_booking_slots_slot_id");
+
+                    b.ToTable("booking_slots", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_booking_slot_quantity", "quantity > 0");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Businesses.Business", b =>
                 {
                     b.Property<Guid>("Id")
@@ -708,6 +885,179 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_itinerary_status", "status IN ('draft', 'saved', 'archived')");
                         });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Listings.AvailabilitySlot", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Capacity")
+                        .HasColumnType("integer")
+                        .HasColumnName("capacity");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("EndAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("end_at");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("listing_id");
+
+                    b.Property<int>("ReservedCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("reserved_count");
+
+                    b.Property<DateTimeOffset>("StartAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("start_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_availability_slots");
+
+                    b.HasIndex("ListingId", "StartAt")
+                        .IsUnique()
+                        .HasDatabaseName("ux_slot_listing_start");
+
+                    b.ToTable("availability_slots", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_slot_capacity", "capacity >= 0 AND reserved_count >= 0 AND reserved_count <= capacity");
+
+                            t.HasCheckConstraint("ck_slot_dates", "end_at > start_at");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Listings.Listing", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("BasePrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("base_price");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("CancellationPolicy")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("cancellation_policy");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsBookable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_bookable");
+
+                    b.Property<string>("ListingType")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("listing_type");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(180)
+                        .HasColumnType("character varying(180)")
+                        .HasColumnName("title");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_listings");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ux_listings_id_business");
+
+                    b.HasIndex("BusinessId", "Status")
+                        .HasDatabaseName("ix_listings_business_status");
+
+                    b.ToTable("listings", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_listing_bookable_policy", "NOT is_bookable OR cancellation_policy IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_listing_bookable_type", "NOT is_bookable OR listing_type <> 'shop'");
+
+                            t.HasCheckConstraint("ck_listing_price", "base_price IS NULL OR base_price >= 0");
+
+                            t.HasCheckConstraint("ck_listing_status", "status IN ('draft', 'pending', 'published', 'suspended')");
+
+                            t.HasCheckConstraint("ck_listing_type", "listing_type IN ('activity', 'stay', 'event', 'service', 'shop')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Listings.SavedListing", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("ListingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("listing_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.HasKey("UserId", "ListingId")
+                        .HasName("pk_saved_listings");
+
+                    b.HasIndex("ListingId")
+                        .HasDatabaseName("ix_saved_listings_listing_id");
+
+                    b.ToTable("saved_listings", (string)null);
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>
@@ -1273,6 +1623,94 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_audit_log_app_users_actor_user_id");
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Bookings.Booking", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Listings.Listing", null)
+                        .WithMany()
+                        .HasForeignKey("ListingId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bookings_listings_listing_id_business_id");
+
+                    b.OwnsMany("OnePondy.Domain.Bookings.BookingStatusHistoryEntry", "History", b1 =>
+                        {
+                            b1.Property<Guid>("Id")
+                                .HasColumnType("uuid")
+                                .HasColumnName("id");
+
+                            b1.Property<string>("ActorType")
+                                .IsRequired()
+                                .HasMaxLength(16)
+                                .HasColumnType("character varying(16)")
+                                .HasColumnName("changed_by_type");
+
+                            b1.Property<Guid?>("ActorUserId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("changed_by_user_id");
+
+                            b1.Property<Guid>("BookingId")
+                                .HasColumnType("uuid")
+                                .HasColumnName("booking_id");
+
+                            b1.Property<DateTimeOffset>("CreatedAt")
+                                .HasColumnType("timestamp with time zone")
+                                .HasColumnName("created_at");
+
+                            b1.Property<string>("NewStatus")
+                                .IsRequired()
+                                .HasMaxLength(32)
+                                .HasColumnType("character varying(32)")
+                                .HasColumnName("new_status");
+
+                            b1.Property<string>("PreviousStatus")
+                                .HasMaxLength(32)
+                                .HasColumnType("character varying(32)")
+                                .HasColumnName("previous_status");
+
+                            b1.Property<string>("Reason")
+                                .HasMaxLength(500)
+                                .HasColumnType("character varying(500)")
+                                .HasColumnName("reason");
+
+                            b1.HasKey("Id")
+                                .HasName("pk_booking_status_history");
+
+                            b1.HasIndex("BookingId", "CreatedAt")
+                                .HasDatabaseName("ix_booking_status_history_booking_time");
+
+                            b1.ToTable("booking_status_history", null, t =>
+                                {
+                                    t.HasCheckConstraint("ck_booking_history_actor", "(changed_by_type = 'system') = (changed_by_user_id IS NULL)");
+
+                                    t.HasCheckConstraint("ck_booking_history_actor_type", "changed_by_type IN ('customer', 'partner', 'admin', 'system')");
+                                });
+
+                            b1.WithOwner()
+                                .HasForeignKey("BookingId")
+                                .HasConstraintName("fk_booking_status_history_bookings_booking_id");
+                        });
+
+                    b.Navigation("History");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Bookings.BookingSlot", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_slots_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Listings.AvailabilitySlot", null)
+                        .WithMany()
+                        .HasForeignKey("SlotId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_booking_slots_availability_slots_slot_id");
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Businesses.Business", b =>
                 {
                     b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
@@ -1444,6 +1882,43 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
 
                     b.Navigation("Stops");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Listings.AvailabilitySlot", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Listings.Listing", null)
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_availability_slots_listings_listing_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Listings.Listing", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_listings_businesses_business_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Listings.SavedListing", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Listings.Listing", null)
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_saved_listings_listings_listing_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_saved_listings_app_users_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>

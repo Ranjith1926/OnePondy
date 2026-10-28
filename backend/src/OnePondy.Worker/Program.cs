@@ -10,8 +10,9 @@ builder.Services.AddWindowsService(options => options.ServiceName = "OnePondy Wo
 builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 
-// Further jobs (outbox dispatch, hold expiry, reconciliation) are added in the phases that need them.
+// Further jobs (outbox dispatch, reconciliation) are added in the phases that need them.
 builder.Services.AddHostedService<AuthDataRetentionJob>();
+builder.Services.AddHostedService<BookingHoldExpiryJob>();
 
 var host = builder.Build();
 host.Run();

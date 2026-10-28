@@ -8,10 +8,12 @@ using Microsoft.Extensions.Time.Testing;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Domain.Audit;
+using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
+using OnePondy.Domain.Listings;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Persistence;
@@ -53,6 +55,16 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<TripPlannerRequestLog> TripPlannerRequestLogs => Set<TripPlannerRequestLog>();
 
     public DbSet<Business> Businesses => Set<Business>();
+
+    public DbSet<Listing> Listings => Set<Listing>();
+
+    public DbSet<AvailabilitySlot> AvailabilitySlots => Set<AvailabilitySlot>();
+
+    public DbSet<SavedListing> SavedListings => Set<SavedListing>();
+
+    public DbSet<Booking> Bookings => Set<Booking>();
+
+    public DbSet<BookingSlot> BookingSlots => Set<BookingSlot>();
 
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
@@ -122,6 +134,28 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
             });
             business.Navigation(b => b.Documents).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
+        modelBuilder.Entity<Listing>(listing =>
+        {
+            listing.HasKey(l => l.Id);
+            listing.HasAlternateKey(l => new { l.Id, l.BusinessId });
+            listing.Property(l => l.CancellationPolicy).HasConversion(CancellationPolicyJson.Converter, CancellationPolicyJson.Comparer);
+        });
+        modelBuilder.Entity<AvailabilitySlot>().HasKey(s => s.Id);
+        modelBuilder.Entity<SavedListing>().HasKey(s => new { s.UserId, s.ListingId });
+        modelBuilder.Entity<Booking>(booking =>
+        {
+            booking.HasKey(b => b.Id);
+            booking.HasOne<Listing>().WithMany().HasForeignKey(b => new { b.ListingId, b.BusinessId }).HasPrincipalKey(l => new { l.Id, l.BusinessId });
+            booking.Property(b => b.PriceSnapshot).HasConversion(PriceSnapshotJson.Converter, PriceSnapshotJson.Comparer);
+            booking.Property(b => b.CancellationPolicySnapshot).HasConversion(CancellationPolicyJson.RequiredConverter, CancellationPolicyJson.RequiredComparer);
+            booking.OwnsMany(b => b.History, history =>
+            {
+                history.WithOwner().HasForeignKey("BookingId");
+                history.HasKey(h => h.Id);
+            });
+            booking.Navigation(b => b.History).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
+        modelBuilder.Entity<BookingSlot>().HasKey(bs => new { bs.BookingId, bs.SlotId });
     }
 }
 

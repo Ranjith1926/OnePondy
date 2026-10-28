@@ -3,6 +3,8 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using OnePondy.Domain.Bookings;
+using OnePondy.Domain.Listings;
 using OnePondy.Domain.Places;
 
 namespace OnePondy.Infrastructure.Persistence;
@@ -83,4 +85,38 @@ public static class OpeningHoursJson
     private sealed record Stored(bool AlwaysOpen, IReadOnlyList<StoredPeriod> Periods, string? Notes);
 
     private sealed record StoredPeriod(string Day, string Opens, string Closes);
+}
+
+/// <summary>A listing's cancellation policy as jsonb, or a booking's snapshot of it at reservation time.</summary>
+public static class CancellationPolicyJson
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+
+    // EF Core never passes null to a converter, so the nullable signature only satisfies the property type.
+    public static ValueConverter<CancellationPolicy?, string> Converter { get; } =
+        new(policy => JsonSerializer.Serialize(policy, Options), json => JsonSerializer.Deserialize<CancellationPolicy>(json, Options));
+
+    public static ValueComparer<CancellationPolicy?> Comparer { get; } =
+        new((left, right) => Equals(left, right), policy => policy == null ? 0 : policy.GetHashCode(), policy => policy);
+
+    /// <summary>For a booking's snapshot, which always has a policy (never null).</summary>
+    public static ValueConverter<CancellationPolicy, string> RequiredConverter { get; } =
+        new(policy => JsonSerializer.Serialize(policy, Options), json => JsonSerializer.Deserialize<CancellationPolicy>(json, Options)!);
+
+    public static ValueComparer<CancellationPolicy> RequiredComparer { get; } =
+        new((left, right) => Equals(left, right), policy => policy.GetHashCode(), policy => policy);
+}
+
+/// <summary>A booking's price breakdown as the customer saw it at reservation time, stored as jsonb.</summary>
+public static class PriceSnapshotJson
+{
+    private static readonly JsonSerializerOptions Options = new(JsonSerializerDefaults.Web);
+
+    public static ValueConverter<PriceSnapshot, string> Converter { get; } =
+        new(
+            snapshot => JsonSerializer.Serialize(snapshot, Options),
+            json => JsonSerializer.Deserialize<PriceSnapshot>(json, Options)!);
+
+    public static ValueComparer<PriceSnapshot> Comparer { get; } =
+        new((left, right) => Equals(left, right), snapshot => snapshot.GetHashCode(), snapshot => snapshot);
 }
