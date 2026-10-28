@@ -182,3 +182,73 @@ export interface CodeRequested {
   resendAfterSeconds: number;
   maskedDestination: string;
 }
+
+export type OtpChannel = 'sms' | 'email';
+
+export interface CustomerProfile {
+  id: string;
+  displayName: string;
+  phoneNumber: string | null;
+  email: string | null;
+  preferredLanguage: string;
+  createdAt: string;
+}
+
+export type BusinessType = 'restaurant' | 'hotel' | 'activity' | 'shop' | 'tourOperator' | 'service';
+
+export type BusinessApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+
+export type BusinessDocumentKind = 'gstin' | 'fssaiLicence' | 'other';
+
+export interface BusinessDocument {
+  id: string;
+  kind: BusinessDocumentKind;
+  contentType: string;
+  uploadedAt: string;
+}
+
+export interface BusinessSummary {
+  id: string;
+  name: string;
+  businessType: BusinessType;
+  approvalStatus: BusinessApprovalStatus;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BusinessDetail {
+  id: string;
+  version: number;
+  ownerUserId: string;
+  name: string;
+  businessType: BusinessType;
+  description: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  address: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  gstin: string | null;
+  fssaiLicenseNumber: string | null;
+  approvalStatus: BusinessApprovalStatus;
+  isActive: boolean;
+  reviewNote: string | null;
+  documents: BusinessDocument[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The body of POST /partner/businesses and the "business" part of PUT /partner/businesses/{id}. */
+export interface BusinessApplicationInput {
+  name: string;
+  businessType: BusinessType;
+  description: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  address: string | null;
+  lat: number | null;
+  lng: number | null;
+  gstin: string | null;
+  fssaiLicenseNumber: string | null;
+}

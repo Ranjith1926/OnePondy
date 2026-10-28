@@ -12,19 +12,28 @@ export const metadata: Metadata = { title: 'Audit log' };
 const areas: Record<string, string> = {
   '': 'Everything',
   place: 'Places and photos',
+  business: 'Partners',
   module_flag: 'Module settings',
   app_setting: 'App version',
   staff: 'Staff access',
 };
 
 function entityLink(entry: AuditEntry) {
-  return entry.entityType === 'place' ? (
-    <Link href={`/places/${entry.entityId}`} className="font-semibold text-brand hover:underline">
-      Open place
-    </Link>
-  ) : (
-    <span className="text-muted">{entry.entityId}</span>
-  );
+  if (entry.entityType === 'place') {
+    return (
+      <Link href={`/places/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+        Open place
+      </Link>
+    );
+  }
+  if (entry.entityType === 'business') {
+    return (
+      <Link href={`/partners/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+        Open partner
+      </Link>
+    );
+  }
+  return <span className="text-muted">{entry.entityId}</span>;
 }
 
 export default async function AuditPage({

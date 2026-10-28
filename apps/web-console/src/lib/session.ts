@@ -8,12 +8,16 @@ import { secureCookies } from './config';
 import { canEditContent, isAdministrator } from './roles';
 import {
   cookieOptions,
+  parsePartnerUser,
   parseSession,
   parseUser,
+  PARTNER_SESSION_COOKIE,
+  PARTNER_USER_COOKIE,
   SESSION_COOKIE,
   toStoredSession,
   USER_COOKIE,
   type ConsoleUser,
+  type PartnerUser,
   type StoredSession,
 } from './sessionCookie';
 
@@ -65,4 +69,38 @@ export async function clearSession(): Promise<void> {
   const store = await cookies();
   store.delete(SESSION_COOKIE);
   store.delete(USER_COOKIE);
+}
+
+export async function getPartnerSession(): Promise<StoredSession | null> {
+  return parseSession((await cookies()).get(PARTNER_SESSION_COOKIE)?.value);
+}
+
+export async function getPartnerUser(): Promise<PartnerUser | null> {
+  const store = await cookies();
+  return parseSession(store.get(PARTNER_SESSION_COOKIE)?.value)
+    ? parsePartnerUser(store.get(PARTNER_USER_COOKIE)?.value)
+    : null;
+}
+
+/** For partner pages and server functions: every one checks the session itself, not only the proxy. */
+export async function requirePartnerUser(): Promise<PartnerUser> {
+  const user = await getPartnerUser();
+  if (!user) {
+    redirect('/partner/sign-in');
+  }
+  return user;
+}
+
+/** Only from server functions and route handlers, which can set cookies. */
+export async function savePartnerSession(tokens: SessionTokens, user: PartnerUser): Promise<void> {
+  const store = await cookies();
+  const options = cookieOptions(tokens.refreshTokenExpiresAt, secureCookies());
+  store.set(PARTNER_SESSION_COOKIE, JSON.stringify(toStoredSession(tokens)), options);
+  store.set(PARTNER_USER_COOKIE, JSON.stringify(user), options);
+}
+
+export async function clearPartnerSession(): Promise<void> {
+  const store = await cookies();
+  store.delete(PARTNER_SESSION_COOKIE);
+  store.delete(PARTNER_USER_COOKIE);
 }

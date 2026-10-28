@@ -5,6 +5,11 @@ import type { SessionTokens, StaffRole } from './apiTypes';
 export const SESSION_COOKIE = 'op_session';
 export const USER_COOKIE = 'op_user';
 
+// A business partner is a customer account, not a staff one (spec §1: "one customer identity"), so
+// it gets its own cookie pair and session rather than sharing the staff session above.
+export const PARTNER_SESSION_COOKIE = 'op_partner_session';
+export const PARTNER_USER_COOKIE = 'op_partner_user';
+
 /** Refresh this long before the access token expires, so requests never race its expiry. */
 export const REFRESH_MARGIN_MS = 60_000;
 
@@ -64,6 +69,21 @@ export function parseUser(value: string | undefined): ConsoleUser | null {
     typeof data.role === 'string' &&
     staffRoles.includes(data.role)
     ? { id: data.id, name: data.name, email: data.email ?? null, role: data.role }
+    : null;
+}
+
+/** Display details only, for a signed-in partner; the API decides what they may do. */
+export interface PartnerUser {
+  id: string;
+  name: string;
+  email: string | null;
+  phoneNumber: string | null;
+}
+
+export function parsePartnerUser(value: string | undefined): PartnerUser | null {
+  const data = parseJson(value) as Partial<PartnerUser> | null;
+  return data && typeof data.id === 'string' && typeof data.name === 'string'
+    ? { id: data.id, name: data.name, email: data.email ?? null, phoneNumber: data.phoneNumber ?? null }
     : null;
 }
 

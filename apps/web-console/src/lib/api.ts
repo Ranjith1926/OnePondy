@@ -3,7 +3,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 
 import { apiBaseUrl } from './config';
-import { getSession } from './session';
+import { getPartnerSession, getSession } from './session';
 
 /** An API problem response: a stable code, a readable detail and, for forms, errors per field. */
 export class ApiError extends Error {
@@ -87,6 +87,23 @@ export async function api<T>(path: string, options: RequestOptions = {}): Promis
   const response = await send(path, options, session.accessToken);
   if (response.status === 401) {
     redirect('/session-expired');
+  }
+  return read<T>(response);
+}
+
+/**
+ * Calls the API as the signed-in partner. The proxy keeps the access token fresh, so a 401 here
+ * means the session was revoked (signed out elsewhere).
+ */
+export async function partnerApi<T>(path: string, options: RequestOptions = {}): Promise<T> {
+  const session = await getPartnerSession();
+  if (!session) {
+    redirect('/partner/sign-in');
+  }
+
+  const response = await send(path, options, session.accessToken);
+  if (response.status === 401) {
+    redirect('/partner/sign-in?reason=expired');
   }
   return read<T>(response);
 }

@@ -1,4 +1,7 @@
 import type {
+  BusinessApprovalStatus,
+  BusinessDocumentKind,
+  BusinessType,
   DayOfWeek,
   MediaLicence,
   ModuleStatus,
@@ -90,6 +93,36 @@ export const auditActionLabels: Record<string, string> = {
   'config.min_app_version_changed': 'Minimum app version changed',
   'staff.role_granted': 'Staff role granted',
   'staff.role_revoked': 'Staff access removed',
+  'business.applied': 'Applied as a partner',
+  'business.updated': 'Application edited',
+  'business.approved': 'Approved',
+  'business.rejected': 'Rejected',
+  'business.suspended': 'Suspended',
+  'business.reinstated': 'Reinstated',
+  'business.document_added': 'Document added',
+  'business.document_removed': 'Document removed',
+};
+
+export const businessTypeLabels: Record<BusinessType, string> = {
+  restaurant: 'Restaurant',
+  hotel: 'Hotel / stay',
+  activity: 'Activity',
+  shop: 'Shop',
+  tourOperator: 'Tour operator',
+  service: 'Service',
+};
+
+export const businessStatusLabels: Record<BusinessApprovalStatus, string> = {
+  pending: 'Pending review',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  suspended: 'Suspended',
+};
+
+export const businessDocumentLabels: Record<BusinessDocumentKind, string> = {
+  gstin: 'GSTIN certificate',
+  fssaiLicence: 'FSSAI licence',
+  other: 'Other document',
 };
 
 const dateTime = new Intl.DateTimeFormat('en-IN', {
