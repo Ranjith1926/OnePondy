@@ -177,7 +177,8 @@
       "title": "Cancel this booking?",
       "message": "This can't be undone.",
       "confirm": "Cancel booking",
-      "keep": "Keep booking"
+      "keep": "Keep booking",
+      "paidMessage": "You'll get a refund under this booking's cancellation policy: free up to {{hours}}h before, then {{percent}}%. A refund can take a few days to reach your bank."
     },
     "detail": {
       "loading": "Loading booking",
@@ -201,6 +202,19 @@
       "refundPending": "Refund in progress",
       "refunded": "Refunded",
       "completed": "Completed"
+    },
+    "errors": {
+      "booking_changed": "This booking just changed. Pull to reload and try again.",
+      "booking_invalid_transition": "That isn't possible for this booking any more.",
+      "booking_not_found": "We couldn't find that booking.",
+      "refunds_not_enabled": "Cancelling a paid booking isn't available yet. Please contact support.",
+      "payment_not_due": "This booking isn't waiting for payment.",
+      "payment_window_closed": "The time to pay for this booking has run out.",
+      "payments_unavailable": "Payment isn't available right now. Please try again in a little while.",
+      "not_enough_availability": "There isn't enough availability left.",
+      "offline": "You appear to be offline. Check your connection and try again.",
+      "timeout": "That took too long. Check your connection and try again.",
+      "generic": "Something went wrong. Please try again."
     }
   },
   "saved": {
@@ -489,5 +503,35 @@
     "title": "Update OnePondy",
     "message": "This version of the app is no longer supported. Update to the latest version to keep using OnePondy.",
     "action": "Update now"
+  },
+  "payments": {
+    "pay": {
+      "title": "Pay to confirm",
+      "accepted": "The partner accepted your request. Pay now to confirm your booking.",
+      "button": "Pay {{amount}}",
+      "opening": "Opening payment…",
+      "timeLeft": "Time left to pay: {{time}}",
+      "timeUp": "The time to pay has run out. You can book again.",
+      "secure": "Payments are handled securely by Razorpay. We never see your card details."
+    },
+    "outcome": {
+      "processing": "Thanks. We're confirming your payment now. This page updates by itself, and we'll notify you.",
+      "cancelled": "Payment wasn't completed. You can try again while there's time left.",
+      "failed": "That payment didn't go through. You haven't been charged for this attempt. Try again, or use another method.",
+      "lapsed": "Your payment arrived after the time to pay ran out, so this booking wasn't confirmed. Your money is being refunded.",
+      "error": "Something went wrong starting the payment. Check your connection and try again."
+    },
+    "receipt": {
+      "title": "Receipt",
+      "paid": "Paid {{amount}} on {{date}}",
+      "reference": "Payment reference: {{reference}}"
+    },
+    "refund": {
+      "title": "Refund",
+      "inProgress": "Your refund of {{amount}} is on its way.",
+      "processed": "Your refund of {{amount}} was sent on {{date}}.",
+      "willBeNotified": "We'll let you know when it's sent.",
+      "bankDelay": "Your bank may take a few working days to show it."
+    }
   }
 }

@@ -60,6 +60,28 @@ export interface BookingHistoryView {
   createdAt: string;
 }
 
+/** What the customer paid, for their receipt. */
+export interface PaymentReceipt {
+  amount: number;
+  currency: string;
+  paidAt: string;
+  /** The gateway's payment id, which support can use to find it. */
+  reference: string;
+}
+
+export type RefundReason = 'rejected' | 'partnerCancelled' | 'customerCancelled' | 'latePayment';
+
+/** `failed` is shown to customers as still in progress: it is being sorted out by the team. */
+export type RefundStatus = 'pending' | 'processed' | 'failed';
+
+export interface RefundInfo {
+  amount: number;
+  reason: RefundReason;
+  status: RefundStatus;
+  requestedAt: string;
+  processedAt: string | null;
+}
+
 export interface BookingDetail {
   id: string;
   version: number;
@@ -79,6 +101,9 @@ export interface BookingDetail {
   slots: BookingSlotView[];
   history: BookingHistoryView[];
   createdAt: string;
+  updatedAt: string;
+  payment: PaymentReceipt | null;
+  refunds: RefundInfo[];
 }
 
 export interface CreateBookingInput {

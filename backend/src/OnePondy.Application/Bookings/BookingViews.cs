@@ -49,7 +49,21 @@ public sealed record BookingDetail(
     IReadOnlyList<BookingSlotView> Slots,
     IReadOnlyList<BookingHistoryView> History,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    PaymentView? Payment,
+    IReadOnlyList<RefundView> Refunds);
+
+/// <summary>What the customer paid for a booking, for their receipt. Null while nothing has been paid online.</summary>
+/// <param name="Reference">The gateway's payment id, which support can use to find it.</param>
+public sealed record PaymentView(decimal Amount, string Currency, DateTimeOffset PaidAt, string Reference);
+
+/// <summary>Money going back to the customer, and how far along it is, so they never have to wonder (spec Phase 7: refund status).</summary>
+public sealed record RefundView(
+    decimal Amount,
+    OnePondy.Domain.Payments.RefundReason Reason,
+    OnePondy.Domain.Payments.RefundStatus Status,
+    DateTimeOffset RequestedAt,
+    DateTimeOffset? ProcessedAt);
 
 /// <summary>What the customer asks for when creating a booking; one slot id per night for a stay.</summary>
 public sealed record CreateBookingInput(Guid ListingId, IReadOnlyList<Guid> SlotIds, int GuestCount, string IdempotencyKey);

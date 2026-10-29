@@ -9,6 +9,7 @@ import {
   type BannerMessageKey,
   type SessionUser,
 } from '../../../state';
+import { forgetPushRegistration } from '../../notifications/hooks/usePushSetup';
 import { authApi } from '../api/authApi';
 import { sessionManager } from '../services/sessionManager';
 
@@ -31,6 +32,8 @@ export function useAuthActions() {
   );
 
   const signOut = useCallback(async () => {
+    // While the session is still valid, tell the server this phone is done. The server also stops using it when the session ends.
+    await forgetPushRegistration();
     try {
       await authApi.signOut();
     } catch {

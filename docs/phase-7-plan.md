@@ -343,3 +343,35 @@ attempt in any state except already captured, because a customer can still pay a
 - **Needs before real delivery:** an Expo account and project (and, if its enhanced push security is on, an access token set as the
   secret `Notifications:Expo:AccessToken`), a Firebase project with the Android credentials uploaded to Expo, the app built with
   push enabled, and a real phone. Verified here against Expo's real API with a made-up token (nothing delivered) and with a stub.
+
+**7.8 (the app side of payments and notifications).**
+
+- **The app never decides whether a payment succeeded.** The booking detail shows a "Pay" card while the booking is
+  `awaiting_payment`, with the amount and a countdown to the end of the 30-minute window. The button asks the server for a gateway
+  order (`POST /bookings/{id}/payment`), opens Razorpay Checkout (the React Native SDK, `react-native-razorpay` 3.0.0, a native
+  module, so the development build must be rebuilt once), and when Checkout closes asks the server what happened.
+  Whatever Checkout reported, only the server's answer counts: a "cancelled" Checkout over a booking the server says is paid shows
+  as paid. After a reported payment the app asks up to six times, two seconds apart, then says "we're confirming your payment";
+  the booking screen also re-reads itself every 5 seconds while it waits for payment.
+- **New endpoint: `POST /api/v1/bookings/{id}/payment/refresh`** ("is it paid yet?"). For the booking's own customer only (anyone
+  else gets 404, no sign-in 401), and only while the booking is `awaiting_payment`, the server asks Razorpay for the order's payments
+  and applies a captured one exactly as the webhook would (same idempotent path), then returns the booking. It means a slow or
+  missing webhook (always the case on a laptop, which Razorpay cannot reach) never leaves a customer stuck.
+- **Receipts and refunds on the booking detail.** `GET /bookings/{id}` now also returns `payment` (amount, currency, paid-at, the
+  gateway's payment id as the reference, or null) and `refunds` (amount, reason, status, requested and processed times). A refund
+  the team is still sorting out (`failed`) is shown to the customer as "on its way". Cancelling a paid booking shows the refund rule
+  that applies before confirming. A booking in `refund_pending` is re-read every 15 seconds.
+- **Notifications.** After the customer's first booking the app asks once for permission to notify (never earlier, never twice). On
+  each sign-in, only if permission was already given, the phone registers its Expo push token (`POST /devices`); on sign-out it
+  unregisters (best effort; the server also stops using a phone when its session ends). A notification tap opens that booking, but
+  only for a signed-in customer and only for a known type with a well-formed booking id; the booking still loads through the
+  signed-in API, so a forged link reveals nothing. While the app is open a notification shows as a quiet banner.
+- **Push needs an Expo project.** An Android phone cannot get an Expo push token without an EAS `projectId` (and Firebase). Until that
+  exists in the app config, registration quietly does nothing ("unavailable"), so the rest of the app is unaffected.
+- **Not yet verified on a real checkout.** Razorpay's "customer closed Checkout" error code is taken as 2 (its documented
+  Android value); confirm it on a device with a test card, because a wrong value would show a closed Checkout as "failed" rather
+  than "cancelled" (harmless, only the wording differs).
+- **Tests.** Backend: 11 unit tests (receipt, refunds, refresh) and 4 integration tests (owner confirms through the refresh, a stranger
+  and anonymous are refused, a booking not awaiting payment is returned untouched, a late payment after cancelling shows its refund).
+  App: the pay flow (every outcome, polling, server over checkout), the Checkout error mapping, push registration (every branch),
+  link validation, the pay card, receipt and booking detail, error messages and the refetch rule.

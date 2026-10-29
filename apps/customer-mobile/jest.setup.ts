@@ -51,3 +51,19 @@ timeoutManager.setTimeoutProvider({
   setInterval: (callback, delay) => unref(setInterval(callback, delay)),
   clearInterval: (id) => clearInterval(id as Parameters<typeof clearInterval>[0]),
 });
+
+// The Razorpay checkout and Expo notifications are native modules with nothing behind them in Jest. Tests that care replace these.
+jest.mock('react-native-razorpay', () => ({ __esModule: true, default: { open: jest.fn() } }));
+
+jest.mock('expo-notifications', () => ({
+  AndroidImportance: { HIGH: 4 },
+  setNotificationHandler: jest.fn(),
+  setNotificationChannelAsync: jest.fn(() => Promise.resolve()),
+  getPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'undetermined' })),
+  requestPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'denied' })),
+  getExpoPushTokenAsync: jest.fn(() =>
+    Promise.resolve({ data: 'ExponentPushToken[testtesttesttesttest]' }),
+  ),
+  getLastNotificationResponse: jest.fn(() => null),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+}));

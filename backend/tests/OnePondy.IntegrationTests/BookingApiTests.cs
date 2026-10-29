@@ -2055,6 +2055,97 @@ public sealed class BookingApiTests : IAsyncLifetime
         Assert.Contains("bookingId", stored.Payload);
     }
 
+    // --- Phase 7 step 7.8: the app asks "is it paid yet?" and shows a receipt ---
+
+    [DatabaseFact]
+    public async Task Refreshing_asks_the_gateway_and_confirms_a_paid_booking_with_its_receipt()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId) = await AwaitingPaymentBookingAsync();
+        var started = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment", customer));
+        var paymentId = "pay_it_" + Guid.NewGuid().ToString("N");
+
+        var beforePaying = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", customer));
+        gateway.CustomerPaid(started.GetProperty("orderId").GetString()!, paymentId, 50_000);
+        var afterPaying = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", customer));
+        var again = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", customer));
+
+        Assert.Equal("awaitingPayment", beforePaying.GetProperty("status").GetString());
+        Assert.Equal(JsonValueKind.Null, beforePaying.GetProperty("payment").ValueKind);
+        Assert.Equal("confirmed", afterPaying.GetProperty("status").GetString());
+        var receipt = afterPaying.GetProperty("payment");
+        Assert.Equal(500m, receipt.GetProperty("amount").GetDecimal());
+        Assert.Equal("INR", receipt.GetProperty("currency").GetString());
+        Assert.Equal(paymentId, receipt.GetProperty("reference").GetString());
+        Assert.Equal(0, afterPaying.GetProperty("refunds").GetArrayLength());
+
+        // Asking again changes nothing: the payment is recorded once.
+        Assert.Equal("confirmed", again.GetProperty("status").GetString());
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.Equal(1, await DbOf(scope).PaymentAttempts.AsNoTracking()
+            .CountAsync(a => a.BookingId == bookingId && a.Status == OnePondy.Domain.Payments.PaymentAttemptStatus.Captured));
+    }
+
+    [DatabaseFact]
+    public async Task Only_the_booking_customer_can_refresh_a_payment()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId) = await AwaitingPaymentBookingAsync();
+        var stranger = await SignInCustomerAsync(client);
+
+        var anonymous = await client.PostAsync($"/api/v1/bookings/{bookingId}/payment/refresh", null);
+        var notYours = await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", stranger);
+        var yours = await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", customer);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, notYours.StatusCode);
+        Assert.Equal("booking_not_found", await ErrorCodeAsync(notYours));
+        Assert.Equal(HttpStatusCode.OK, yours.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task Refreshing_a_booking_that_is_not_waiting_for_payment_just_returns_it()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId) = await NewBookingAsync();
+
+        var response = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", customer));
+
+        Assert.Equal("pending", response.GetProperty("status").GetString());
+        Assert.Equal(0, gateway.OrdersCreated);
+    }
+
+    [DatabaseFact]
+    public async Task A_booking_shows_the_refund_raised_for_a_payment_that_arrived_after_cancelling()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId) = await AwaitingPaymentBookingAsync();
+        var started = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment", customer));
+        var current = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
+        await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/cancel", customer, new { version = current.GetProperty("version").GetUInt32() });
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            await PaymentServiceFor(scope, gateway).RecordCaptureAsync(
+                started.GetProperty("orderId").GetString()!, "pay_it_" + Guid.NewGuid().ToString("N"), 500m, default);
+        }
+
+        var detail = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
+
+        var refund = Assert.Single(detail.GetProperty("refunds").EnumerateArray());
+        Assert.Equal(500m, refund.GetProperty("amount").GetDecimal());
+        Assert.Equal("latePayment", refund.GetProperty("reason").GetString());
+        Assert.Equal("refundPending", detail.GetProperty("status").GetString());
+    }
+
     private static HttpRequestMessage Authorized(HttpMethod method, string path, string token)
     {
         var request = new HttpRequestMessage(method, path);

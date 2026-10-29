@@ -14,6 +14,11 @@ public static class PaymentEndpoints
             .RequireAuthorization()
             .WithTags("Payments");
 
+        // "Is it paid yet?": the server asks the gateway itself, so a slow webhook never leaves a customer waiting.
+        app.MapPost("/api/v1/bookings/{id:guid}/payment/refresh", RefreshPayment)
+            .RequireAuthorization()
+            .WithTags("Payments");
+
         // Called by Razorpay, not by a signed-in user, so it has no sign-in: the signature is the authentication.
         app.MapPost("/api/v1/webhooks/payments", ReceiveWebhook)
             .WithMetadata(new RequestSizeLimitAttribute(MaxWebhookBytes))
@@ -23,6 +28,20 @@ public static class PaymentEndpoints
     }
 
     private const int MaxWebhookBytes = 256 * 1024;
+
+    private static async Task<IResult> RefreshPayment(
+        Guid id,
+        ClaimsPrincipal user,
+        PaymentService payments,
+        OnePondy.Application.Bookings.BookingService bookings,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        var error = await payments.CheckNowAsync(id, user.GetUserId(), cancellationToken);
+        return error is not null
+            ? ProblemResults.From(error, httpContext)
+            : EndpointResults.Ok(await bookings.GetMineAsync(id, user.GetUserId(), cancellationToken), httpContext);
+    }
 
     private static async Task<IResult> ReceiveWebhook(
         PaymentWebhookService service,

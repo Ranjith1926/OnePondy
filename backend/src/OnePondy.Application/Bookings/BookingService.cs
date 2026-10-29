@@ -438,6 +438,13 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         var slotIds = bookingSlots.Select(bs => bs.SlotId).ToList();
         var slots = await db.AvailabilitySlots.AsNoTracking().Where(s => slotIds.Contains(s.Id)).ToListAsync(cancellationToken);
 
+        // The receipt: the payment that confirmed the booking is the first one captured (a later one would be a duplicate, refunded).
+        var paid = await db.PaymentAttempts.AsNoTracking()
+            .Where(a => a.BookingId == booking.Id && a.Status == PaymentAttemptStatus.Captured)
+            .OrderBy(a => a.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        var refunds = await db.Refunds.AsNoTracking().Where(r => r.BookingId == booking.Id).OrderBy(r => r.RequestedAt).ToListAsync(cancellationToken);
+
         return new BookingDetail(
             booking.Id,
             booking.Version,
@@ -457,7 +464,9 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
             [.. bookingSlots.Select(bs => ToSlotView(bs, slots.Single(s => s.Id == bs.SlotId)))],
             [.. booking.History.OrderBy(h => h.CreatedAt).Select(ToHistoryView)],
             booking.CreatedAt,
-            booking.UpdatedAt);
+            booking.UpdatedAt,
+            paid is null ? null : new PaymentView(paid.Amount, paid.Currency, paid.UpdatedAt, paid.ProviderPaymentId!),
+            [.. refunds.Select(r => new RefundView(r.Amount, r.Reason, r.Status, r.RequestedAt, r.ProcessedAt))]);
     }
 
     private static BookingSummary ToSummary(Booking booking, Listing listing, Business business) => new(

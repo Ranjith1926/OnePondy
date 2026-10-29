@@ -185,6 +185,14 @@ The phone registers its Expo push token with `POST /api/v1/devices`; it stops re
 Notification text is generic by design and carries only the booking id. To try Expo's real service with a made-up token (nothing is
 delivered to anyone), set `ONEPONDY_EXPO_LIVE_CHECK=1` before `dotnet test`.
 
+**In the app.** The booking screen shows a Pay card (Razorpay Checkout, test mode) while a booking waits for payment, then the
+receipt and any refund. The app never decides a payment succeeded: it asks `POST /api/v1/bookings/{id}/payment/refresh`, which
+asks Razorpay itself, so this works on a laptop even though Razorpay cannot reach your webhook. Razorpay Checkout and
+notifications are native modules: after pulling this change run `npx expo run:android` once to rebuild the development build.
+Push tokens also need an Expo (EAS) project id in the app config (see "7.8" in docs/phase-7-plan.md); without one the app
+simply does not register for notifications. In Razorpay test mode, pay with a test card such as `4111 1111 1111 1111`, any future
+expiry and any CVV.
+
 **Reconciliation.** The Worker also checks every five minutes, and once a day, that our payment records agree with
 Razorpay's (see "7.6" in docs/phase-7-plan.md). A payment or refund whose webhook was lost is applied from Razorpay's own record
 and noted; anything else that differs is listed for an administrator at

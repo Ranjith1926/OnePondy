@@ -15,13 +15,17 @@ import {
   useThemedStyles,
   type Theme,
 } from '../../../design-system';
-import { authErrorMessageKey } from '../../auth/services/errorMessages';
+import { formatMoney } from '../../payments/formatMoney';
+import { PaymentCard } from '../../payments/components/PaymentCard';
+import { ReceiptSection } from '../../payments/components/ReceiptSection';
+import { bookingErrorMessageKey } from '../bookingErrors';
 import { formatDateTime } from '../formatDateTime';
 import { useBooking, useCancelBooking } from '../hooks/useBookings';
 
 type Props = StaticScreenProps<{ id: string }>;
 
-const cancellableStatuses = new Set(['pending', 'confirmed']);
+// A customer may also walk away from a booking that is waiting for payment (spec §7, decided 2026-10-29).
+const cancellableStatuses = new Set(['pending', 'awaitingPayment', 'confirmed']);
 
 export function BookingDetailScreen({ route }: Props) {
   const { t } = useTranslation();
@@ -84,9 +88,17 @@ export function BookingDetailScreen({ route }: Props) {
           <OPText>{t('bookings.guestCount', { count: data.guestCount })}</OPText>
           {data.startAt ? <OPText>{formatDateTime(data.startAt)}</OPText> : null}
           <OPText variant="label">
-            {data.priceSnapshot.currency} {data.priceSnapshot.totalAmount}
+            {formatMoney(data.priceSnapshot.totalAmount, data.priceSnapshot.currency)}
           </OPText>
         </View>
+
+        {data.status === 'awaitingPayment' ? (
+          <View style={styles.section}>
+            <PaymentCard booking={data} />
+          </View>
+        ) : null}
+
+        <ReceiptSection booking={data} />
 
         <View style={styles.section}>
           <OPText variant="label">{t('bookings.detail.cancellationPolicy')}</OPText>
@@ -136,9 +148,16 @@ export function BookingDetailScreen({ route }: Props) {
       >
         <View style={styles.confirmBody}>
           {cancelBooking.error ? (
-            <InlineBanner kind="error" message={t(authErrorMessageKey(cancelBooking.error))} />
+            <InlineBanner kind="error" message={t(bookingErrorMessageKey(cancelBooking.error))} />
           ) : null}
-          <OPText tone="secondary">{t('bookings.cancelConfirm.message')}</OPText>
+          <OPText tone="secondary">
+            {data.payment
+              ? t('bookings.cancelConfirm.paidMessage', {
+                  hours: data.cancellationPolicySnapshot.freeCancellationHours,
+                  percent: data.cancellationPolicySnapshot.refundPercentage,
+                })
+              : t('bookings.cancelConfirm.message')}
+          </OPText>
           <OPButton
             label={
               cancelBooking.isPending

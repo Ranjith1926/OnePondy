@@ -67,6 +67,7 @@
       ],
       "@react-native-vector-icons/lucide",
       "expo-secure-store",
+      ["expo-notifications", { "color": "#0E6F6A" }],
       [
         "expo-location",
         {

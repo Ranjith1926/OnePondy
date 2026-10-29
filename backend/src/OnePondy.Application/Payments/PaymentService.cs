@@ -269,6 +269,29 @@ public sealed class PaymentService(
     }
 
     /// <summary>
+    /// The customer's app has just finished the gateway's checkout and asks "is it paid yet?". The answer is never the app's: this
+    /// asks the gateway directly (the same check the Worker makes before expiring a booking) and applies a captured payment exactly
+    /// as a webhook would. It is what makes a payment show up straight away when the webhook is slow or cannot reach the server.
+    /// Returns nothing to say about the result; the caller reloads the booking. Another customer's booking is "not found".
+    /// </summary>
+    public async Task<AppError?> CheckNowAsync(Guid bookingId, Guid customerUserId, CancellationToken cancellationToken)
+    {
+        var owns = await db.Bookings.AsNoTracking().AnyAsync(b => b.Id == bookingId && b.CustomerUserId == customerUserId, cancellationToken);
+        if (!owns)
+        {
+            return BookingErrors.NotFound;
+        }
+
+        var waiting = await db.Bookings.AsNoTracking().AnyAsync(b => b.Id == bookingId && b.Status == BookingStatus.AwaitingPayment, cancellationToken);
+        if (waiting)
+        {
+            await CheckBeforeExpiryAsync(bookingId, cancellationToken);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// The gateway reports a refund as paid out. Safe to repeat. A booking waiting on its refund
     /// (<c>refund_pending</c>) becomes <c>refunded</c> once none of its refunds are still outstanding; an expired
     /// booking is already final, so only the refund record changes.
