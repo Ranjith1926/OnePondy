@@ -21,6 +21,8 @@ reinstall the APK (`android/app/build/outputs/apk/debug`). Metro and the IIS-hos
 on another port (`npx expo start --dev-client --port 8082`) and open the app with
 `adb shell am start -a android.intent.action.VIEW -d "exp+onepondy://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8082"`.
 
+On a physical phone (USB debugging on): `npx expo run:android --device <serial> --no-bundler` builds and installs for the phone's chip (the emulator's build is x86 and will not install). Run `adb reverse tcp:5080 tcp:5080` and `adb reverse tcp:8082 tcp:8082`, set `EXPO_PUBLIC_API_BASE_URL=http://localhost:5080`, and open the app with the same `exp+onepondy://` link using `localhost%3A8082`; no Wi-Fi or firewall setup is needed. Do not start Metro with `CI=1`: it turns off file watching, so the phone keeps running old code.
+
 In development builds, **Profile > Developer > Component gallery** shows every design-system
 component and state (loading, empty, error, offline) for visual QA in light and dark mode.
 

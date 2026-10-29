@@ -190,8 +190,9 @@ receipt and any refund. The app never decides a payment succeeded: it asks `POST
 asks Razorpay itself, so this works on a laptop even though Razorpay cannot reach your webhook. Razorpay Checkout and
 notifications are native modules: after pulling this change run `npx expo run:android` once to rebuild the development build.
 Push tokens also need an Expo (EAS) project id in the app config (see "7.8" in docs/phase-7-plan.md); without one the app
-simply does not register for notifications. In Razorpay test mode, pay with a test card such as `4111 1111 1111 1111`, any future
-expiry and any CVV.
+simply does not register for notifications. In Razorpay test mode, pay with **Netbanking** and press Success on the demo bank page: it works for any account. The
+usual `4111 1111 1111 1111` test card is refused as an "international card" by an Indian Razorpay account; use one of
+Razorpay's Indian test cards from its documentation instead.
 
 **Statements and payouts.** In the console, an administrator drafts a statement for a partner and period (Statements), checks it,
 approves it, transfers the money themselves, then records the bank reference, which books the payout in the ledger. Partners see
@@ -557,15 +558,20 @@ a real PostgreSQL 18 database, three consecutive runs.
 
 Known limitations:
 
-- **Driven on the Android emulator up to Razorpay Checkout, not through it.** Against a local API and a scratch database (Razorpay test
-  keys), the app signed in a new customer, booked a slot, showed the partner's acceptance as a "Pay to confirm" card with the amount and a
-  live countdown, and Cancel booking stayed available. Pay created a real Razorpay test order (server side) and launched Checkout. When
-  Checkout could not load (the emulator had no DNS) the app showed "That payment didn't go through, you haven't been charged" and kept Pay
-  available, and the booking stayed awaiting payment. **A test-card payment to "confirmed" was not completed:** Razorpay Checkout crashed
-  this PC's emulator (the QEMU process, with an access violation) every time it opened, with hardware, software and no graphics
-  acceleration, so it needs a physical Android phone. Razorpay's code for "customer closed Checkout" is taken as 2 and is still
-  unconfirmed (backing out of a Checkout that had failed to load showed the "didn't go through" message, not the cancelled one). The
-  console's new pages were checked with lint, types, component tests and a production build, not clicked through in a browser.
+- **Driven end to end on a real Android phone (Samsung A14, Android 15), in sandbox.** Against a local API and a scratch database with
+  the Razorpay test keys, over a USB tunnel: a customer signed in, saw the "Pay to confirm" card (amount, live countdown), opened Razorpay
+  Checkout, paid through Netbanking's demo bank page, and the booking became **Confirmed** with a receipt ("Paid ₹500", the Razorpay
+  payment id) and the history updated. On the server the attempt is `captured`, the ledger holds 500 / −450 / −50 and balances, and no
+  webhook had arrived (localhost), so it was the app's "is it paid yet?" check that confirmed it. Backing out of Checkout shows "Payment
+  wasn't completed, you can try again" and leaves Pay available. The PC's emulator cannot do this: Razorpay Checkout crashes its QEMU
+  process every time. **Not seen:** a card payment (the Indian test account refused the 4111 test card as international; netbanking was
+  used instead), the webhook path with a real delivery, push on a phone, and the console's new pages in a browser (lint, types, component
+  tests and a production build only).
+- **Two things the phone run found, both fixed or noted.** Razorpay's Android SDK reports a closed Checkout as code **0**
+  (`PAYMENT_CANCELED`) and a network error as 2; the app had them the other way round, so closing Checkout looked like a failure. Fixed,
+  with tests, and checked on the phone. The iOS codes are not known here, so on iOS every error shows the "didn't go through" wording.
+  Also, the bookings list is cached: a booking that changes elsewhere (the partner accepting it) shows only after the app reloads, and the
+  first bookings request right after sign-in can fail once ("Try again" fixes it). Neither is fixed.
 - **Push needs an Expo (EAS) project id and a Firebase project**; until then the app quietly does not register for notifications.
   Delivery to a real phone has not been seen.
 - **Payouts are recorded, not made.** An administrator transfers the money and records the bank reference; Razorpay Route (D21) and

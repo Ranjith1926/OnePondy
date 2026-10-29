@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 
 import { openRazorpayCheckout } from './razorpayCheckout';
@@ -40,18 +41,37 @@ describe('openRazorpayCheckout', () => {
     expect(open.mock.calls[0][0].timeout).toBe(60);
   });
 
-  it('reports a closed checkout as cancelled', async () => {
-    open.mockRejectedValue({ code: 2, description: 'Payment Cancelled' });
+  describe('on Android', () => {
+    beforeEach(() => jest.replaceProperty(Platform, 'OS', 'android'));
+    afterEach(() => jest.restoreAllMocks());
 
-    expect(await openRazorpayCheckout(request)).toEqual({ kind: 'cancelled' });
-  });
+    it('reports a closed checkout (the SDK code PAYMENT_CANCELED, 0) as cancelled', async () => {
+      open.mockRejectedValue({ code: 0, description: 'Payment Cancelled' });
 
-  it.each([{ code: 0 }, { code: 1 }, new Error('boom'), null, undefined])(
-    'reports any other failure (%p) as failed',
-    async (error) => {
-      open.mockRejectedValue(error);
+      expect(await openRazorpayCheckout(request)).toEqual({ kind: 'cancelled' });
+    });
+
+    it('reports a network error (code 2) as failed, not cancelled', async () => {
+      open.mockRejectedValue({ code: 2, description: 'Network error' });
 
       expect(await openRazorpayCheckout(request)).toEqual({ kind: 'failed' });
-    },
-  );
+    });
+
+    it.each([{ code: 3 }, { code: 6 }, new Error('boom'), null, undefined])(
+      'reports any other failure (%p) as failed',
+      async (error) => {
+        open.mockRejectedValue(error);
+
+        expect(await openRazorpayCheckout(request)).toEqual({ kind: 'failed' });
+      },
+    );
+  });
+
+  it('never reports a cancel on iOS, whose codes are not known here', async () => {
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    open.mockRejectedValue({ code: 0 });
+
+    expect(await openRazorpayCheckout(request)).toEqual({ kind: 'failed' });
+    jest.restoreAllMocks();
+  });
 });

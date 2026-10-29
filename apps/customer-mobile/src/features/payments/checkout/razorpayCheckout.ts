@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import RazorpayCheckout from 'react-native-razorpay';
 
 export interface CheckoutRequest {
@@ -18,8 +19,12 @@ export type CheckoutResult = { kind: 'completed' } | { kind: 'cancelled' } | { k
 
 export type CheckoutLauncher = (request: CheckoutRequest) => Promise<CheckoutResult>;
 
-/** Razorpay's Android code for the customer closing the checkout without paying. */
-const CANCELLED_CODE = 2;
+/**
+ * Razorpay's Android SDK code for the customer closing the checkout without paying (`Checkout.PAYMENT_CANCELED`). Code 2 is
+ * `NETWORK_ERROR`, so it is a failure, not a cancel. Seen on a real phone. The iOS code is not known here, so on iOS every
+ * error is reported as a failure, which only changes the wording shown.
+ */
+const ANDROID_CANCELLED_CODE = 0;
 
 const brandColour = '#0E6F6A';
 
@@ -40,6 +45,8 @@ export const openRazorpayCheckout: CheckoutLauncher = async (request) => {
     return { kind: 'completed' };
   } catch (error) {
     const code = (error as { code?: unknown } | null)?.code;
-    return code === CANCELLED_CODE ? { kind: 'cancelled' } : { kind: 'failed' };
+    return Platform.OS === 'android' && code === ANDROID_CANCELLED_CODE
+      ? { kind: 'cancelled' }
+      : { kind: 'failed' };
   }
 };
