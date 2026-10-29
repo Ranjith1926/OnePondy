@@ -1293,6 +1293,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_payment_attempts");
 
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_payment_attempts_open_booking")
+                        .HasFilter("status = 'created'");
+
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_payment_attempts_open")
                         .HasFilter("status = 'created'");

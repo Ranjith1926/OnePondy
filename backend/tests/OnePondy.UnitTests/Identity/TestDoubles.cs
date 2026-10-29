@@ -14,6 +14,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Persistence;
@@ -65,6 +66,10 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<Booking> Bookings => Set<Booking>();
 
     public DbSet<BookingSlot> BookingSlots => Set<BookingSlot>();
+
+    public DbSet<PaymentAttempt> PaymentAttempts => Set<PaymentAttempt>();
+
+    public DbSet<Refund> Refunds => Set<Refund>();
 
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
@@ -156,6 +161,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
             booking.Navigation(b => b.History).UsePropertyAccessMode(PropertyAccessMode.Field);
         });
         modelBuilder.Entity<BookingSlot>().HasKey(bs => new { bs.BookingId, bs.SlotId });
+        modelBuilder.Entity<PaymentAttempt>().HasKey(a => a.Id);
+        modelBuilder.Entity<Refund>().HasKey(r => r.Id);
     }
 }
 

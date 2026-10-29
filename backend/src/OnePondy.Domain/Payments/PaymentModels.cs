@@ -90,12 +90,16 @@ public sealed class PaymentAttempt
         };
     }
 
+    /// <summary>
+    /// Records that the gateway took the money. A capture is a fact, so it is accepted whatever we thought the
+    /// attempt's state was (a customer can still pay an order we had already given up on); it is not accepted twice.
+    /// </summary>
     public void MarkCaptured(string providerPaymentId, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerPaymentId);
-        if (Status != PaymentAttemptStatus.Created)
+        if (Status == PaymentAttemptStatus.Captured)
         {
-            throw new InvalidOperationException($"A {Status} payment attempt cannot be captured.");
+            throw new InvalidOperationException("This payment attempt was already captured.");
         }
 
         ProviderPaymentId = providerPaymentId;
@@ -211,6 +215,13 @@ public sealed class Refund
             Status = RefundStatus.Pending,
             RequestedAt = now,
         };
+    }
+
+    /// <summary>The gateway accepted the refund; it stays pending until the gateway reports it processed.</summary>
+    public void MarkInitiated(string providerRefundId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(providerRefundId);
+        ProviderRefundId = providerRefundId;
     }
 
     public void MarkProcessed(string providerRefundId, DateTimeOffset now)

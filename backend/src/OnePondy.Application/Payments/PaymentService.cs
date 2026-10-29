@@ -1,0 +1,241 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using OnePondy.Application.Bookings;
+using OnePondy.Application.Common;
+using OnePondy.Domain.Bookings;
+using OnePondy.Domain.Payments;
+
+namespace OnePondy.Application.Payments;
+
+/// <summary>What the app needs to open the gateway's checkout. The key id is public; the secret never leaves the server.</summary>
+public sealed record PaymentStartView(
+    Guid BookingId,
+    Guid AttemptId,
+    string Provider,
+    string Mode,
+    string KeyId,
+    string OrderId,
+    decimal Amount,
+    long AmountPaise,
+    string Currency,
+    DateTimeOffset PaymentExpiresAt);
+
+public enum CaptureOutcome
+{
+    /// <summary>The booking was waiting for this payment and is now confirmed.</summary>
+    Confirmed,
+
+    /// <summary>Nothing needed the money any more (cancelled, expired, rejected, or already paid); a full refund was raised.</summary>
+    RefundRaised,
+
+    /// <summary>This payment was recorded earlier; nothing changed.</summary>
+    AlreadyRecorded,
+}
+
+public sealed record CaptureResult(CaptureOutcome Outcome, Guid? RefundId);
+
+/// <summary>
+/// Paying for a booking (spec Phase 7). A customer starts a payment once a partner has accepted; the result
+/// comes back from the gateway, and only that result confirms the booking (<see cref="RecordCaptureAsync"/>).
+/// </summary>
+public sealed class PaymentService(
+    IOnePondyDbContext db,
+    IPaymentGateway gateway,
+    TimeProvider time,
+    IOptions<PaymentsOptions> options,
+    ILogger<PaymentService> logger)
+{
+    private readonly PaymentsOptions _options = options.Value;
+
+    /// <summary>
+    /// Creates, or returns the one already open, gateway order for a booking that is waiting for payment. Asking
+    /// twice, including at the same instant, gives the same order, so a customer is never offered two ways to pay.
+    /// </summary>
+    public async Task<Result<PaymentStartView>> StartPaymentAsync(Guid bookingId, Guid customerUserId, CancellationToken cancellationToken)
+    {
+        var booking = await db.Bookings.AsNoTracking().SingleOrDefaultAsync(b => b.Id == bookingId, cancellationToken);
+        if (booking is null || booking.CustomerUserId != customerUserId)
+        {
+            return BookingErrors.NotFound;
+        }
+
+        if (booking.Status != BookingStatus.AwaitingPayment || booking.TotalAmount <= 0m)
+        {
+            return PaymentErrors.NotDue;
+        }
+
+        var now = time.GetUtcNow();
+        if (booking.ExpiresAt is not { } expiresAt || now >= expiresAt)
+        {
+            return PaymentErrors.WindowClosed;
+        }
+
+        var open = await FindOpenAttemptAsync(bookingId, cancellationToken);
+        if (open is not null)
+        {
+            return ToView(booking, open, expiresAt);
+        }
+
+        var order = await gateway.CreateOrderAsync(
+            new GatewayOrderRequest(Money.ToPaise(booking.TotalAmount), booking.Currency, booking.Id.ToString("N"), booking.Id),
+            cancellationToken);
+        if (!order.IsSuccess)
+        {
+            return order.Error;
+        }
+
+        var attempt = PaymentAttempt.Create(booking.Id, order.Value.OrderId, booking.TotalAmount, booking.Currency, now);
+        db.PaymentAttempts.Add(attempt);
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException)
+        {
+            // A parallel request opened an order first (one open attempt per booking is a database rule). Ours is
+            // left unused at the gateway, which is harmless; hand back the winner.
+            db.PaymentAttempts.Remove(attempt);
+            var winner = await FindOpenAttemptAsync(bookingId, cancellationToken);
+            if (winner is null)
+            {
+                throw;
+            }
+
+            return ToView(booking, winner, expiresAt);
+        }
+
+        return ToView(booking, attempt, expiresAt);
+    }
+
+    /// <summary>
+    /// Applies a successful payment reported by the gateway (called by the verified webhook, step 7.3). Safe to
+    /// repeat. If the booking no longer wants the money (the customer cancelled while paying, the hold expired, the
+    /// partner rejected, or a different payment already confirmed it), the payment is recorded and refunded in full.
+    /// </summary>
+    public async Task<Result<CaptureResult>> RecordCaptureAsync(
+        string providerOrderId,
+        string providerPaymentId,
+        decimal amount,
+        CancellationToken cancellationToken)
+    {
+        var attempt = await db.PaymentAttempts.SingleOrDefaultAsync(a => a.ProviderOrderId == providerOrderId, cancellationToken);
+        if (attempt is null)
+        {
+            return PaymentErrors.UnknownOrder;
+        }
+
+        if (attempt.Status == PaymentAttemptStatus.Captured)
+        {
+            if (attempt.ProviderPaymentId != providerPaymentId)
+            {
+                return PaymentErrors.AlreadyCaptured;
+            }
+
+            // A repeat delivery. If the first run stopped before the refund reached the gateway, finish that now.
+            await RetryUnsentRefundsAsync(attempt, cancellationToken);
+            return new CaptureResult(CaptureOutcome.AlreadyRecorded, null);
+        }
+
+        if (amount != attempt.Amount)
+        {
+            logger.LogWarning("Payment {AttemptId} reported {Reported} but {Expected} is due", attempt.Id, amount, attempt.Amount);
+            return PaymentErrors.AmountMismatch;
+        }
+
+        var booking = await db.Bookings.SingleAsync(b => b.Id == attempt.BookingId, cancellationToken);
+        var now = time.GetUtcNow();
+        var paidAlready = await db.PaymentAttempts.AnyAsync(
+            a => a.BookingId == booking.Id && a.Id != attempt.Id && a.Status == PaymentAttemptStatus.Captured,
+            cancellationToken);
+
+        attempt.MarkCaptured(providerPaymentId, now);
+
+        Refund? refund = null;
+        if (booking.Status == BookingStatus.AwaitingPayment && !paidAlready)
+        {
+            booking.ConfirmPayment(now);
+            db.MarkAdded(booking.History[^1]);
+        }
+        else
+        {
+            // Cancelled and rejected bookings move to refund_pending, as the spec's state table says. An expired
+            // one is final, so only the refund record is raised.
+            if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected)
+            {
+                booking.RequestRefund(BookingActorType.System, null, now);
+                db.MarkAdded(booking.History[^1]);
+            }
+
+            refund = Refund.Request(attempt.Id, booking.Id, attempt.Amount, RefundReason.LatePayment, now);
+            db.Refunds.Add(refund);
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            // The booking (or the attempt) changed in the same instant, for example the customer cancelling while
+            // this payment arrived. Nothing was saved; the gateway retries, and the retry sees the new state.
+            return PaymentErrors.Busy;
+        }
+
+        if (refund is null)
+        {
+            return new CaptureResult(CaptureOutcome.Confirmed, null);
+        }
+
+        await InitiateRefundAsync(refund, attempt, cancellationToken);
+        return new CaptureResult(CaptureOutcome.RefundRaised, refund.Id);
+    }
+
+    private async Task RetryUnsentRefundsAsync(PaymentAttempt attempt, CancellationToken cancellationToken)
+    {
+        var unsent = await db.Refunds
+            .Where(r => r.PaymentAttemptId == attempt.Id && r.Status == RefundStatus.Pending && r.ProviderRefundId == null)
+            .ToListAsync(cancellationToken);
+        foreach (var refund in unsent)
+        {
+            await InitiateRefundAsync(refund, attempt, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Asks the gateway to send the money back. If it cannot, the refund stays recorded as pending without a
+    /// gateway id, which the reconciliation job (step 7.6) and a repeat webhook both pick up.
+    /// </summary>
+    private async Task InitiateRefundAsync(Refund refund, PaymentAttempt attempt, CancellationToken cancellationToken)
+    {
+        var result = await gateway.RefundAsync(
+            new GatewayRefundRequest(attempt.ProviderPaymentId!, Money.ToPaise(refund.Amount), refund.Id.ToString("N")),
+            cancellationToken);
+        if (!result.IsSuccess)
+        {
+            logger.LogWarning("Refund {RefundId} for payment attempt {AttemptId} could not be sent to the gateway yet", refund.Id, attempt.Id);
+            return;
+        }
+
+        refund.MarkInitiated(result.Value.RefundId);
+        await db.SaveChangesAsync(cancellationToken);
+    }
+
+    private Task<PaymentAttempt?> FindOpenAttemptAsync(Guid bookingId, CancellationToken cancellationToken) =>
+        db.PaymentAttempts.AsNoTracking()
+            .Where(a => a.BookingId == bookingId && a.Status == PaymentAttemptStatus.Created)
+            .OrderByDescending(a => a.CreatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    private PaymentStartView ToView(Booking booking, PaymentAttempt attempt, DateTimeOffset expiresAt) => new(
+        booking.Id,
+        attempt.Id,
+        "razorpay",
+        _options.Mode.ToLowerInvariant(),
+        _options.Razorpay.KeyId ?? string.Empty,
+        attempt.ProviderOrderId,
+        attempt.Amount,
+        Money.ToPaise(attempt.Amount),
+        attempt.Currency,
+        expiresAt);
+}

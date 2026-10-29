@@ -133,6 +133,29 @@ environment except `Testing`. The Worker (`backend/src/OnePondy.Worker`) needs t
 connection string and `Auth:HashingKey` in its own user secrets; it purges expired sign-in data
 every hour (`docs/data-retention.md`).
 
+#### Online payment (Razorpay, sandbox only)
+
+Payments are off until you give the API Razorpay **test-mode** keys and an administrator switches the
+`payments` module to "available" in the console. Set the keys as user secrets (never in a committed
+file, and never paste them into chat or an issue):
+
+```powershell
+cd backend
+dotnet user-secrets set "Payments:Razorpay:KeyId" "<rzp_test_... key id>" --project src/OnePondy.Api
+dotnet user-secrets set "Payments:Razorpay:KeySecret" "<key secret>" --project src/OnePondy.Api
+dotnet user-secrets set "Payments:Razorpay:WebhookSecret" "<webhook secret>" --project src/OnePondy.Api
+```
+
+Key id and key secret must be set together, or the API refuses to start. The API also refuses to start
+with a live key (`rzp_live_...`) unless `Payments:Mode` is `Live` and `Payments:AllowLive` is `true`;
+leave both alone until legal review and a settlement test are complete (docs/phase-7-plan.md). The
+webhook secret is used from step 7.3. Other settings, all optional: `Payments:PaymentWindow` (default
+30 minutes after a partner accepts), `Payments:CommissionPercent` (provisional 10, not used yet).
+
+On a server running under IIS the API does not read user secrets: put the same keys in the server's
+`appsettings.<Environment>.json` and keep that file private. Apply database migrations as the
+`onepondy_app` role, not `postgres`, so the tables are owned by the role the API connects as.
+
 #### Hosting the API on IIS
 
 1. Install the ASP.NET Core 10 Hosting Bundle and create a site pointing at the publish folder.

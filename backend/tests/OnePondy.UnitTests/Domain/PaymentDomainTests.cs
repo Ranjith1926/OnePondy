@@ -103,7 +103,7 @@ public class PaymentDomainTests
 public class PaymentsGuardTests
 {
     private static PaymentsOptions Options(string? keyId = null, string mode = "Sandbox", bool allowLive = false) =>
-        new() { Mode = mode, AllowLive = allowLive, Razorpay = new RazorpayOptions { KeyId = keyId } };
+        new() { Mode = mode, AllowLive = allowLive, Razorpay = new RazorpayOptions { KeyId = keyId, KeySecret = keyId is null ? null : "secret" } };
 
     [Fact]
     public void The_defaults_are_a_sandbox_with_a_thirty_minute_window_and_ten_percent_provisional_commission()

@@ -36,6 +36,12 @@ public sealed class RazorpayOptions
     public string? KeySecret { get; set; }
 
     public string? WebhookSecret { get; set; }
+
+    /// <summary>The Razorpay API address. Tests point it at a stub; there is no reason to change it otherwise.</summary>
+    public string BaseUrl { get; set; } = "https://api.razorpay.com/v1";
+
+    /// <summary>True when both halves of the API key are set, so calls to the gateway can be signed.</summary>
+    public bool HasCredentials => !string.IsNullOrWhiteSpace(KeyId) && !string.IsNullOrWhiteSpace(KeySecret);
 }
 
 /// <summary>Refuses to start with a payment configuration that could move real money by accident.</summary>
@@ -64,6 +70,13 @@ public static class PaymentsGuard
         if (options.CommissionPercent is < 0m or > 100m)
         {
             throw new InvalidOperationException("Payments:CommissionPercent must be between 0 and 100.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(options.Razorpay.KeyId) != !string.IsNullOrWhiteSpace(options.Razorpay.KeySecret))
+        {
+            throw new InvalidOperationException(
+                "Payments:Razorpay:KeyId and Payments:Razorpay:KeySecret must be set together. Use 'dotnet user-secrets set' " +
+                "with --project src/OnePondy.Api (see README), or leave both unset to keep online payment off.");
         }
 
         var keyId = options.Razorpay.KeyId?.Trim();

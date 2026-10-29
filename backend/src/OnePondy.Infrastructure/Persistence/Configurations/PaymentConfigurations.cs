@@ -40,6 +40,12 @@ public sealed class PaymentAttemptConfiguration : IEntityTypeConfiguration<Payme
         builder.HasIndex(p => p.CreatedAt)
             .HasDatabaseName("ix_payment_attempts_open")
             .HasFilter($"status = '{SnakeCaseEnum<PaymentAttemptStatus>.ToDatabase(PaymentAttemptStatus.Created)}'");
+
+        // At most one open attempt per booking, so two requests at the same instant cannot offer two ways to pay.
+        builder.HasIndex(p => p.BookingId)
+            .IsUnique()
+            .HasDatabaseName("ux_payment_attempts_open_booking")
+            .HasFilter($"status = '{SnakeCaseEnum<PaymentAttemptStatus>.ToDatabase(PaymentAttemptStatus.Created)}'");
     }
 }
 

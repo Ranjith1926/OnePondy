@@ -183,8 +183,13 @@ public sealed class Booking
         TransitionTo(BookingStatus.Rejected, BookingActorType.Partner, partnerUserId, reason, now, BookingStatus.Pending, BookingStatus.AwaitingPayment);
     }
 
+    /// <summary>
+    /// A cancellation by the customer, the partner or an administrator. A customer may also walk away from a
+    /// booking that is waiting for payment (spec §7, decided 2026-10-29); any payment that still arrives
+    /// afterwards is refunded by <c>PaymentService</c>.
+    /// </summary>
     public void Cancel(BookingActorType actorType, Guid? actorUserId, string? reason, DateTimeOffset now) =>
-        TransitionTo(BookingStatus.Cancelled, actorType, actorUserId, reason, now, BookingStatus.Pending, BookingStatus.Confirmed);
+        TransitionTo(BookingStatus.Cancelled, actorType, actorUserId, reason, now, BookingStatus.Pending, BookingStatus.AwaitingPayment, BookingStatus.Confirmed);
 
     /// <summary>The worker releases a hold that was never acted on in time.</summary>
     public void Expire(DateTimeOffset now) =>

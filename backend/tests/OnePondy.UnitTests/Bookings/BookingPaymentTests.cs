@@ -132,15 +132,28 @@ public class BookingPaymentTests
     }
 
     [Fact]
-    public async Task The_spec_does_not_allow_cancelling_a_booking_that_is_waiting_for_payment()
+    public async Task A_customer_can_walk_away_from_a_booking_that_is_waiting_for_payment()
     {
         await _harness.EnablePaymentsAsync();
         var accepted = (await AcceptAsync(await CreateAsync())).Value!;
 
-        var byCustomer = await _harness.Bookings.CancelMineAsync(accepted.Id, _harness.Customer, null, accepted.Version, None);
+        var cancelled = await _harness.Bookings.CancelMineAsync(accepted.Id, _harness.Customer, "Changed my mind", accepted.Version, None);
+
+        Assert.Equal(BookingStatus.Cancelled, cancelled.Value!.Status);
+        Assert.Null(cancelled.Value.ExpiresAt);
+        Assert.Equal(BookingActorType.Customer, cancelled.Value.History[^1].ActorType);
+        Assert.Equal(BookingStatus.AwaitingPayment, cancelled.Value.History[^1].PreviousStatus);
+        Assert.Equal(0, await ReservedAsync());
+    }
+
+    [Fact]
+    public async Task A_partner_rejects_rather_than_cancels_a_booking_that_is_waiting_for_payment()
+    {
+        await _harness.EnablePaymentsAsync();
+        var accepted = (await AcceptAsync(await CreateAsync())).Value!;
+
         var byPartner = await _harness.Bookings.CancelForBusinessAsync(_harness.BusinessId, accepted.Id, accepted.Version, _harness.Owner, null, None);
 
-        Assert.Equal("booking_invalid_transition", byCustomer.Error!.Code);
         Assert.Equal("booking_invalid_transition", byPartner.Error!.Code);
         Assert.Equal(2, await ReservedAsync());
     }

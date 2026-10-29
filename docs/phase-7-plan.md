@@ -70,9 +70,10 @@ Rules:
 - **Accept** moves to `awaiting_payment` and sets `expires_at = now + 30 min`. Seats stay held.
 - **Reject** follows the spec table: allowed from `pending` and from `awaiting_payment`, and it releases the seats. A
   rejection before payment needs no refund; one that races a payment is handled by the late-payment refund (7.4).
-- **Cancel** is allowed from `pending` and `confirmed` only, as the spec table says. **Open question for the owner:** while a
-  booking is `awaiting_payment` neither the customer nor the partner can cancel it (it ends by payment, failure, rejection
-  or expiry). Allowing `awaiting_payment` to `cancelled` would need a spec change.
+- **Cancel** is allowed from `pending`, `confirmed` and, for the customer only, `awaiting_payment` (decided 2026-10-29; the
+  spec table now says so). Seats are released at once. The gateway order may still be open, so a payment that lands
+  afterwards is recorded and refunded in full (built in 7.2). A partner declines a booking that is awaiting payment with
+  Reject, not Cancel.
 - **Payment attempts:** a customer may retry; each attempt is a row. An order is created once per attempt and
   reused if the screen is reopened while it is still open.
 - **Failure:** a verified failure moves `awaiting_payment → failed` and releases seats, as the spec says; the

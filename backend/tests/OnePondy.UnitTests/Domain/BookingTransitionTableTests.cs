@@ -26,6 +26,7 @@ public class BookingTransitionTableTests
         (BookingStatus.AwaitingPayment, BookingStatus.Failed),
         (BookingStatus.AwaitingPayment, BookingStatus.Expired),
         (BookingStatus.AwaitingPayment, BookingStatus.Rejected),
+        (BookingStatus.AwaitingPayment, BookingStatus.Cancelled),
         (BookingStatus.Confirmed, BookingStatus.Cancelled),
         (BookingStatus.Confirmed, BookingStatus.Completed),
         (BookingStatus.Rejected, BookingStatus.RefundPending),

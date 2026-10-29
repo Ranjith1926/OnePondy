@@ -215,7 +215,22 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
     }
 
     public Task<Result<BookingDetail>> CancelForBusinessAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, string? reason, CancellationToken cancellationToken) =>
-        ForBusinessTransitionAsync(businessId, id, expectedVersion, ownerUserId, b => b.Cancel(BookingActorType.Partner, ownerUserId, Trim(reason), time.GetUtcNow()), cancellationToken);
+        ForBusinessTransitionAsync(
+            businessId,
+            id,
+            expectedVersion,
+            ownerUserId,
+            b =>
+            {
+                // Only the customer may cancel while payment is pending; the partner declines instead, with a reason.
+                if (b.Status == BookingStatus.AwaitingPayment)
+                {
+                    throw new InvalidOperationException("A booking that is waiting for payment is rejected, not cancelled, by the partner.");
+                }
+
+                b.Cancel(BookingActorType.Partner, ownerUserId, Trim(reason), time.GetUtcNow());
+            },
+            cancellationToken);
 
     public Task<Result<BookingDetail>> CompleteAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, CancellationToken cancellationToken) =>
         ForBusinessTransitionAsync(businessId, id, expectedVersion, ownerUserId, b => b.Complete(ownerUserId, BookingActorType.Partner, time.GetUtcNow()), cancellationToken);

@@ -80,7 +80,8 @@ public class DependencyInjectionTests
     {
         var configuration = Configuration(
             ("ConnectionStrings:OnePondy", ConnectionString),
-            ("Payments:Razorpay:KeyId", "rzp_live_abc123"));
+            ("Payments:Razorpay:KeyId", "rzp_live_abc123"),
+            ("Payments:Razorpay:KeySecret", "secret"));
 
         var exception = Assert.Throws<InvalidOperationException>(
             () => new ServiceCollection().AddInfrastructure(configuration, new TestEnvironment("Production")));
@@ -95,7 +96,8 @@ public class DependencyInjectionTests
             ("ConnectionStrings:OnePondy", ConnectionString),
             ("Auth:Jwt:SigningKey", Convert.ToBase64String(new byte[32])),
             ("Auth:HashingKey", Convert.ToBase64String(new byte[32])),
-            ("Payments:Razorpay:KeyId", "rzp_test_abc123"));
+            ("Payments:Razorpay:KeyId", "rzp_test_abc123"),
+            ("Payments:Razorpay:KeySecret", "secret"));
 
         new ServiceCollection().AddInfrastructure(configuration, new TestEnvironment("Production"));
     }

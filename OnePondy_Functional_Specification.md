@@ -870,7 +870,7 @@ transaction.
 | From | To |
 |---|---|
 | `pending` | `awaiting_payment`, `confirmed` (free or pay-at-venue listings), `rejected`, `expired`, `cancelled` |
-| `awaiting_payment` | `confirmed`, `failed`, `expired`, `rejected` |
+| `awaiting_payment` | `confirmed`, `failed`, `expired`, `rejected`, `cancelled` (by the customer only; decided 2026-10-29) |
 | `confirmed` | `cancelled`, `completed` |
 | `rejected` | `refund_pending` (when payment was captured) |
 | `cancelled` | `refund_pending` (when a refund is due) |

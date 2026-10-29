@@ -7,6 +7,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
 
@@ -50,6 +51,10 @@ public interface IOnePondyDbContext
     DbSet<Booking> Bookings { get; }
 
     DbSet<BookingSlot> BookingSlots { get; }
+
+    DbSet<PaymentAttempt> PaymentAttempts { get; }
+
+    DbSet<Refund> Refunds { get; }
 
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an

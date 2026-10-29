@@ -14,6 +14,7 @@ using OnePondy.Infrastructure.Businesses;
 using OnePondy.Infrastructure.Identity;
 using OnePondy.Infrastructure.Media;
 using OnePondy.Infrastructure.Messaging;
+using OnePondy.Infrastructure.Payments;
 using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
 using OnePondy.Infrastructure.TripPlanner;
@@ -69,6 +70,7 @@ public static class DependencyInjection
 
         PaymentsGuard.EnsureSafe(configuration.GetSection(PaymentsOptions.SectionName).Get<PaymentsOptions>() ?? new PaymentsOptions());
         AddOtpDelivery(services, configuration, environment);
+        AddPaymentGateway(services, configuration);
         AddTripPlannerProvider(services, configuration);
         return services;
     }
@@ -120,6 +122,25 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<IOtpSender, LoggingOtpSender>();
+    }
+
+    /// <summary>
+    /// Razorpay when a key pair is configured, otherwise a gateway that reports online payment as unavailable,
+    /// the same way the AI planner and one-time code senders fall back. <see cref="PaymentsGuard"/> has already
+    /// refused live keys by the time this runs.
+    /// </summary>
+    private static void AddPaymentGateway(IServiceCollection services, IConfiguration configuration)
+    {
+        var payments = configuration.GetSection(PaymentsOptions.SectionName).Get<PaymentsOptions>() ?? new PaymentsOptions();
+        services.AddOptions<PaymentsOptions>().Bind(configuration.GetSection(PaymentsOptions.SectionName));
+
+        if (!payments.Razorpay.HasCredentials)
+        {
+            services.AddSingleton<IPaymentGateway, UnavailablePaymentGateway>();
+            return;
+        }
+
+        services.AddHttpClient<IPaymentGateway, RazorpayPaymentGateway>(client => client.Timeout = TimeSpan.FromSeconds(15));
     }
 
     /// <summary>
