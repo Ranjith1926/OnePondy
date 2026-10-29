@@ -570,8 +570,9 @@ Known limitations:
 - **Two things the phone run found, both fixed or noted.** Razorpay's Android SDK reports a closed Checkout as code **0**
   (`PAYMENT_CANCELED`) and a network error as 2; the app had them the other way round, so closing Checkout looked like a failure. Fixed,
   with tests, and checked on the phone. The iOS codes are not known here, so on iOS every error shows the "didn't go through" wording.
-  Also, the bookings list is cached: a booking that changes elsewhere (the partner accepting it) shows only after the app reloads, and the
-  first bookings request right after sign-in can fail once ("Try again" fixes it). Neither is fixed.
+  The run also showed two gaps, both since fixed (with tests): the bookings list was cached, so a booking changed elsewhere (the partner
+  accepting it) showed only after the app reloaded, and the list was read while still signed out, so a "not signed in" failure stayed
+  cached after signing in. The list and a booking now load only while signed in, and both re-read when their screen comes into focus.
 - **Push needs an Expo (EAS) project id and a Firebase project**; until then the app quietly does not register for notifications.
   Delivery to a real phone has not been seen.
 - **Payouts are recorded, not made.** An administrator transfers the money and records the bank reference; Razorpay Route (D21) and

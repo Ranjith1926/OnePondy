@@ -377,8 +377,9 @@ attempt in any state except already captured, because a customer can still pay a
   error (read from the SDK's `Checkout` class and confirmed by capturing the real error). The app had them reversed; it now treats only
   Android code 0 as a close (iOS codes unknown, so iOS reports every error as a failure). The Indian test account also rejects the
   `4111` test card as international: use Netbanking's demo bank page or one of Razorpay's Indian test cards.
-- **Found on the phone, not fixed:** the bookings list does not refetch when the screen is revisited (a booking changed elsewhere shows
-  only after a reload), and the first bookings request right after sign-in can fail once.
+- **Found on the phone, then fixed:** the bookings list did not refetch when the screen was revisited (a booking changed elsewhere showed
+  only after a reload), and it was read while still signed out, so the "not signed in" failure stayed cached after sign-in. Bookings now
+  load only while signed in and re-read on focus (`useRefetchOnFocus`); the cache was already cleared on sign-out.
 - **Not yet seen:** a card payment, a real webhook delivery, push on a phone.
 - **Tests.** Backend: 11 unit tests (receipt, refunds, refresh) and 4 integration tests (owner confirms through the refresh, a stranger
   and anonymous are refused, a booking not awaiting payment is returned untouched, a late payment after cancelling shows its refund).

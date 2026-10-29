@@ -21,6 +21,7 @@ import { ReceiptSection } from '../../payments/components/ReceiptSection';
 import { bookingErrorMessageKey } from '../bookingErrors';
 import { formatDateTime } from '../formatDateTime';
 import { useBooking, useCancelBooking } from '../hooks/useBookings';
+import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
 
 type Props = StaticScreenProps<{ id: string }>;
 
@@ -32,6 +33,7 @@ export function BookingDetailScreen({ route }: Props) {
   const navigation = useNavigation();
   const styles = useThemedStyles(createStyles);
   const booking = useBooking(route.params.id);
+  useRefetchOnFocus(booking.refetch);
   const cancelBooking = useCancelBooking(route.params.id);
   const [confirming, setConfirming] = useState(false);
 

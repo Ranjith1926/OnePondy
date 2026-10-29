@@ -3,10 +3,18 @@ import { screen } from '@testing-library/react-native';
 
 import { aBooking, bookingId } from '../../../test-utils/bookingFixture';
 import { renderWithProviders } from '../../../test-utils/render';
+import { signedInState } from '../../../test-utils/signedIn';
 import { bookingsApi } from '../api/bookingsApi';
 import { BookingDetailScreen } from './BookingDetailScreen';
 
-jest.mock('@react-navigation/native', () => ({ useNavigation: () => ({ goBack: jest.fn() }) }));
+jest.mock('@react-navigation/native', () => {
+  const { useEffect } = jest.requireActual('react');
+  return {
+    useNavigation: () => ({ goBack: jest.fn() }),
+    // A screen is focused as soon as it is shown.
+    useFocusEffect: (effect: () => void) => useEffect(effect, [effect]),
+  };
+});
 jest.mock('../api/bookingsApi', () => ({ bookingsApi: { get: jest.fn(), cancel: jest.fn() } }));
 jest.mock('../../payments/api/paymentsApi', () => ({
   paymentsApi: { start: jest.fn(), refresh: jest.fn() },
@@ -21,6 +29,7 @@ async function renderScreen() {
     <QueryClientProvider client={client}>
       <BookingDetailScreen route={route} />
     </QueryClientProvider>,
+    { initialState: signedInState },
   );
 }
 

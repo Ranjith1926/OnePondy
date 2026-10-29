@@ -1,15 +1,19 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { useAppState } from '../../../state';
 import { askForPushAfterBooking } from '../../notifications/hooks/usePushSetup';
 import { bookingsApi, type CreateBookingInput } from '../api/bookingsApi';
 
 export const bookingsQueryKey = ['bookings'] as const;
 export const bookingQueryKey = (id: string) => ['booking', id] as const;
 
+/** Only asks while signed in: a read made before signing in fails with "not signed in", and that failure would stay cached after. */
 export function useBookings() {
+  const { auth } = useAppState();
   return useQuery({
     queryKey: bookingsQueryKey,
     queryFn: () => bookingsApi.list(),
+    enabled: auth.status === 'authenticated',
   });
 }
 
@@ -23,10 +27,11 @@ export function bookingRefetchInterval(status: string | undefined): number | fal
 }
 
 export function useBooking(id: string | undefined) {
+  const { auth } = useAppState();
   return useQuery({
     queryKey: bookingQueryKey(id ?? ''),
     queryFn: () => bookingsApi.get(id!),
-    enabled: id !== undefined,
+    enabled: id !== undefined && auth.status === 'authenticated',
     refetchInterval: (query) => bookingRefetchInterval(query.state.data?.status),
   });
 }

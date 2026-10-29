@@ -14,6 +14,7 @@ import {
 import { useAppState } from '../../../state';
 import { SignInPrompt } from '../../auth/components/SignInPrompt';
 import { useBookings } from '../hooks/useBookings';
+import { useRefetchOnFocus } from '../hooks/useRefetchOnFocus';
 
 // Bookings need an account (spec §4 Guest access); the engine arrived in Phase 6.
 export function BookingsScreen() {
@@ -22,6 +23,7 @@ export function BookingsScreen() {
   const styles = useThemedStyles(createStyles);
   const { auth } = useAppState();
   const bookings = useBookings();
+  useRefetchOnFocus(bookings.refetch, auth.status === 'authenticated');
 
   if (auth.status !== 'authenticated') {
     return (
