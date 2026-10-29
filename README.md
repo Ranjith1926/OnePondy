@@ -200,6 +200,13 @@ see two new sections, Partners and Listings.
 - The customer app shows Stays and Activities once an administrator sets those two module flags to
   available under Configuration.
 
+## Documentation
+
+- [Backend architecture](docs/backend-architecture.md): layers, request pipeline, security, concurrency, Worker, configuration, endpoint catalogue.
+- [Database architecture](docs/database-architecture.md): every table, constraint, index and trigger, with an ER diagram and the migration history.
+- [Workflows](docs/workflows.md): sign-in, content verification, partner onboarding, listings, the booking lifecycle and hold expiry, step by step.
+- [Data retention](docs/data-retention.md): how long authentication data and deleted-account data are kept.
+
 ## Checks
 
 ```powershell
