@@ -111,6 +111,26 @@ public class RazorpayPaymentGatewayTests
     }
 
     [Fact]
+    public async Task A_refund_carries_its_own_id_as_the_idempotency_key_so_a_repeat_cannot_pay_twice()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"id":"rfnd_1","status":"pending"}""");
+
+        await Gateway(handler).RefundAsync(new GatewayRefundRequest("pay_123", 50_000, "0123456789abcdef0123456789abcdef"), default);
+
+        Assert.Equal("0123456789abcdef0123456789abcdef", Assert.Single(handler.Request!.Headers.GetValues("X-Refund-Idempotency")));
+    }
+
+    [Fact]
+    public async Task Creating_an_order_sends_no_refund_idempotency_header()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"id":"order_abc","amount":100000,"currency":"INR"}""");
+
+        await Gateway(handler).CreateOrderAsync(Order(), default);
+
+        Assert.False(handler.Request!.Headers.Contains("X-Refund-Idempotency"));
+    }
+
+    [Fact]
     public async Task A_refused_refund_is_reported_so_it_can_be_retried()
     {
         var result = await Gateway(new StubHandler(HttpStatusCode.BadRequest)).RefundAsync(new GatewayRefundRequest("pay_123", 50_000, "refund1"), default);

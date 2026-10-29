@@ -73,6 +73,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<GatewayEvent> GatewayEvents => Set<GatewayEvent>();
 
+    public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -166,6 +168,7 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<PaymentAttempt>().HasKey(a => a.Id);
         modelBuilder.Entity<Refund>().HasKey(r => r.Id);
         modelBuilder.Entity<GatewayEvent>().HasKey(e => e.Id);
+        modelBuilder.Entity<LedgerEntry>().HasKey(e => e.Id);
     }
 }
 

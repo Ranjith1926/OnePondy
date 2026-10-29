@@ -20,9 +20,12 @@ public sealed class BookingHarness
         var audit = new AuditTrail(Db, Time);
         var businesses = new BusinessService(Db, new InMemoryBusinessDocumentStorage(), audit, Time);
         Listings = new ListingService(Db, audit, Time);
-        Bookings = new BookingService(Db, Time, Microsoft.Extensions.Options.Options.Create(Payments));
-        PaymentService = new OnePondy.Application.Payments.PaymentService(Db, Gateway, Time, Microsoft.Extensions.Options.Options.Create(Payments), Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.PaymentService>.Instance);
-        Expiry = new BookingHoldExpiry(Db, Bookings, PaymentService, Time, Microsoft.Extensions.Options.Options.Create(Payments));
+        var paymentOptions = Microsoft.Extensions.Options.Options.Create(Payments);
+        Ledger = new OnePondy.Application.Payments.LedgerService(Db, Time, paymentOptions);
+        Refunds = new OnePondy.Application.Payments.RefundService(Db, Gateway, Time, paymentOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.RefundService>.Instance);
+        Bookings = new BookingService(Db, Time, paymentOptions, Refunds);
+        PaymentService = new OnePondy.Application.Payments.PaymentService(Db, Gateway, Time, paymentOptions, Ledger, Refunds, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.PaymentService>.Instance);
+        Expiry = new BookingHoldExpiry(Db, Bookings, PaymentService, Time, paymentOptions);
 
         Owner = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919876543210", CancellationToken.None).Result.Id;
         Customer = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919988776655", CancellationToken.None).Result.Id;
@@ -57,6 +60,10 @@ public sealed class BookingHarness
 
     public FakePaymentGateway Gateway { get; } = new();
 
+    public OnePondy.Application.Payments.LedgerService Ledger { get; }
+
+    public OnePondy.Application.Payments.RefundService Refunds { get; }
+
     public OnePondy.Application.Payments.PaymentService PaymentService { get; }
 
     /// <summary>The Worker hold-expiry step, wired to the fake gateway.</summary>
@@ -85,9 +92,9 @@ public sealed class BookingHarness
     }
 
     /// <summary>Publishes a further bookable listing at the given price, with one open slot, and returns a booking request for it.</summary>
-    public async Task<CreateBookingInput> NewListingInputAsync(decimal price, string idempotencyKey)
+    public async Task<CreateBookingInput> NewListingInputAsync(decimal price, string idempotencyKey, int refundPercentage = 50)
     {
-        var input = new ListingApplicationInput(ListingType.Activity, $"Listing at {price}", null, true, price, 24, 50, null);
+        var input = new ListingApplicationInput(ListingType.Activity, $"Listing at {price}", null, true, price, 24, refundPercentage, null);
         var created = (await Listings.CreateAsync(BusinessId, Owner, input, default)).Value!;
         var submitted = (await Listings.SubmitAsync(created.Id, created.Version, Owner, default)).Value!;
         var published = (await Listings.PublishAsync(submitted.Id, submitted.Version, Administrator, default)).Value!;

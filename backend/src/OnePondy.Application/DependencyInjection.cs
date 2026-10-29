@@ -52,6 +52,8 @@ public static class DependencyInjection
         services.AddScoped<SavedListingsService>();
         services.AddScoped<BookingService>();
         services.AddScoped<BookingHoldExpiry>();
+        services.AddScoped<LedgerService>();
+        services.AddScoped<RefundService>();
         services.AddScoped<PaymentService>();
         services.AddScoped<PaymentWebhookService>();
 

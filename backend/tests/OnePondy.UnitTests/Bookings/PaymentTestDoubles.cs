@@ -100,6 +100,22 @@ public sealed class PaymentHarness
         return (await Bookings.Bookings.AcceptAsync(Bookings.BusinessId, created.Id, created.Version, Bookings.Owner, default)).Value!;
     }
 
+    /// <summary>A booking that was accepted and paid: confirmed, with the payment applied and booked to the ledger.</summary>
+    public async Task<(BookingDetail Booking, string OrderId, string PaymentId)> PaidAsync(string idempotencyKey = "idem-paid")
+    {
+        var awaiting = await AwaitingPaymentAsync(idempotencyKey);
+        var started = (await Payments.StartPaymentAsync(awaiting.Id, Bookings.Customer, default)).Value!;
+        var paymentId = "pay_" + idempotencyKey;
+        await Payments.RecordCaptureAsync(started.OrderId, paymentId, 1000m, default);
+        return (await BookingAsync(awaiting.Id), started.OrderId, paymentId);
+    }
+
+    public async Task<IReadOnlyList<OnePondy.Domain.Payments.LedgerEntry>> LedgerAsync() =>
+        await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.ToListAsync(Bookings.Db.LedgerEntries);
+
+    /// <summary>The balance of one ledger account: debits positive, credits negative.</summary>
+    public async Task<decimal> BalanceAsync(string account) => (await LedgerAsync()).Where(e => e.Account == account).Sum(e => e.Amount);
+
     public async Task<int> ReservedAsync()
     {
         var slots = await Bookings.Listings.ListPublicSlotsAsync(Bookings.ListingId, null, default);

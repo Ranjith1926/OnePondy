@@ -55,7 +55,13 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
     {
         var body = new { amount = request.AmountPaise, speed = "normal", receipt = request.Receipt };
 
-        var response = await PostAsync($"payments/{Uri.EscapeDataString(request.PaymentId)}/refund", body, cancellationToken);
+        // The refund's own id is the idempotency key: if the answer is lost and the call repeated, Razorpay returns the
+        // first refund instead of paying the customer twice. The key is 10 or more letters and digits, as Razorpay requires.
+        var response = await PostAsync(
+            $"payments/{Uri.EscapeDataString(request.PaymentId)}/refund",
+            body,
+            cancellationToken,
+            ("X-Refund-Idempotency", request.Receipt));
         if (response is null)
         {
             return PaymentErrors.Unavailable;
@@ -120,13 +126,21 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
         "Basic",
         Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.KeyId}:{_options.KeySecret}")));
 
-    private async Task<HttpResponseMessage?> PostAsync(string path, object body, CancellationToken cancellationToken)
+    private async Task<HttpResponseMessage?> PostAsync(
+        string path,
+        object body,
+        CancellationToken cancellationToken,
+        (string Name, string Value)? header = null)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl.TrimEnd('/')}/{path}")
         {
             Content = JsonContent.Create(body),
         };
         request.Headers.Authorization = BasicAuthorization();
+        if (header is { } extra)
+        {
+            request.Headers.Add(extra.Name, extra.Value);
+        }
 
         try
         {

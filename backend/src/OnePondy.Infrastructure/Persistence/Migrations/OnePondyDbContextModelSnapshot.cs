@@ -1170,11 +1170,12 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId")
                         .HasDatabaseName("ix_ledger_entries_booking");
 
-                    b.HasIndex("TransactionId")
-                        .HasDatabaseName("ix_ledger_entries_transaction");
-
                     b.HasIndex("Account", "CreatedAt")
                         .HasDatabaseName("ix_ledger_entries_account");
+
+                    b.HasIndex("TransactionId", "Account")
+                        .IsUnique()
+                        .HasDatabaseName("ux_ledger_entries_transaction_account");
 
                     b.ToTable("ledger_entries", null, t =>
                         {

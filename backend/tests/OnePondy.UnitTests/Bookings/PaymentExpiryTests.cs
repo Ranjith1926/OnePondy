@@ -229,12 +229,14 @@ public class PaymentExpiryTests
     [Fact]
     public async Task A_confirmed_bookings_paid_attempt_is_left_alone_when_it_is_later_cancelled()
     {
+        _h.Bookings.Payments.RefundsEnabled = true;
         var (booking, orderId) = await UnpaidAsync();
         await _h.Payments.RecordCaptureAsync(orderId, "pay_1", 1000m, None);
         var confirmed = await _h.BookingAsync(booking.Id);
 
-        await _h.Bookings.Bookings.CancelMineAsync(booking.Id, _h.Bookings.Customer, null, confirmed.Version, None);
+        var cancelled = await _h.Bookings.Bookings.CancelMineAsync(booking.Id, _h.Bookings.Customer, null, confirmed.Version, None);
 
+        Assert.True(cancelled.IsSuccess);
         Assert.Equal(PaymentAttemptStatus.Captured, (await AttemptAsync()).Status);
     }
 

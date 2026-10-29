@@ -118,7 +118,8 @@ public sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<LedgerEn
         builder.Property(e => e.Description).HasMaxLength(200).IsRequired();
 
         builder.HasOne<Booking>().WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasIndex(e => e.TransactionId).HasDatabaseName("ix_ledger_entries_transaction");
+        // One line per account in a transaction: posting the same event twice cannot double count.
+        builder.HasIndex(e => new { e.TransactionId, e.Account }).IsUnique().HasDatabaseName("ux_ledger_entries_transaction_account");
         builder.HasIndex(e => new { e.Account, e.CreatedAt }).HasDatabaseName("ix_ledger_entries_account");
         builder.HasIndex(e => e.BookingId).HasDatabaseName("ix_ledger_entries_booking");
     }

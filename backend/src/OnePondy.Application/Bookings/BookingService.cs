@@ -16,7 +16,7 @@ namespace OnePondy.Application.Bookings;
 /// full status history. Phase 6 treats every booking as free or pay-at-venue, since the payment
 /// gateway is Phase 7 — a partner confirms a request directly, with no <c>awaiting_payment</c> step.
 /// </summary>
-public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOptions<PaymentsOptions> payments)
+public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOptions<PaymentsOptions> payments, RefundService refunds)
 {
     public const int MaxGuestCount = 50;
     public const int MaxReasonLength = 500;
@@ -143,7 +143,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
             return BookingErrors.NotFound;
         }
 
-        return await TransitionAsync(booking, expectedVersion, b => b.Cancel(BookingActorType.Customer, customerUserId, Trim(reason), time.GetUtcNow()), cancellationToken);
+        return await TransitionAsync(booking, expectedVersion, b => b.Cancel(BookingActorType.Customer, customerUserId, Trim(reason), time.GetUtcNow()), cancellationToken, RefundReason.CustomerCancelled);
     }
 
     // --- Partner booking inbox ---
@@ -231,7 +231,8 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
 
                 b.Cancel(BookingActorType.Partner, ownerUserId, Trim(reason), time.GetUtcNow());
             },
-            cancellationToken);
+            cancellationToken,
+            RefundReason.PartnerCancelled);
 
     public Task<Result<BookingDetail>> CompleteAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, CancellationToken cancellationToken) =>
         ForBusinessTransitionAsync(businessId, id, expectedVersion, ownerUserId, b => b.Complete(ownerUserId, BookingActorType.Partner, time.GetUtcNow()), cancellationToken);
@@ -242,7 +243,8 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         uint expectedVersion,
         Guid ownerUserId,
         Action<Booking> apply,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        RefundReason? cancelReason = null)
     {
         if (!await OwnsBusinessAsync(businessId, ownerUserId, cancellationToken))
         {
@@ -255,17 +257,37 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
             return BookingErrors.NotFound;
         }
 
-        return await TransitionAsync(booking, expectedVersion, apply, cancellationToken);
+        return await TransitionAsync(booking, expectedVersion, apply, cancellationToken, cancelReason);
     }
 
-    private async Task<Result<BookingDetail>> TransitionAsync(Booking booking, uint expectedVersion, Action<Booking> apply, CancellationToken cancellationToken)
+    /// <param name="cancelReason">Set when the move is a cancellation, so a paid booking's refund is decided and saved with it.</param>
+    private async Task<Result<BookingDetail>> TransitionAsync(
+        Booking booking,
+        uint expectedVersion,
+        Action<Booking> apply,
+        CancellationToken cancellationToken,
+        RefundReason? cancelReason = null)
     {
         if (booking.Version != expectedVersion)
         {
             return BookingErrors.Changed;
         }
 
+        // Decided before anything is changed, so a refusal leaves the booking exactly as it was.
+        RefundPlan? plan = null;
+        if (cancelReason is not null)
+        {
+            var planned = await refunds.PlanCancellationAsync(booking, cancelReason.Value, cancellationToken);
+            if (!planned.IsSuccess)
+            {
+                return planned.Error;
+            }
+
+            plan = planned.Value;
+        }
+
         db.ExpectVersion(booking, expectedVersion);
+        var historyBefore = booking.History.Count;
         try
         {
             apply(booking);
@@ -275,11 +297,25 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
             return BookingErrors.InvalidTransition(exception.Message);
         }
 
-        db.MarkAdded(booking.History[^1]);
+        // A cancelled paid booking with something to give back waits for that refund (spec §7: cancelled to
+        // refund_pending "when a refund is due"). A policy that returns nothing leaves it cancelled.
+        Refund? refund = null;
+        if (plan is { Amount: > 0m } && booking.Status == BookingStatus.Cancelled)
+        {
+            booking.RequestRefund(BookingActorType.System, null, time.GetUtcNow());
+            refund = Refund.Request(plan.Attempt.Id, booking.Id, plan.Amount, cancelReason!.Value, time.GetUtcNow());
+            db.Refunds.Add(refund);
+        }
 
-        // Pending, awaiting-payment and confirmed bookings all keep their seats reserved, so any move
-        // to one of these ends states gives them back, including cancelling an already confirmed booking.
-        if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Expired or BookingStatus.Failed)
+        for (var i = historyBefore; i < booking.History.Count; i++)
+        {
+            db.MarkAdded(booking.History[i]);
+        }
+
+        // Pending, awaiting-payment and confirmed bookings all keep their seats reserved, so any move to one of these
+        // end states gives them back, including cancelling an already confirmed booking, which may already have moved
+        // on to wait for its refund.
+        if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Expired or BookingStatus.Failed or BookingStatus.RefundPending)
         {
             await ReleaseHoldAsync(booking.Id, cancellationToken);
         }
@@ -291,6 +327,19 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         catch (DbUpdateConcurrencyException)
         {
             return BookingErrors.Changed;
+        }
+        catch (DbUpdateException) when (refund is not null)
+        {
+            // Someone else cancelled and refunded this booking at the same moment: the database refuses a second
+            // refund for money that has already been given back. Nothing of ours was saved; report it as a change.
+            return BookingErrors.Changed;
+        }
+
+        if (refund is not null)
+        {
+            // After the save, so the cancellation and the refund it owes are never separated; if the gateway cannot
+            // be reached the refund is retried by the Worker.
+            await refunds.SendAsync(refund, plan!.Attempt, cancellationToken);
         }
 
         return await ToDetailAsync(booking, cancellationToken);

@@ -267,7 +267,7 @@ public sealed class LedgerEntry
 
     public string Account { get; private set; } = string.Empty;
 
-    /// <summary>Signed: positive money comes into the account, negative leaves it.</summary>
+    /// <summary>Double-entry sign: a debit is positive and a credit negative. Money held at the gateway is a debit; what OnePondy owes a partner or customer is a credit.</summary>
     public decimal Amount { get; private set; }
 
     public Guid? BookingId { get; private set; }

@@ -486,9 +486,10 @@ public sealed class BookingApiTests : IAsyncLifetime
     }
 
     /// <summary>The API with a fake payment gateway and a test Razorpay key, so the endpoints can be exercised without the network.</summary>
-    private WebApplicationFactory<Program> WithFakeGateway(FakePaymentGateway gateway) =>
+    private WebApplicationFactory<Program> WithFakeGateway(FakePaymentGateway gateway, bool refundsEnabled = false) =>
         Factory.WithWebHostBuilder(builder =>
         {
+            builder.UseSetting("Payments:RefundsEnabled", refundsEnabled ? "true" : "false");
             builder.UseSetting("Payments:Razorpay:KeyId", "rzp_test_integration");
             builder.UseSetting("Payments:Razorpay:KeySecret", "integration-secret");
             builder.UseSetting("Payments:Razorpay:WebhookSecret", WebhookSecret);
@@ -501,8 +502,8 @@ public sealed class BookingApiTests : IAsyncLifetime
         var db = DbOf(scope);
         var time = clock ?? TimeProvider.System;
         var options = Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } });
-        var payments = new PaymentService(db, gateway, time, options, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
-        return new BookingHoldExpiry(db, new BookingService(db, time, options), payments, time, options);
+        var wired = Wire(db, gateway, time, options);
+        return new BookingHoldExpiry(db, wired.Bookings, wired.Payments, time, options);
     }
 
     /// <summary>Pushes a booking hold into the past, the way waiting out the payment window would.</summary>
@@ -522,12 +523,25 @@ public sealed class BookingApiTests : IAsyncLifetime
             .SingleAsync();
     }
 
-    private PaymentService PaymentServiceFor(AsyncServiceScope scope, FakePaymentGateway gateway) => new(
-        DbOf(scope),
-        gateway,
-        TimeProvider.System,
-        Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } }),
-        Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
+    private PaymentService PaymentServiceFor(AsyncServiceScope scope, FakePaymentGateway gateway) =>
+        Wire(
+            DbOf(scope),
+            gateway,
+            TimeProvider.System,
+            Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } })).Payments;
+
+    /// <summary>The booking, payment, refund and ledger services built by hand on one database, with a fake gateway.</summary>
+    private static (BookingService Bookings, PaymentService Payments, RefundService Refunds, LedgerService Ledger) Wire(
+        OnePondyDbContext db,
+        FakePaymentGateway gateway,
+        TimeProvider time,
+        Microsoft.Extensions.Options.IOptions<PaymentsOptions> options)
+    {
+        var ledger = new LedgerService(db, time, options);
+        var refunds = new RefundService(db, gateway, time, options, Microsoft.Extensions.Logging.Abstractions.NullLogger<RefundService>.Instance);
+        var payments = new PaymentService(db, gateway, time, options, ledger, refunds, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
+        return (new BookingService(db, time, options, refunds), payments, refunds, ledger);
+    }
 
     private static OnePondyDbContext DbOf(AsyncServiceScope scope) => scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
 
@@ -603,7 +617,7 @@ public sealed class BookingApiTests : IAsyncLifetime
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             var db = DbOf(scope);
-            var service = new BookingService(db, TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new OnePondy.Application.Payments.PaymentsOptions()));
+            var service = Wire(db, new FakePaymentGateway(), TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new PaymentsOptions())).Bookings;
             Assert.True(await service.TryExpireAsync(bookingId, default));
         }
 
@@ -1297,6 +1311,239 @@ public sealed class BookingApiTests : IAsyncLifetime
                 Assert.Equal(0, await ReservedForAsync(bookingId));
             }
         }
+    }
+
+    // --- Phase 7 step 7.5: refunds and the ledger, over HTTP and real PostgreSQL ---
+
+    /// <summary>A booking accepted, paid through a signed webhook, and so confirmed; with its ledger entries booked.</summary>
+    private async Task<(string Customer, Guid BookingId, string PaymentId, string PartnerToken)> PaidBookingAsync(HttpClient client)
+    {
+        var (customer, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(client, PaymentCapturedJson(orderId, paymentId, 50_000), NewEventId())).StatusCode);
+        Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+        return (customer, bookingId, paymentId, string.Empty);
+    }
+
+    private static string RefundProcessedJson(string refundId, string paymentId, long paise) =>
+        JsonSerializer.Serialize(new { entity = "event", @event = "refund.processed", payload = new { refund = new { entity = new { id = refundId, payment_id = paymentId, amount = paise, status = "processed" } } } });
+
+    private async Task<decimal> LedgerBalanceAsync(Guid bookingId, string accountPrefix)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var entries = await DbOf(scope).LedgerEntries.AsNoTracking().Where(e => e.BookingId == bookingId).ToListAsync();
+        return entries.Where(e => e.Account.StartsWith(accountPrefix, StringComparison.Ordinal)).Sum(e => e.Amount);
+    }
+
+    [DatabaseFact]
+    public async Task A_payment_is_booked_to_the_ledger_once_even_when_the_webhook_is_repeated()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var json = PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000);
+
+        await PostWebhookAsync(client, json, NewEventId());
+        await PostWebhookAsync(client, json, NewEventId()); // Razorpay also sends order.paid, with a different event id
+        await PostWebhookAsync(client, json, NewEventId());
+
+        Assert.Equal(500m, await LedgerBalanceAsync(bookingId, "gateway_clearing"));
+        Assert.Equal(-50m, await LedgerBalanceAsync(bookingId, "platform_commission"));
+        Assert.Equal(-450m, await LedgerBalanceAsync(bookingId, "partner_payable:"));
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.Equal(3, await DbOf(scope).LedgerEntries.AsNoTracking().CountAsync(e => e.BookingId == bookingId));
+    }
+
+    [DatabaseFact]
+    public async Task A_customer_cancelling_after_the_free_deadline_is_refunded_the_listings_percentage_and_the_books_follow()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway, refundsEnabled: true);
+        using var client = factory.CreateClient();
+        var (customer, bookingId, paymentId, _) = await PaidBookingAsync(client);
+        var current = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
+
+        var cancel = await SendAsync(
+            client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/cancel", customer, new { version = current.GetProperty("version").GetUInt32(), reason = "Plans changed" });
+
+        Assert.Equal(HttpStatusCode.OK, cancel.StatusCode);
+        Assert.Equal("refundPending", (await ReadAsync(cancel)).GetProperty("status").GetString());
+        Assert.Equal(0, await ReservedForAsync(bookingId));
+        var sent = Assert.Single(gateway.RefundRequests);
+        Assert.Equal(paymentId, sent.PaymentId);
+        // The slot starts a day after the listing was made, so this cancellation is inside the 24-hour free window's end:
+        // the listing's 50% applies, not the full price.
+        Assert.Equal(25_000, sent.AmountPaise);
+
+        string refundId;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var refund = await DbOf(scope).Refunds.AsNoTracking().SingleAsync(r => r.BookingId == bookingId);
+            Assert.Equal(250m, refund.Amount);
+            Assert.Equal(OnePondy.Domain.Payments.RefundReason.CustomerCancelled, refund.Reason);
+            refundId = refund.ProviderRefundId!;
+        }
+
+        // Razorpay reports the money paid out: twice, as a redelivery would.
+        var processed = RefundProcessedJson(refundId, paymentId, 25_000);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(client, processed, NewEventId())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(client, processed, NewEventId())).StatusCode);
+
+        // 500 paid, 250 handed back: half of each share stays booked, and nothing was booked twice.
+        Assert.Equal("refunded", await BookingStatusAsync(bookingId));
+        Assert.Equal(250m, await LedgerBalanceAsync(bookingId, "gateway_clearing"));
+        Assert.Equal(-25m, await LedgerBalanceAsync(bookingId, "platform_commission"));
+        Assert.Equal(-225m, await LedgerBalanceAsync(bookingId, "partner_payable:"));
+        await using var check = Factory.Services.CreateAsyncScope();
+        Assert.Equal(6, await DbOf(check).LedgerEntries.AsNoTracking().CountAsync(e => e.BookingId == bookingId));
+    }
+
+    [DatabaseFact]
+    public async Task A_partner_cancelling_a_paid_booking_refunds_everything_and_the_books_return_to_zero()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway, refundsEnabled: true);
+        using var client = factory.CreateClient();
+        var (_, bookingId, paymentId, _) = await PaidBookingAsync(client);
+        var partner = await PartnerOfAsync(bookingId);
+        string refundId;
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var booking = await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId);
+            var wired = Wire(db, gateway, TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { RefundsEnabled = true }));
+            var cancelled = await wired.Bookings.CancelForBusinessAsync(booking.BusinessId, bookingId, booking.Version, partner, "Closed that day", default);
+            Assert.True(cancelled.IsSuccess, cancelled.Error?.Code);
+        }
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var refund = await DbOf(scope).Refunds.AsNoTracking().SingleAsync(r => r.BookingId == bookingId);
+            Assert.Equal(500m, refund.Amount);
+            Assert.Equal(OnePondy.Domain.Payments.RefundReason.PartnerCancelled, refund.Reason);
+            refundId = refund.ProviderRefundId!;
+        }
+
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(client, RefundProcessedJson(refundId, paymentId, 50_000), NewEventId())).StatusCode);
+
+        Assert.Equal("refunded", await BookingStatusAsync(bookingId));
+        Assert.Equal(0m, await LedgerBalanceAsync(bookingId, "gateway_clearing"));
+        Assert.Equal(0m, await LedgerBalanceAsync(bookingId, "platform_commission"));
+        Assert.Equal(0m, await LedgerBalanceAsync(bookingId, "partner_payable:"));
+    }
+
+    [DatabaseFact]
+    public async Task While_refunds_are_off_a_paid_booking_cannot_be_cancelled_over_http()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId, _, _) = await PaidBookingAsync(client);
+        var current = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
+
+        var cancel = await SendAsync(
+            client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/cancel", customer, new { version = current.GetProperty("version").GetUInt32(), reason = (string?)null });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, cancel.StatusCode);
+        Assert.Equal("refunds_not_enabled", await ErrorCodeAsync(cancel));
+        Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+        Assert.Equal(1, await ReservedForAsync(bookingId));
+        Assert.Empty(gateway.RefundRequests);
+    }
+
+    [DatabaseFact]
+    public async Task The_customer_and_the_partner_cancelling_at_the_same_moment_produce_exactly_one_refund()
+    {
+        for (var round = 0; round < 4; round++)
+        {
+            var gateway = new FakePaymentGateway();
+            await using var factory = WithFakeGateway(gateway, refundsEnabled: true);
+            using var client = factory.CreateClient();
+            var (customer, bookingId, _, _) = await PaidBookingAsync(client);
+            var partner = await PartnerOfAsync(bookingId);
+
+            var customerTask = Task.Run(async () =>
+            {
+                await using var scope = Factory.Services.CreateAsyncScope();
+                var version = (await DbOf(scope).Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId)).Version;
+                return await Wire(DbOf(scope), gateway, TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { RefundsEnabled = true }))
+                    .Bookings.CancelMineAsync(bookingId, CustomerIdOf(customer), "mine", version, default);
+            });
+            var partnerTask = Task.Run(async () =>
+            {
+                await using var scope = Factory.Services.CreateAsyncScope();
+                var db = DbOf(scope);
+                var booking = await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId);
+                return await Wire(db, gateway, TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { RefundsEnabled = true }))
+                    .Bookings.CancelForBusinessAsync(booking.BusinessId, bookingId, booking.Version, partner, "theirs", default);
+            });
+            var results = await Task.WhenAll(customerTask, partnerTask);
+
+            Assert.Equal(1, results.Count(r => r.IsSuccess));
+            await using var check = Factory.Services.CreateAsyncScope();
+            var db2 = DbOf(check);
+            Assert.Equal(1, await db2.Refunds.AsNoTracking().CountAsync(r => r.BookingId == bookingId));
+            Assert.Single(gateway.RefundRequests);
+            Assert.Equal(OnePondy.Domain.Bookings.BookingStatus.RefundPending, (await db2.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId)).Status);
+            Assert.Equal(0, await ReservedForAsync(bookingId));
+        }
+    }
+
+    private Guid CustomerIdOf(string accessToken) =>
+        Guid.Parse(new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(accessToken).Subject);
+
+    [DatabaseFact]
+    public async Task A_refund_that_never_reached_the_gateway_is_sent_later_by_the_sweep()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway, refundsEnabled: true);
+        using var client = factory.CreateClient();
+        var (customer, bookingId, _, _) = await PaidBookingAsync(client);
+        var current = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
+        await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/cancel", customer, new { version = current.GetProperty("version").GetUInt32(), reason = (string?)null });
+
+        // Make it look like the first attempt never got through, and like it was made a while ago.
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            await DbOf(scope).Database.ExecuteSqlAsync($"UPDATE refunds SET provider_refund_id = NULL, requested_at = now() - interval '10 minutes' WHERE booking_id = {bookingId}");
+        }
+
+        var before = gateway.RefundRequests.Count;
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var sent = await Wire(DbOf(scope), gateway, TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { RefundsEnabled = true }))
+                .Refunds.SendUnsentAsync(50, default);
+            Assert.True(sent >= 1);
+        }
+
+        // The sweep sends every old unsent refund in the shared test database, so at least ours went out.
+        Assert.True(gateway.RefundRequests.Count >= before + 1);
+        await using var check = Factory.Services.CreateAsyncScope();
+        Assert.NotNull((await DbOf(check).Refunds.AsNoTracking().SingleAsync(r => r.BookingId == bookingId)).ProviderRefundId);
+    }
+
+    [DatabaseFact]
+    public async Task The_ledger_refuses_a_second_line_for_the_same_account_in_a_transaction()
+    {
+        var transaction = Guid.NewGuid();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var now = DateTimeOffset.UtcNow;
+        db.LedgerEntries.AddRange(
+            OnePondy.Domain.Payments.LedgerEntry.Create(transaction, OnePondy.Domain.Payments.LedgerAccounts.GatewayClearing, 100m, null, "a", now),
+            OnePondy.Domain.Payments.LedgerEntry.Create(transaction, OnePondy.Domain.Payments.LedgerAccounts.PlatformCommission, -100m, null, "b", now));
+        await db.SaveChangesAsync();
+
+        // Posting the same event again would double count it; the database refuses.
+        db.LedgerEntries.AddRange(
+            OnePondy.Domain.Payments.LedgerEntry.Create(transaction, OnePondy.Domain.Payments.LedgerAccounts.GatewayClearing, 100m, null, "a", now),
+            OnePondy.Domain.Payments.LedgerEntry.Create(transaction, OnePondy.Domain.Payments.LedgerAccounts.PlatformCommission, -100m, null, "b", now));
+        var failure = await Assert.ThrowsAnyAsync<Exception>(() => db.SaveChangesAsync());
+
+        var postgres = failure as PostgresException ?? failure.InnerException as PostgresException;
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres!.SqlState);
     }
 
     [DatabaseFact]

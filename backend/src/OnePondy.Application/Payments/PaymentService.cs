@@ -57,6 +57,8 @@ public sealed class PaymentService(
     IPaymentGateway gateway,
     TimeProvider time,
     IOptions<PaymentsOptions> options,
+    LedgerService ledger,
+    RefundService refunds,
     ILogger<PaymentService> logger)
 {
     private readonly PaymentsOptions _options = options.Value;
@@ -169,6 +171,7 @@ public sealed class PaymentService(
         {
             booking.ConfirmPayment(now);
             db.MarkAdded(booking.History[^1]);
+            await ledger.PostCaptureAsync(booking, attempt, cancellationToken);
         }
         else
         {
@@ -182,6 +185,7 @@ public sealed class PaymentService(
 
             refund = Refund.Request(attempt.Id, booking.Id, attempt.Amount, RefundReason.LatePayment, now);
             db.Refunds.Add(refund);
+            await ledger.PostHeldPaymentAsync(booking, attempt, cancellationToken);
         }
 
         try
@@ -194,13 +198,20 @@ public sealed class PaymentService(
             // this payment arrived. Nothing was saved; the gateway retries, and the retry sees the new state.
             return PaymentErrors.Busy;
         }
+        catch (DbUpdateException exception)
+        {
+            // The same payment was applied on another request at the same moment: the ledger refuses to book it twice.
+            // Nothing of ours was saved; the retry finds it already recorded.
+            logger.LogWarning(exception, "Payment {AttemptId} was being applied elsewhere at the same time", attempt.Id);
+            return PaymentErrors.Busy;
+        }
 
         if (refund is null)
         {
             return new CaptureResult(CaptureOutcome.Confirmed, null);
         }
 
-        await InitiateRefundAsync(refund, attempt, cancellationToken);
+        await refunds.SendAsync(refund, attempt, cancellationToken);
         return new CaptureResult(CaptureOutcome.RefundRaised, refund.Id);
     }
 
@@ -276,6 +287,8 @@ public sealed class PaymentService(
         refund.MarkProcessed(providerRefundId, now);
 
         var booking = await db.Bookings.SingleAsync(b => b.Id == refund.BookingId, cancellationToken);
+        var paidAttempt = await db.PaymentAttempts.AsNoTracking().SingleAsync(a => a.Id == refund.PaymentAttemptId, cancellationToken);
+        await ledger.PostRefundAsync(refund, booking, paidAttempt, cancellationToken);
         if (booking.Status == BookingStatus.RefundPending)
         {
             var othersOutstanding = await db.Refunds.AnyAsync(
@@ -292,8 +305,10 @@ public sealed class PaymentService(
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateConcurrencyException)
+        catch (DbUpdateException exception)
         {
+            // A concurrency conflict, or the same refund being booked on another request at the same moment.
+            logger.LogWarning(exception, "Refund {RefundId} was being recorded elsewhere at the same time", refund.Id);
             return PaymentErrors.Busy;
         }
 
@@ -326,27 +341,8 @@ public sealed class PaymentService(
             .ToListAsync(cancellationToken);
         foreach (var refund in unsent)
         {
-            await InitiateRefundAsync(refund, attempt, cancellationToken);
+            await refunds.SendAsync(refund, attempt, cancellationToken);
         }
-    }
-
-    /// <summary>
-    /// Asks the gateway to send the money back. If it cannot, the refund stays recorded as pending without a
-    /// gateway id, which the reconciliation job (step 7.6) and a repeat webhook both pick up.
-    /// </summary>
-    private async Task InitiateRefundAsync(Refund refund, PaymentAttempt attempt, CancellationToken cancellationToken)
-    {
-        var result = await gateway.RefundAsync(
-            new GatewayRefundRequest(attempt.ProviderPaymentId!, Money.ToPaise(refund.Amount), refund.Id.ToString("N")),
-            cancellationToken);
-        if (!result.IsSuccess)
-        {
-            logger.LogWarning("Refund {RefundId} for payment attempt {AttemptId} could not be sent to the gateway yet", refund.Id, attempt.Id);
-            return;
-        }
-
-        refund.MarkInitiated(result.Value.RefundId);
-        await db.SaveChangesAsync(cancellationToken);
     }
 
     private Task<PaymentAttempt?> FindOpenAttemptAsync(Guid bookingId, CancellationToken cancellationToken) =>

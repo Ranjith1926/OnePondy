@@ -252,3 +252,30 @@ attempt in any state except already captured, because a customer can still pay a
   was released and rebooked, so the refund option is the one built. Re-confirmation can be added later if the business wants it.
 - **Checked end to end.** An integration test runs the Worker and the webhook at the same instant, six rounds, and requires one
   consistent ending every time: paid and kept with no refund, or expired with the full amount refunded.
+
+**7.5 (refunds and the ledger).**
+
+- **What a cancellation refunds** (`RefundCalculator`, the proposed D22 rule): the customer cancelling gets everything back up to
+  the listing's free-cancellation deadline and the listing's refund percentage after it; a partner cancelling always refunds
+  everything. The deadline and percentage are each listing's own terms, copied onto the booking when it was made, so the
+  partner sets them per listing. A policy that returns nothing leaves the booking `cancelled` with no refund.
+- **Off by default.** While `Payments:RefundsEnabled` is `false`, cancelling a *paid* booking is refused (503
+  `refunds_not_enabled`) and nothing changes, rather than cancelling it and quietly keeping the customer's money. Free
+  bookings, and bookings not yet paid, cancel as before. Refunds of late or duplicate payments (7.2 and 7.4) are not held back:
+  that money should never have been kept.
+- **One save.** The cancellation, the `refund_pending` move, the seats being given back and the refund record are saved
+  together; only then is Razorpay asked. If Razorpay cannot be reached the refund stays recorded without a gateway id and a new
+  Worker job (`PendingRefundJob`, every minute) sends it once it is two minutes old, so a refund is never lost waiting for a
+  webhook that will not come.
+- **No double refunds.** The refund's own id is sent as Razorpay's `X-Refund-Idempotency` header, so a repeat after a lost
+  answer returns the first refund. (From Razorpay's documentation; not exercised against the live sandbox, which needs a real
+  checkout payment.) Our own database also refuses refunds that add up to more than was paid, and a customer and a partner
+  cancelling at the same instant produce exactly one refund; the other gets 409 `booking_changed`.
+- **The ledger** (`LedgerService`, the only writer). A payment that confirms a booking: gateway_clearing debit, the commission
+  and the partner's `partner_payable` credit. A payment no booking wants: gateway_clearing debit, `customer_refunds` credit.
+  A refund the gateway reports paid: the reverse, in proportion, using the commission actually booked at the time, not today's
+  rate. Every business event is one transaction that adds up to zero (the database refuses otherwise), is saved with the change
+  it describes, and has an id derived from the event, with a unique (transaction, account) rule so booking an event twice is
+  recognised and impossible to double count.
+- **Not here yet:** statements and settlements to partners (7.9), reconciliation against Razorpay's reports (7.6), refund status in
+  the app (7.8). The commission is a provisional 10% for sandbox only.
