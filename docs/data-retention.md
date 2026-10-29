@@ -1,7 +1,7 @@
 # Data retention: sign-in, account, content, partner and booking data
 
-Status: Phase 2 to 6 draft. It covers the data that sign-in, accounts, content management,
-partners and bookings create. Payment and review data are added when those phases arrive.
+Status: Phase 2 to 7 draft. It covers the data that sign-in, accounts, content management,
+partners, bookings, payments and notifications create. Review data is added when that phase arrives.
 Retention periods for financial records, partner documents and bookings need the compliance review
 in spec §21 and are not set here: where this page says "kept", no end date has been decided yet.
 
@@ -62,6 +62,7 @@ The public page never reveals whether an account exists for a phone number or em
 |---|---|---|
 | Payment attempts, refunds, ledger entries, settlements | No end date decided | Financial records, linked to the anonymised customer row like bookings. The ledger is append-only (a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE`). The retention period needs the §21 tax review. |
 | Gateway webhook events | No end date decided | Stored with only ids, amounts and statuses: never the payer's email, phone number, card or UPI details. |
+| Partner statements and their CSV | No end date decided | A statement lists booking ids, listing titles and amounts only: no customer name, phone or email. Generated on request, not stored as files. Same retention question as the settlements above. |
 | Reconciliation exceptions | No end date decided | Differences between our records and the gateway's, with the administrator's resolution note. Never deleted by the application. |
 | Device tokens (push) | Until the session ends, the phone signs out, the phone loses the app, or the account is deleted | Deleted with their session or user (database cascade), by the sender when Expo says the phone is gone, and explicitly on account deletion. |
 | Notification log | 30 days | Type, status and Expo's ticket id. Never the message text. Removed by the Worker. |

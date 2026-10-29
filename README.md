@@ -392,8 +392,8 @@ the app, so it must never be secret.
 | 3 — Web console and content management | Done — see verification below |
 | 4 — Tourism discovery and itineraries | Done — places, saved places, itineraries, nearby sorting (decision D6: list only, no map SDK) |
 | 5 — AI trip planner | Done — behind `IItineraryPlanner`, Gemini implementation (decision D5, owner to confirm) |
-| 6 — Partner listings and booking engine | Done, except payment, which is Phase 7 — see verification below |
-| 7 — Payments, ledger and notifications | **Not started: waiting on decisions D3 (payment gateway) and D7 (push provider) and the legal and tax review (spec §21)** |
+| 6 — Partner listings and booking engine | Done; payment was added in Phase 7 — see verification below |
+| 7 — Payments, ledger and notifications | **Built in sandbox (steps 7.1–7.9); live payments deliberately off** until the legal and tax review, D21/D22 sign-off and an end-to-end settlement check — see "Phase 7 verification" and `docs/phase-7-plan.md` |
 
 ### Phase 0 verification (2026-10-26)
 
@@ -522,9 +522,8 @@ against a real PostgreSQL 18 database (three consecutive runs).
 
 Known limitations:
 
-- **No payment yet.** Every booking is treated as free or pay-at-venue and a partner confirms it
-  directly; `awaiting_payment`, `failed`, `refund_pending` and `refunded` exist in the state machine
-  but nothing moves a booking into them until Phase 7 (decisions D3, D7 and the §21 review).
+- **No payment yet** *(superseded by Phase 7, below).* Every booking was treated as free or
+  pay-at-venue and a partner confirmed it directly.
 - **D13 needs confirming:** Phase 6 says services are discovery-only, but the schema lets a service
   take bookings, and the schema was followed (see the decisions register).
 - Listings have no photos (the reference schema has no media for them) and the console has no
@@ -533,4 +532,40 @@ Known limitations:
   are not built, the same deferral as for places.
 - The app was driven on an Android emulator only; the console's new pages were built and checked
   with lint, types and a production build but not clicked through in a browser.
-- A cancelled booking returns its places but nothing refunds or charges anything, by the same rule.
+- A cancelled booking returns its places but nothing refunds or charges anything, by the same rule *(superseded by Phase 7)*.
+
+### Phase 7 verification (2026-10-29)
+
+Phase 7 is built as steps 7.1 to 7.9 (plan and as-built notes: `docs/phase-7-plan.md`). **Payments run in sandbox only**: the
+API refuses live keys unless `Payments:Mode` is `Live` and `Payments:AllowLive` is `true`, and neither is set. Refunds are off by
+default (`Payments:RefundsEnabled`), push sending is off by default (`Notifications:Enabled`), and the `payments` module flag starts
+off.
+
+| Acceptance criterion (spec §10, Phase 7) | Result |
+|---|---|
+| Payment results are verified server-side; a success reported by the app is never trusted | The webhook is authenticated by an HMAC-SHA256 signature over the raw body, and "is it paid yet?" asks Razorpay itself. The app's pay flow treats the checkout's own report as a hint only: a "cancelled" checkout over a booking the server says is paid shows as paid (tested). |
+| Payment failure or timeout does not create a false confirmed booking | A failed event never confirms; expiry asks the gateway first and keeps the hold a grace period if it cannot be asked; a payment after the booking ended is refunded in full (all tested, the races against PostgreSQL). |
+| Duplicate webhooks and retried requests are handled idempotently | Events are unique by provider event id, a booking has one open order, ledger transactions are derived from the event and refused if repeated, and a refund uses its own id as the gateway idempotency key. Simultaneous duplicates, simultaneous payouts and simultaneous drafts are tested against PostgreSQL. |
+| Reconciliation finds and resolves failed or delayed callbacks | The Worker checks every five minutes and daily, applies a payment or refund whose webhook was lost through the same safe path (recording it), and lists everything else for an administrator. Seeded mismatches are found in the tests. |
+| Ledger entries balance for every payment, refund and settlement | A deferred constraint trigger refuses any transaction that does not sum to zero, the table is append-only, and a statement is refused if it disagrees with the ledger. Each event type is tested. |
+| Sensitive values are never logged | A webhook's payer details (email, phone, card) are never read or stored, only identifiers, amounts and statuses; keys and secrets are configuration secrets. Reviewed in the code; no log scan was run. |
+| Notifications do not expose private booking details to unauthorized recipients | The text is generic, the data is a type and a booking id, the recipient is re-checked when sending, and a phone is used only while its session lives (tested). |
+
+Checks: Prettier, ESLint and `tsc` clean for the app and the console; Jest 262/262 for the app; Vitest 30/30 for the console and a
+production build of it; backend 9 architecture, 585 unit and 101 integration tests (6 live-service tests skipped), the last against
+a real PostgreSQL 18 database, three consecutive runs.
+
+Known limitations:
+
+- **Not yet driven end to end on a device.** The Android development build was rebuilt with Razorpay Checkout and notifications and
+  installed, but a test-card payment through the emulator against a local API was not run, and the console's new pages were checked
+  with lint, types, component tests and a production build, not clicked through in a browser. Razorpay's code for "customer closed
+  Checkout" is taken as 2 and should be confirmed on a device (a wrong value only changes the wording shown).
+- **Push needs an Expo (EAS) project id and a Firebase project**; until then the app quietly does not register for notifications.
+  Delivery to a real phone has not been seen.
+- **Payouts are recorded, not made.** An administrator transfers the money and records the bank reference; Razorpay Route (D21) and
+  GST/TCS on commission wait for the legal and tax review. The commission (10%) is provisional.
+- **A known gap in race handling:** the payment services of steps 7.3 to 7.7 catch only `DbUpdateException`, so a rare deadlock there
+  would answer 500 instead of 409 (nothing is lost; the webhook is retried). The statement code handles both (`WriteConflicts`).
+- Phase 7 migrations (`AddPaymentsAndLedger` through `AddSettlementRowVersion`) may not yet be applied to the shared development database; apply every pending migration as `onepondy_app`.
+- **Secrets to rotate:** the Twilio auth token and the Razorpay test secret were shared in chat during development.

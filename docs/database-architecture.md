@@ -5,9 +5,9 @@ Audience: developers and operations. Source of truth is the EF Core model under
 produced from a database built by applying every migration to an empty PostgreSQL instance.
 
 - Engine: PostgreSQL 18 (Windows service), accessed through Npgsql + EF Core 10.
-- Schema: `public`. 30 tables, 1 view (`customer_history`), plus `__EFMigrationsHistory`.
-- Phase coverage: Phases 1–6. Payment, refund, push-notification and review tables
-  (Phase 7+) **do not exist yet**.
+- Schema: `public`. 40 tables, 1 view (`customer_history`), plus `__EFMigrationsHistory`.
+- Phase coverage: Phases 1–7 (payments, refunds, ledger, reconciliation, notifications and partner
+  statements). Review and rating tables (Phase 10) **do not exist yet**.
 
 ## 1. Conventions
 
@@ -25,7 +25,7 @@ produced from a database built by applying every migration to an empty PostgreSQ
 | Migrations | Code-first. `PendingModelChanges` is treated as an error, so a model change without a migration fails the integration tests. |
 
 Tables using `xmin`: `places`, `businesses`, `listings`, `availability_slots`, `bookings`,
-`refresh_tokens`. Itineraries intentionally have none.
+`refresh_tokens`, `payment_attempts`, `outbox_messages`, `settlements`. Itineraries intentionally have none.
 
 ## 2. Entity-relationship overview
 
@@ -60,6 +60,18 @@ erDiagram
     bookings ||--o{ booking_slots : reserves
     availability_slots ||--o{ booking_slots : "reserved in"
     bookings ||--o{ booking_status_history : "audited by"
+
+    bookings ||--o{ payment_attempts : "paid by"
+    payment_attempts ||--o{ refunds : "refunded by"
+    bookings ||--o{ refunds : "has"
+    bookings ||--o{ ledger_entries : "booked in"
+    businesses ||--o{ settlements : "is paid by"
+    settlements ||--o{ settlement_items : lists
+    bookings ||--o{ settlement_items : "settled in"
+    gateway_events ||--o{ reconciliation_exceptions : "may raise"
+    app_users ||--o{ device_tokens : registers
+    user_sessions ||--o{ device_tokens : "ends"
+    outbox_messages ||--o{ notification_log : "sent as"
 
     app_users ||--o{ audit_log : "acts in"
     app_users ||--o{ module_flags : updates
@@ -230,8 +242,9 @@ raise an exception, so rows cannot be altered even by an application bug. Indexe
 - `ck_booking_total`: `total_amount = subtotal + fees + tax_amount - discount_amount`.
 - `ck_booking_hold`: `pending` and `awaiting_payment` must have `expires_at`.
 - `ck_booking_status`: all ten states (`pending`, `awaiting_payment`, `confirmed`, `failed`,
-  `expired`, `rejected`, `cancelled`, `refund_pending`, `refunded`, `completed`). Only the Phase 6
-  subset is reachable today.
+  `expired`, `rejected`, `cancelled`, `refund_pending`, `refunded`, `completed`). All ten are
+  reachable once the `payments` module is on; with it off, a priced booking goes from `pending`
+  straight to `confirmed` as before.
 - `ix_bookings_hold_expiry` is partial (`status IN ('pending','awaiting_payment')`), so the
   expiry job scans only open holds.
 - Snapshots keep the price and cancellation terms the customer agreed to, so later edits to the
@@ -245,14 +258,88 @@ a slot that was ever booked cannot be deleted (the API returns `slot_has_reserva
 `created_at`. `ck_booking_history_actor` ties `system` to a `NULL` user. Same append-only trigger
 pair as `audit_log` (`booking_status_history_is_append_only`). FKs are RESTRICT.
 
-### 3.7 View
+### 3.7 Payments, refunds, ledger and statements (Phase 7)
+
+All money is `numeric(12,2)`, currency `char(3)` (INR). Status columns are `snake_case` `varchar` with a `CHECK`
+list. Every foreign key below is `RESTRICT`: a financial record never loses the booking, payment or business it
+describes. The story behind these tables is in [workflows.md](workflows.md) §20–§24.
+
+**`payment_attempts`** – one row per gateway order (`provider` is `razorpay`). `booking_id`,
+`provider_order_id`, `provider_payment_id` (null until paid), `amount > 0`, `currency`, `status`
+(`created`, `captured`, `failed`, `expired`), `created_at`, `updated_at`. Has `xmin`.
+- `ux_payment_attempts_order (provider_order_id)` and `ux_payment_attempts_payment (provider_payment_id)` (partial,
+  where not null): an order or a payment is never recorded twice.
+- `ux_payment_attempts_open_booking (booking_id) WHERE status = 'created'`: a booking has at most one open order, so
+  two simultaneous "pay" taps get the same order.
+- `ck_payment_attempt_captured`: a `captured` attempt must have a `provider_payment_id`.
+- `ix_payment_attempts_open` (partial, `created`) serves the Worker's check of orders still open at the gateway.
+
+**`gateway_events`** – every webhook Razorpay sends, kept as received: `provider`, `provider_event_id`,
+`event_type`, `payload` (`jsonb`), `signature_valid`, `received_at`, `processed_at`, `error`.
+`ux_gateway_events_event (provider, provider_event_id)` makes a redelivered event a no-op, and
+`ix_gateway_events_unprocessed` (partial, `processed_at IS NULL`) finds events that never finished. Rows whose signature
+is wrong are not stored at all, so an unauthenticated caller cannot fill the table. Never deleted by the application.
+
+**`refunds`** – `payment_attempt_id`, `booking_id`, `amount > 0`, `reason` (`rejected`, `partner_cancelled`,
+`customer_cancelled`, `late_payment`), `status` (`pending`, `processed`, `failed`), `provider_refund_id`,
+`requested_at`, `processed_at`. `ck_refund_processed`: a `processed` refund has a provider refund id.
+`ux_refunds_provider_refund` is unique where not null. A trigger (§5) stops the refunds of one payment adding up to
+more than was captured.
+
+**`ledger_entries`** – the double-entry ledger, one row per line: `transaction_id`, `account`, `amount` (debit
+positive, credit negative, never zero), `booking_id` (null for a payout), `description`, `created_at`.
+- `ck_ledger_account`: one of `gateway_clearing`, `customer_refunds`, `platform_commission`, or
+  `partner_payable:<business id>` / `partner_paid:<business id>`.
+- `ux_ledger_entries_transaction_account (transaction_id, account)`: the transaction id is derived from the event
+  (for example the payment attempt), so posting the same event twice is refused by the database, not only checked.
+- Triggers (§5) make every transaction sum to zero when it commits and make the table append-only.
+
+**`settlements`** and **`settlement_items`** – a partner statement and its lines. `settlements`: `business_id`,
+`period_start`, `period_end`, `gross_amount`, `commission_amount`, `refund_amount`, `net_amount`, `status` (`draft`,
+`approved`, `paid`), `payout_reference`, `created_at`, `approved_at`, `paid_at`. Has `xmin`.
+- `ck_settlement_net`: `net_amount = gross_amount - commission_amount - refund_amount`.
+- `ck_settlement_paid`: a `paid` statement has a payout reference and a paid time.
+- `ux_settlements_period (business_id, period_start, period_end)`: one statement per business and period.
+- `settlement_items`: `settlement_id`, `booking_id`, `kind` (`sale`, `refund`), `gross_amount`, `commission_amount`
+  (both `>= 0`). `ux_settlement_items_booking_kind (booking_id, kind)`: a booking is a sale once and a refund at most
+  once, across every statement, so none can count it twice.
+
+**`reconciliation_exceptions`** – differences found between our records and the gateway's, listed for a person.
+`kind` (twelve values, for example `payment_mismatch`, `refund_stuck`, `ledger_problem`), `status` (`open`, `resolved`,
+`auto_resolved`), `fingerprint` (unique, so finding the same problem again bumps `occurrences` and `last_seen_at`
+instead of adding a row), optional links to the booking, payment attempt, refund and gateway event,
+`provider_reference`, `expected_amount`, `actual_amount`, `detail`, `first_seen_at`, `last_seen_at`, `occurrences`,
+`resolved_at`, `resolved_by_user_id`, `resolution_note`. `ck_reconciliation_person_note`: a `resolved` one names who and
+why; `ck_reconciliation_resolved`: it has a resolved time exactly when it is not `open`.
+
+### 3.8 Notifications (Phase 7)
+
+**`outbox_messages`** – the transactional outbox (spec §10). A booking change and its notification are saved in one
+transaction, so both happen or neither does; the Worker sends it afterwards. `type`, `payload` (`jsonb`: who it is for
+and which booking, never the message text), `created_at`, `dispatched_at`, `attempts`, `last_error`, `next_attempt_at`
+(back-off), `dedupe_key`. Has `xmin`, used as a lease so two Worker instances never send the same message.
+`ix_outbox_pending` (partial, `dispatched_at IS NULL`) is what the dispatcher scans, and `ux_outbox_dedupe` (partial)
+stops a reminder or "pay now" message being queued twice.
+
+**`device_tokens`** – one row per phone: `user_id`, `session_id`, `token` (Expo push token, unique), `platform`
+(`android`, `ios`), `created_at`, `last_seen_at`. Both foreign keys `CASCADE`: signing out, expiry, reuse detection,
+role change and account deletion all end the session and so delete its phones, which is how "a signed-out phone
+receives nothing" is guaranteed without the app having to remember anything.
+
+**`notification_log`** – what was sent to whom, for support and for removing dead tokens: `outbox_message_id`,
+`user_id`, `device_token_id` (`SET NULL` when the phone is removed), `type`, `status` (`sent`, `delivered`, `failed`),
+`provider_ticket_id`, `error`, `created_at`, `receipt_checked_at`. It holds no message text.
+`ix_notification_log_awaiting_receipt` (partial) finds tickets whose delivery receipt is still to be read.
+
+### 3.9 View
 
 **`customer_history`** – a unified "what has this customer done" view, created in
 `AddListingsAndBookings`. Today it selects one row per booking (`id`, `kind = 'booking'`,
 `customer_user_id`, listing `title`, `status`, `scheduled_at`, `total_amount`, `currency`,
 `created_at`) by joining `bookings` to `listings`. It is a view and holds no data of its own. It
 is shaped so that food orders (Phase 8) and rides (Phase 9) can be added as further `UNION`
-branches without changing readers.
+branches without changing readers. Phase 7 did **not** extend it with payment status (the plan
+considered it); the app reads the receipt and refunds from the booking detail instead.
 
 ## 4. Foreign-key delete policy
 
@@ -266,6 +353,10 @@ branches without changing readers.
 | `businesses` → `listings`, `listings` → `availability_slots` | RESTRICT | Commercial history must survive. |
 | `listings`/`availability_slots` → bookings, `booking_slots` | RESTRICT | A booking can never lose its listing or slot. |
 | `bookings` → `booking_slots`, `booking_status_history` | RESTRICT | History is immutable. |
+| `bookings`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
+| `app_users`, `user_sessions` → `device_tokens` | CASCADE | A phone is meaningful only while its session lives. |
+| `device_tokens` → `notification_log` | SET NULL | The log survives a removed phone. |
+| `app_users`, `outbox_messages` → `notification_log` | RESTRICT | The log is kept for the retention period. |
 
 Because `booking_slots.booking_id` is RESTRICT, it is hand-set in the `HardenBookingSchema`
 migration; EF Core cannot express a non-cascade ownership FK in the model snapshot.
@@ -277,6 +368,9 @@ migration; EF Core cannot express a non-cascade ownership FK in the model snapsh
 | `trg_audit_log_append_only` (row) and `trg_audit_log_no_truncate` (statement), function `audit_log_is_append_only()` | `audit_log` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`. |
 | `trg_booking_status_history_append_only` (row) | `booking_status_history` | Raises on `UPDATE`, `DELETE`. |
 | `trg_booking_status_history_no_truncate` (statement) | `booking_status_history` | Raises on `TRUNCATE`. |
+| `trg_ledger_entries_balance` (row, **deferred constraint trigger**), function `ledger_entries_must_balance()` | `ledger_entries` | At commit, raises unless every ledger transaction touched sums to zero. A transaction that does not balance cannot be saved. |
+| `trg_ledger_entries_append_only` (row) and `trg_ledger_entries_no_truncate` (statement), function `ledger_entries_is_append_only()` | `ledger_entries` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: a mistake is corrected by a new, balanced transaction. |
+| `trg_refunds_within_captured` (row), function `refunds_within_captured_amount()` | `refunds` | Locks the payment and raises if its refunds (other than failed ones) would exceed what was captured, so two simultaneous refunds cannot both pass. |
 
 ## 6. Migrations
 
@@ -291,6 +385,12 @@ Applied in this order (folder `Persistence/Migrations`):
 | 5 | `20261028074813_AddBusinesses` | Businesses and documents. |
 | 6 | `20261028161435_AddListingsAndBookings` | Listings, slots, saved listings, bookings, booking slots, history, `customer_history` view. |
 | 7 | `20261029044723_HardenBookingSchema` | Missing FKs and checks, RESTRICT on booking ownership FKs, append-only trigger on history. |
+| 8 | `20261029080451_AddPaymentsAndLedger` | `payment_attempts`, `gateway_events`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `outbox_messages`; the ledger and refund triggers; the `payments` module flag. |
+| 9 | `20261029085314_AddOneOpenPaymentAttemptPerBooking` | One open payment order per booking. |
+| 10 | `20261029093526_AddLedgerTransactionAccountUniqueness` | One line per account in a ledger transaction, which makes a repeated event refused by the database. |
+| 11 | `20261029095555_AddReconciliationExceptions` | `reconciliation_exceptions`. |
+| 12 | `20261029101305_AddPushNotifications` | `device_tokens`, `notification_log`, and `next_attempt_at`, `dedupe_key` on the outbox. |
+| 13 | `20261029110845_AddSettlementRowVersion` | `xmin` row version on `settlements` (no new physical column). |
 
 Rules for new migrations:
 
@@ -310,14 +410,16 @@ Details are in [data-retention.md](data-retention.md). In short:
 - Account deletion anonymises `app_users` (`display_name` becomes "Deleted user", phone and e-mail
   are cleared, `is_active = false`, `deleted_at` set, security stamp rotated) and removes saved places, saved listings and itineraries. Sessions are
   revoked with reason `account_deleted`. Bookings, audit rows and partner records are kept.
+- The Worker removes `notification_log` rows and finished `outbox_messages` after 30 days. Payment, refund, ledger and
+  statement rows have no end date yet (they need the tax review) and are linked to the anonymised customer row.
 - Deletion is blocked while the customer has bookings in progress (`pending`,
   `awaiting_payment`, `confirmed`, `refund_pending`) or, for partners, while their business has
   any.
 
 ## 8. Not yet in the schema (planned)
 
-- Payments, refunds, webhook events (Phase 7, blocked on gateway and legal decisions).
-- Push-notification tokens and notification log.
 - Reviews and ratings.
+- Commission per listing or business: today the provisional rate is the setting `Payments:CommissionPercent`, applied when a payment arrives and recorded in the ledger, so changing it never rewrites history.
+- GST and tax-collected-at-source columns: the ledger keeps tax separate from the amounts so it can be added without rewriting history, but nothing tax-related is switched on until the legal and tax review.
 - Optional `places.location` (PostGIS) and a place link on listings. Nearby search currently
   sorts by distance in application memory (`lat`/`lng` on `GET /places`).

@@ -414,3 +414,8 @@ attempt in any state except already captured, because a customer can still pay a
   discard, approve and pay, partner visibility, CSV), 3 for `WriteConflicts` and 6 integration tests against PostgreSQL (the full HTTP
   flow with the ledger checked, access control, simultaneous payouts and simultaneous drafts). Console: label coverage, query string,
   statement table and badge.
+
+**7.10 (documentation).** `docs/backend-architecture.md`, `docs/database-architecture.md` and `docs/workflows.md` now describe Phases 1 to 7
+(the database document was regenerated from a database built by applying all thirteen migrations: 40 tables), `docs/data-retention.md`
+covers statements, and the README and the specification's status, D21 and Phase 7 entries say what is built. They also say plainly what
+is **not**: live payments, Route payouts, GST/TCS, push delivery to a real phone, and a device run of the payment flow.

@@ -1,9 +1,11 @@
 # OnePondy – Backend Architecture
 
-Audience: developers and operations. Scope: everything built through Phase 6 (accounts,
-tourism content, itineraries and AI planner, partner onboarding, listings, availability and the
-booking engine). Phase 7+ (payments, notifications, reviews, food, rides) is **not built** and is
-marked as such.
+Audience: developers and operations. Scope: everything built through Phase 7 (accounts,
+tourism content, itineraries and AI planner, partner onboarding, listings, availability, the
+booking engine, and Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
+push notifications and partner statements). Reviews, food and rides are **not built** and are
+marked as such. Live payments are switched off by design until the go-live gate in
+[phase-7-plan.md](phase-7-plan.md) §9 is met.
 
 Related documents: [database-architecture.md](database-architecture.md),
 [workflows.md](workflows.md), [data-retention.md](data-retention.md),
@@ -26,7 +28,9 @@ flowchart LR
     end
     DB[(PostgreSQL 18)]
     G[Google Gemini API<br/>optional]
-    S[SMS / e-mail provider<br/>not chosen yet - D19]
+    S[SMS provider<br/>Twilio dev, MSG91 planned - D19<br/>e-mail not chosen]
+    R[Razorpay<br/>orders, refunds, webhooks<br/>test mode only]
+    X[Expo push service]
 
     M -->|HTTPS /api/v1| A
     W -->|HTTPS| A
@@ -36,6 +40,10 @@ flowchart LR
     A --> F
     A -.-> G
     A -.-> S
+    A <-->|orders, signed webhooks| R
+    K <-->|refunds, reconciliation| R
+    K -->|push| X
+    M -->|Razorpay Checkout SDK| R
 ```
 
 - The mobile app talks to the API directly with a bearer access token.
@@ -128,6 +136,9 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Planning | `ItineraryService`, `SavedPlacesService`, `TripPlannerService` |
 | Partners | `BusinessService`, `ListingService`, `SavedListingsService` |
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
+| Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
+| Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
+| Notifications | `NotificationOutbox` (queues in the caller's transaction), `OutboxDispatcher`, `BookingReminders`, `NotificationRetention`, `DeviceService`, `IPushSender` |
 
 ### 4.1 Result and error model
 
@@ -229,7 +240,7 @@ only reaches their own booking, and a partner only reaches bookings of their own
 
 ### 5.7 Known security gaps
 
-- No real OTP provider yet (D19) – a launch blocker.
+- No production OTP provider yet (D19): Twilio works for development, MSG91 needs DLT registration and e-mail has no provider. A launch blocker.
 - JWT signing key and hashing key come from configuration; production values must be supplied as
   secrets and rotated per the ops runbook. Never commit them.
 - HS256 with a shared key is adequate for a single API; revisit if tokens must be verified by
@@ -239,12 +250,16 @@ only reaches their own booking, and a partner only reaches bookings of their own
 
 | Mechanism | Used for |
 |---|---|
-| `xmin` row version (`Version`) | `Place`, `Business`, `Listing`, `AvailabilitySlot`, `Booking`, `RefreshToken`. Clients send the `version` they loaded; a mismatch becomes `409 Conflict`. |
+| `xmin` row version (`Version`) | `Place`, `Business`, `Listing`, `AvailabilitySlot`, `Booking`, `RefreshToken`, `PaymentAttempt`, `OutboxMessage`, `Settlement`. Clients send the `version` they loaded; a mismatch becomes `409 Conflict`. |
 | `CHECK` constraints | Last line of defence for rules such as `reserved_count <= capacity` (see database doc). |
 | Unique indexes | Idempotency (`customer_user_id`, `idempotency_key`), one stop per position, one account per phone/e-mail. |
 | Deferrable unique constraint | Itinerary stop reorder inside one transaction. |
 | Transactions | Booking creation reserves slots and writes history atomically. |
-| Append-only triggers | `audit_log` and `booking_status_history`. |
+| Append-only triggers | `audit_log`, `booking_status_history` and `ledger_entries`. |
+| Deferred constraint trigger | Every ledger transaction must sum to zero when it commits. |
+| Row-lock trigger | `refunds` of one payment can never exceed what was captured, even when requested simultaneously. |
+| Idempotent events | Webhook events are unique by provider event id; ledger transactions are derived from the event, so a repeat is refused; a booking has one open payment order. |
+| `WriteConflicts.Is` | A save that lost a race is either a `DbUpdateException` or, for a deadlock victim, an `InvalidOperationException` wrapping one. The statement code handles both and answers `409`; the 7.3–7.7 payment services still handle only the first (a known, rare gap: nothing is lost and the webhook is retried). |
 
 Testing consequence: the EF in-memory provider cannot reproduce races, `xmin`, deferrable
 constraints or `ExecuteUpdate`/`ExecuteDelete`. Domain and booking/listing code therefore avoids
@@ -283,6 +298,26 @@ Business onboarding with document review, listings with moderation, dated capaci
 booking engine with a 30-minute hold. Money and hold behaviour are in [workflows.md](workflows.md)
 §11–§16.
 
+### 7.6 Payments (Phase 7, sandbox only)
+
+Razorpay is the gateway (D3), behind `IPaymentGateway`; `UnavailablePaymentGateway` is used when keys are missing, like the AI planner and OTP senders. A priced booking the partner accepts waits in `awaiting_payment` for a configurable window (30 minutes), the customer pays with Razorpay Checkout, and a **signed webhook** (or the app's "is it paid yet?" call, which asks Razorpay itself) confirms it. The app never decides a payment succeeded. A guard (`PaymentsGuard`) refuses to start with a configuration that could move real money by accident. Flow and rules: [workflows.md](workflows.md) §20.
+
+### 7.7 Refunds and the ledger
+
+`RefundService` applies the provisional refund rule (D22) and is off by default (`Payments:RefundsEnabled`). `LedgerService` records every movement as balanced double-entry lines, enforced by the database. Flow: [workflows.md](workflows.md) §21.
+
+### 7.8 Reconciliation
+
+The Worker compares our records with Razorpay's every five minutes and daily, applies what a lost webhook missed through the same safe path, and lists everything else for a person in the console. Flow: [workflows.md](workflows.md) §22.
+
+### 7.9 Notifications
+
+The transactional outbox plus the Expo push service (D7). Messages are written with the change that causes them, sent by the Worker, privacy-checked at send time, retried with back-off, and carry only a type and a booking id. Flow: [workflows.md](workflows.md) §23.
+
+### 7.10 Partner statements
+
+A statement is built from the ledger per business and period, approved by an administrator, and marked paid with the bank reference, which books the payout. Partners read their own and download CSV. Flow: [workflows.md](workflows.md) §24.
+
 ## 8. AI trip planner
 
 `TripPlannerService` is deliberately defensive; the model only ranks and arranges places the
@@ -310,11 +345,16 @@ and runnable as a console app in development. It shares Application and Infrastr
 | `AuthDataRetentionJob` | hourly (and once at start-up) | Calls `AuthDataRetention`: deletes OTP challenges created more than 1 day ago, refresh tokens expired or consumed more than 30 days ago, and sessions revoked or expired more than 90 days ago (their remaining tokens cascade). |
 | `BookingHoldExpiryJob` | every minute (and once at start-up) | Calls `BookingHoldExpiry`: takes up to 100 open holds past `expires_at`, oldest first, and runs `TryExpireAsync` on each. Each booking is saved separately, so a lost race (for example a second worker instance, or the partner accepting at that instant) never blocks the rest of the batch. |
 
-Both jobs catch and log exceptions so a bad run never stops the service; the next interval retries.
+| `PendingRefundJob` | every minute | Sends pending refunds to Razorpay (the refund's own id is the idempotency key) and retries ones that never left. |
+| `PaymentReconciliationJob` | every 5 minutes | Checks open orders, stuck refunds and unprocessed webhooks, applies what a lost webhook missed, raises exceptions; once a day compares the previous day's payments with Razorpay's. |
+| `OutboxDispatchJob` | every 20 seconds | Sends due notifications through Expo, reads delivery receipts about 15 minutes later, deletes dead phones, and (hourly) removes old log and outbox rows. |
+| `BookingReminderJob` | every 30 minutes | Queues the "booking tomorrow" reminder, once per booking. |
 
-If the Worker is stopped, nothing breaks immediately, but unconfirmed bookings keep their slots
-until it runs again. Keep it running in production. Planned additions (outbox dispatch, payment
-reconciliation) arrive with Phase 7.
+All jobs catch and log exceptions so a bad run never stops the service; the next interval retries.
+
+If the Worker is stopped, nothing breaks immediately, but unconfirmed bookings keep their slots,
+refunds wait, notifications queue and webhook gaps go unnoticed until it runs again. Keep it
+running in production and alert on its error log lines and on the open reconciliation count.
 
 ## 10. Configuration reference
 
@@ -334,6 +374,11 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Console` | `BootstrapAdministrators` |
 | `TripPlanner` | Daily limit, cost cap, cost per request, candidate limit |
 | `Ai:Gemini` | `ApiKey`, `Model`, `BaseUrl`, `Timeout` |
+| `Twilio` | `AccountSid`, `AuthToken`, and either `From` (`Auth:Otp:Delivery` = `Twilio`) or `VerifyServiceSid` (`TwilioVerify`). Development only; secrets, never committed. |
+| `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
+| `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
+| `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
+| `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
 
 Production notes: the app pool identity needs write access to both storage folders; the
 business-documents folder must sit outside the web root.
@@ -344,7 +389,8 @@ business-documents folder must sit outside the web root.
 |---|---|---|
 | Unit | Domain state machines, services (OTP, auth, places, itineraries, planner, businesses, listings, bookings) using in-memory EF and a controllable clock | Always |
 | Architecture | Layering rules (§2.1) | Always |
-| Integration | Real HTTP requests against PostgreSQL: auth flows, content, tourism, businesses, bookings, concurrency, health | Only when `ONEPONDY_TEST_DATABASE` is set (tests skip themselves otherwise) |
+| Integration | Real HTTP requests against PostgreSQL: auth flows, content, tourism, businesses, bookings, payments, refunds, the ledger triggers, statements, simultaneous payouts, concurrency, health. A fake payment gateway and push sender keep them offline | Only when `ONEPONDY_TEST_DATABASE` is set (tests skip themselves otherwise) |
+| Live (optional) | One call to Razorpay's real test API (set the key pair) and one to Expo's real service with a made-up token (`ONEPONDY_EXPO_LIVE_CHECK=1`) | Only when enabled; skipped otherwise |
 
 Important: the CI workflow builds and runs the suite on Windows but does not currently provide a
 database, so the PostgreSQL integration tests are skipped in CI. Run them locally before merging
@@ -385,6 +431,9 @@ administrator.
 | `/admin/staff` list, add, change role, remove; GET `/admin/audit` | S-A | Staff management and audit log. |
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
 | `/admin/listings` list, get, publish, send-back, suspend, reinstate | S-A | Listing moderation. |
+| GET `/admin/payments`, `/admin/refunds` | S-A | Money in and out (no customer details). |
+| GET `/admin/payments/exceptions`, `/exceptions/open-count`, POST `/exceptions/{id}/resolve` | S-A | Reconciliation differences and their resolution. |
+| GET, POST `/admin/settlements`, GET `/{id}`, POST `/{id}/approve`, `/paid`, `/discard` | S-A | Partner statements: draft, approve, record payout, discard a draft. |
 
 ### Customer features
 | Method and path | Auth | Purpose |
@@ -392,7 +441,14 @@ administrator.
 | `/saved-places`, `/saved-listings` | U | Bookmarks. |
 | `/itineraries` CRUD, save, archive, unarchive, stops, stops/order, share | U | Trip plans. |
 | POST `/trip-planner/plan` | U | AI draft itinerary. |
-| POST/GET `/bookings`, GET `/bookings/{id}`, POST `/bookings/{id}/cancel` | U | Create, list, view, cancel own bookings. |
+| POST/GET `/bookings`, GET `/bookings/{id}`, POST `/bookings/{id}/cancel` | U | Create, list, view, cancel own bookings. The detail includes the receipt and refunds. |
+| POST `/bookings/{id}/payment`, POST `/bookings/{id}/payment/refresh` | U (own booking) | Start the gateway order; ask "is it paid yet?". |
+| POST `/devices`, DELETE `/devices/{id}` | U | Register or remove this phone for push notifications. |
+
+### Payments (no sign-in)
+| Method and path | Auth | Purpose |
+|---|---|---|
+| POST `/webhooks/payments` | **P, signature-verified** | Razorpay events. The signature is the authentication; the only unauthenticated write. |
 
 ### Partner features
 | Method and path | Auth | Purpose |
@@ -400,6 +456,7 @@ administrator.
 | `/partner/businesses` list, apply, get, update; documents upload, download, remove | O (list and apply: U) | Onboarding and profile. |
 | `/partner/businesses/{id}/listings` CRUD, submit, slots CRUD | O | Listings and availability. |
 | `/partner/businesses/{id}/bookings` list, get, accept, reject, cancel, complete | O | Handle incoming bookings. |
+| `/partner/businesses/{id}/statements` list, get, `/{id}/csv` | O | Own approved and paid statements. |
 
 Update calls take the entity's `version`; a mismatch returns `409`.
 
@@ -411,6 +468,7 @@ Update calls take the entity's `version`; a mismatch returns `409`.
 3. Install or update the Worker service and confirm it is running.
 4. Grant the app pool write access to the media and business-documents folders.
 5. Publish the console and restart its Node service.
+5a. For payments: set the `Payments` secrets, create the Razorpay webhook (a public HTTPS URL for `/api/v1/webhooks/payments`; events `payment.captured`, `payment.failed`, `order.paid`, `refund.processed`, `refund.failed`) and set its secret as `Payments:Razorpay:WebhookSecret`. Turn the `payments` module on only when ready. For push: an Expo project and Firebase credentials, then `Notifications:Enabled` on the Worker. After pulling Phase 7 app changes, rebuild the development build (`npx expo run:android`), since Razorpay Checkout and notifications are native modules.
 6. Verify `/health/ready`, then sign in and run a smoke booking.
 
 `database/scripts` holds `create-dev-database.sql` and `enable-postgis.sql` (PostGIS is not used
@@ -418,7 +476,8 @@ yet).
 
 ## 14. Not built yet
 
-- Payments, refunds and the states `awaiting_payment`, `failed`, `refund_pending`, `refunded` –
-  modelled in the schema and state machine but unreachable until Phase 7.
-- Push notifications, reviews and ratings, food ordering, rides.
-- A real SMS/e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.
+- **Live payments and payouts.** Everything above is sandbox. Needs the legal and tax review, sign-off of the commission (D21) and refund rule (D22), partner agreements, Razorpay live KYC and an end-to-end settlement checked against Razorpay's report (go-live gate, phase-7-plan.md §9).
+- Razorpay Route payouts (D21); GST and tax collected at source on commission.
+- Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
+- Reviews and ratings, food ordering, rides.
+- A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.

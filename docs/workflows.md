@@ -1,7 +1,7 @@
 # OnePondy – Full Workflows
 
 Audience: developers, QA and operations. Every workflow below describes what the code does today
-(Phases 1–6). Anything not built is labelled **Not built (Phase 7+)**. Error `code` values are the
+(Phases 1–7). Anything not built is labelled **Not built**. Error `code` values are the
 stable strings the API returns in problem JSON.
 
 Related documents: [backend-architecture.md](backend-architecture.md),
@@ -28,7 +28,12 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 17. [Module flags and minimum app version](#17-module-flags-and-minimum-app-version)
 18. [Audit trail](#18-audit-trail)
 19. [End-to-end journey](#19-end-to-end-journey)
-20. [Not built (Phase 7+)](#20-not-built-phase-7)
+20. [Paying for a booking](#20-paying-for-a-booking)
+21. [Refunds, cancellation money and the ledger](#21-refunds-cancellation-money-and-the-ledger)
+22. [Reconciliation (Worker)](#22-reconciliation-worker)
+23. [Notifications (Expo push)](#23-notifications-expo-push)
+24. [Partner statements and payouts](#24-partner-statements-and-payouts)
+25. [Not built](#25-not-built)
 
 ---
 
@@ -37,12 +42,12 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 | Actor | How they are identified | Can do |
 |---|---|---|
 | Guest | No token | Browse config, places, published listings and availability; open a shared itinerary. |
-| Customer | Signed in, role `customer` | Profile, saved places/listings, itineraries, AI planner, create and cancel own bookings. |
-| Partner | Signed in **and** owner of a business | Apply as a business, manage own business, listings, slots and incoming bookings. Not a role: ownership is the permission. |
+| Customer | Signed in, role `customer` | Profile, saved places/listings, itineraries, AI planner, create, pay for and cancel own bookings, receipts and refund status, push notifications. |
+| Partner | Signed in **and** owner of a business | Apply as a business, manage own business, listings, slots and incoming bookings, and read own approved and paid statements. Not a role: ownership is the permission. |
 | Content editor | Role `content_editor` | Create, edit, submit and moderate places and media. |
 | Support agent | Role `support_agent` | Read-only console access to content. |
-| Administrator | Role `administrator` | Everything above plus staff, module flags, minimum app version, audit log, partner and listing moderation. |
-| Worker | Background service | Releases expired holds; purges old authentication data. |
+| Administrator | Role `administrator` | Everything above plus staff, module flags, minimum app version, audit log, partner and listing moderation, payments and refunds, reconciliation, and partner statements and payouts. |
+| Worker | Background service | Releases expired holds (asking the payment gateway first); sends refunds; reconciles payments; sends push notifications and reminders; purges old authentication and notification data. |
 
 Every new sign-in account starts as a customer. A customer becomes a partner by applying for a
 business.
@@ -429,21 +434,33 @@ Only listings the owner marks bookable use slots; each slot is a dated block wit
 ```mermaid
 stateDiagram-v2
     [*] --> pending: customer books (hold 30 min)
-    pending --> confirmed: partner accepts
+    pending --> confirmed: partner accepts (free, or payments off)
+    pending --> awaiting_payment: partner accepts (priced, payments on)
+    awaiting_payment --> confirmed: verified payment (system)
+    awaiting_payment --> expired: payment window ended (Worker)
+    awaiting_payment --> failed: gateway reports a verified failure
+    awaiting_payment --> cancelled: customer or partner cancels
+    awaiting_payment --> rejected: partner rejects
     pending --> rejected: partner rejects (reason)
     pending --> cancelled: customer or partner cancels
     pending --> expired: hold timed out (Worker)
     confirmed --> cancelled: customer or partner cancels
     confirmed --> completed: partner marks complete
+    cancelled --> refund_pending: a payment was captured
+    rejected --> refund_pending: a payment was captured
+    refund_pending --> refunded: refund processed
     rejected --> [*]
     cancelled --> [*]
     expired --> [*]
     completed --> [*]
+    refunded --> [*]
+    failed --> [*]
 ```
 
-`awaiting_payment`, `failed`, `refund_pending` and `refunded` exist in the schema and domain for
-Phase 7 but **cannot be reached today**. Until payments are built every booking is treated as free
-or pay-at-venue, and the partner confirms it directly.
+The four payment states are reachable only when online payment is on (the `payments` module flag
+and Razorpay keys, sandbox only; see §20). With it off, or for a free listing, a booking behaves as
+in Phase 6 and the partner confirms it directly. `refund_pending` and `refunded` are reached only
+after a captured payment is refunded (§21).
 
 ### 14.2 Create (`POST /bookings`)
 
@@ -495,19 +512,22 @@ own that business (otherwise `booking_not_found`), and send the booking `version
 
 | Action | From | To | Seats | Notes |
 |---|---|---|---|---|
-| Accept | `pending` | `confirmed` | stay reserved | Hold expiry cleared. |
-| Reject | `pending` | `rejected` | **released** | Reason required (max 500). |
-| Cancel | `pending`, `confirmed` | `cancelled` | **released** | Reason optional. |
+| Accept | `pending` | `confirmed`, or `awaiting_payment` for a priced booking when payments are on | stay reserved | Hold expiry cleared; for a payment, a fresh 30-minute window starts (§20). |
+| Reject | `pending`, `awaiting_payment` | `rejected` (then `refund_pending` if a payment was captured) | **released** | Reason required (max 500). |
+| Cancel | `pending`, `awaiting_payment`, `confirmed` | `cancelled` (then `refund_pending` if paid) | **released** | Reason optional; a partner cancel refunds everything. |
 | Complete | `confirmed` | `completed` | unchanged | Marks the visit as done. |
 
 ### 14.4 Customer actions
 
 - `GET /bookings`, `GET /bookings/{id}`: only the customer's own bookings; the detail includes slots,
   price snapshot, cancellation policy and the full status history.
-- `POST /bookings/{id}/cancel`: allowed from `pending` or `confirmed`; seats are released and the
-  reason is stored. Someone else's booking answers `booking_not_found`.
-- **Cancellation policy** (free hours, refund percentage) is **displayed and stored** but no money
-  is refunded because nothing is charged yet (Phase 7).
+- `POST /bookings/{id}/cancel`: allowed from `pending`, `awaiting_payment` or `confirmed`; seats are
+  released and the reason is stored. Someone else's booking answers `booking_not_found`.
+- The detail also carries the **receipt** (amount, time and the gateway's payment id) and each
+  **refund** with its progress.
+- `POST /bookings/{id}/payment` and `/payment/refresh` pay for and re-check an accepted booking (§20).
+- **Cancellation policy** (free hours, refund percentage) decides the refund when a paid booking is
+  cancelled by the customer (§21). A booking that was never paid refunds nothing because nothing was charged.
 
 ### 14.5 Concurrency and stale screens
 
@@ -541,7 +561,10 @@ Unanswered requests must not block inventory forever.
 1. `BookingHoldExpiryJob` runs every minute (and once at start-up).
 2. `BookingHoldExpiry` selects up to 100 bookings in `pending`/`awaiting_payment` whose
    `expires_at` has passed, oldest first (using the partial index `ix_bookings_hold_expiry`).
-3. For each, `TryExpireAsync` moves it to `expired` (actor: system), releases its seats and writes
+3. For a booking in `awaiting_payment` it first **asks the payment gateway** whether the customer paid;
+   a payment found is applied and the booking confirmed instead of expired. If the gateway cannot be
+   asked, the hold is kept for `Payments:GatewayCheckGrace` (15 minutes) longer. Then, for each,
+   `TryExpireAsync` moves it to `expired` (actor: system), releases its seats and writes
    history. Each booking is saved on its own. If another worker instance or a partner's accept got
    there first, the version check fails and that booking is simply skipped.
 4. The customer sees "expired" in the app and can book again.
@@ -609,8 +632,9 @@ sequenceDiagram
     C->>C: browse listings, view availability
     C->>P: book slot (hold 30 min)
     alt partner accepts
-        P->>C: confirmed
+        P->>C: confirmed (or "pay now", then confirmed once paid, section 20)
         P->>C: complete after the visit
+        S->>P: statement approved and paid (section 24)
     else partner rejects or cancels
         P->>C: seats released, reason shown
     else nobody answers
@@ -620,13 +644,236 @@ sequenceDiagram
 
 ---
 
-## 20. Not built (Phase 7+)
+## 20. Paying for a booking
+
+Online payment is behind the `payments` module flag, which starts **off** (`coming_soon`), and behind the Razorpay keys.
+With it off, or for a free listing, nothing below happens and a partner's accept confirms the booking directly (§14.3).
+It is **sandbox only**: the API refuses to start with live keys unless `Payments:Mode` is `Live` **and**
+`Payments:AllowLive` is `true`, and neither is set until the go-live gate in [phase-7-plan.md](phase-7-plan.md) §9 is met.
+
+### 20.1 From accept to paid
+
+```mermaid
+sequenceDiagram
+    participant P as Partner
+    participant C as Customer app
+    participant API
+    participant R as Razorpay
+    participant W as Worker
+    P->>API: accept (priced booking, payments on)
+    API-->>C: status awaiting_payment, expiresAt = now + 30 min, notification "accepted"
+    C->>API: POST /bookings/{id}/payment
+    API->>R: create order, once - a second tap returns the same order
+    API-->>C: keyId, orderId, amountPaise
+    C->>R: Razorpay Checkout (native SDK)
+    R-->>API: webhook payment.captured (signed)
+    API->>API: verify signature, store event once, confirm booking, book the ledger
+    C->>API: POST /bookings/{id}/payment/refresh ("is it paid yet?")
+    API->>R: list the order's payments (if still awaiting)
+    API-->>C: booking (confirmed, with receipt)
+    W->>R: also asks about open orders every 5 minutes
+```
+
+1. **Accept.** The partner's accept moves a priced booking `pending → awaiting_payment` and replaces the request hold with a
+   fresh payment window (`Payments:PaymentWindow`, 30 minutes; allowed 5 minutes to 2 hours). Seats stay held. The customer is
+   notified. The partner may still reject, and the customer may still cancel, while it waits.
+2. **Start (`POST /bookings/{id}/payment`).** Only the booking's customer; only while `awaiting_payment` (`payment_not_due`
+   otherwise, `payment_window_closed` once the window has ended). The server creates one Razorpay order for the booking's
+   total in paise. A database rule allows one open order per booking, so two simultaneous taps get the same order.
+3. **Checkout.** The app opens Razorpay's SDK with the order id and the public key id (the secret never leaves the server).
+4. **The app never decides the result.** After Checkout closes the app calls `POST /bookings/{id}/payment/refresh`, which asks
+   Razorpay itself and applies a captured payment through the same path a webhook takes, then returns the booking. The app
+   re-asks a few times and then says "we are confirming your payment"; the booking screen also re-reads itself every 5 seconds.
+   This also makes payment work on a laptop, which Razorpay's webhook cannot reach.
+5. **Webhook (`POST /webhooks/payments`).** There is no sign-in: the signature is the authentication. HMAC-SHA256 of the exact
+   raw body with `Payments:Razorpay:WebhookSecret`, compared in constant time. A missing or wrong signature answers 400 and is
+   **not stored**; with no secret configured it answers 503. A valid event is stored once by Razorpay's event id (a redelivery
+   changes nothing) and then applied. Handled: `payment.captured` and `order.paid`, `payment.failed`, `refund.processed`,
+   `refund.failed`. Anything else is stored and ignored. Only identifiers, amounts and statuses are read; the payer's email,
+   phone and card details in the event are never read or kept. An event that could not be applied is left unprocessed so Razorpay
+   delivers it again.
+6. **Confirm.** A captured payment for the right amount moves the booking `awaiting_payment → confirmed` (actor: system),
+   records the attempt as `captured`, books the ledger (§21) and notifies the customer ("confirmed") and the partner ("paid").
+   A wrong amount is not applied; it is listed as a reconciliation exception (§22).
+7. **A failed try** is recorded but does not end the booking: the customer may try again on the same order until the window
+   ends. The booking ends by payment or by expiry.
+
+### 20.2 When the time runs out, or paying races cancelling
+
+- **Expiry asks the gateway first** (§15). A customer who paid but whose webhook was lost is confirmed, not expired.
+- **If Razorpay cannot be asked**, the hold is kept for `Payments:GatewayCheckGrace` (15 minutes) past its deadline before it is
+  released anyway.
+- **A payment that arrives after the booking was cancelled, expired or rejected** is never silently kept: it is recorded and
+  refunded in full (reason `late_payment`), and the customer is told.
+- **A customer cancelling while paying** (allowed in `awaiting_payment`) and the payment landing at the same moment is the same
+  case: whichever is recorded first decides, and a payment after a cancel is refunded.
+
+### 20.3 Errors
+
+`payment_not_due`, `payment_window_closed`, `payments_unavailable` (module off or no keys), `booking_changed`,
+`booking_not_found` (someone else's booking; never reveals it exists).
+
+---
+
+## 21. Refunds, cancellation money and the ledger
+
+### 21.1 How much is refunded (provisional, spec D22)
+
+| Reason | Refund |
+|---|---|
+| Partner rejected, or partner cancelled | Everything paid |
+| Customer cancelled at or before the listing's free-cancellation deadline (start time minus `free_cancellation_hours`) | Everything paid |
+| Customer cancelled after it | The listing's `refund_percentage` of what was paid (rounded to the paisa) |
+| A payment that arrived after the booking had ended | Everything paid |
+
+Refunds are **off by default** (`Payments:RefundsEnabled` is `false`) until the cancellation policy is approved. With them off,
+cancelling a paid booking is refused with `refunds_not_enabled` rather than keeping the money.
+
+### 21.2 Steps
+
+1. Cancelling (or rejecting) a paid booking moves it `→ cancelled/rejected → refund_pending` and writes a `refunds` row
+   (`pending`) in the same save, so the decision cannot be lost. Seats are released at once. If both sides cancel at the same
+   instant the loser gets `booking_changed`.
+2. The Worker's `PendingRefundJob` (every minute) sends pending refunds to Razorpay, using the refund's own id as the idempotency
+   key so a retry never refunds twice. A database trigger stops all refunds of one payment from exceeding what was captured.
+3. Razorpay's `refund.processed` webhook marks the refund `processed`, moves the booking `refund_pending → refunded`, books the
+   ledger and notifies the customer ("refund sent"). `refund.failed` marks it `failed` and logs a warning, and the reconciliation job (§22) lists it
+   for a person; the customer still sees "on its way" while the team sorts it out.
+4. The booking detail shows the receipt and each refund with its progress, and the customer is told their bank may take a few
+   working days.
+
+### 21.3 The ledger (`ledger_entries`)
+
+A double-entry record of every movement of money. A debit is positive and a credit negative; the database refuses any
+transaction that does not sum to zero at commit, and refuses to change or delete a line. A mistake is fixed by a new balanced
+transaction. `LedgerService` is the only writer. Each event has a transaction id derived from it, so posting it twice is refused.
+
+| Event | Lines |
+|---|---|
+| Payment confirms a booking (sandbox commission 10%, `Payments:CommissionPercent`) | `gateway_clearing` +1000; `platform_commission` −100; `partner_payable:<business>` −900 |
+| Payment nobody wants (late, duplicate) | `gateway_clearing` +amount; `customer_refunds` −amount |
+| Refund processed (late payment) | `customer_refunds` +amount; `gateway_clearing` −amount |
+| Refund processed (a booking's) | `gateway_clearing` −refund; `platform_commission` + the commission in proportion (from what was actually booked, not today's rate); `partner_payable` + the rest |
+| Statement paid (§24) | `partner_payable` +net; `partner_paid` −net |
+
+The commission rate is a provisional setting for sandbox testing; the real rate is a business decision (D21).
+
+---
+
+## 22. Reconciliation (Worker)
+
+Webhooks can be lost, so the Worker compares our records with Razorpay's. It never fixes a difference silently: it lists
+it for a person, except the few it can apply by the same safe path a webhook takes (a payment or refund whose webhook never
+arrived), which it applies **and records**.
+
+| Job | Schedule | What it does |
+|---|---|---|
+| `PaymentReconciliationJob` | every 5 minutes | Asks Razorpay about recent open orders and applies a captured payment whose webhook was lost; looks for webhook events stored but never finished (15 min), refunds recorded but never sent (15 min), refunds waiting at the gateway for too long (6 h) and refunds the gateway shows failed; checks recent payments and refunds have balanced ledger entries. |
+| Daily comparison (run by the same job, after 03:00 UTC for the previous day) | once a day | Lists the day's payments at Razorpay and compares them with ours: unknown or missing payments, differing amounts or payment ids, and refund totals that do not add up. |
+
+Each finding is a row in `reconciliation_exceptions` (twelve kinds). The same problem found again updates its row (`occurrences`,
+`last_seen_at`) instead of adding another. In the console (**Payments → Reconciliation**) an administrator sees what needs
+attention (`GET /admin/payments/exceptions`, with `open-count` for a badge) and closes an item with a note of what was done
+(`POST /admin/payments/exceptions/{id}/resolve`); that is recorded in the audit log with their name. Alert on the Worker's
+error log lines and on a growing open count.
+
+---
+
+## 23. Notifications (Expo push)
+
+### 23.1 From booking change to phone
+
+```mermaid
+sequenceDiagram
+    participant S as Booking / payment service
+    participant DB as PostgreSQL
+    participant W as Worker (OutboxDispatchJob, every 20 s)
+    participant E as Expo push service
+    participant D as Phone
+    S->>DB: save the change and an outbox row in one transaction
+    W->>DB: lease due messages (2 minutes), re-check who may receive it
+    W->>E: send (up to 100 per request)
+    E-->>D: push
+    W->>E: about 15 minutes later, read delivery receipts
+```
+
+1. **Outbox.** A notification is written in the same transaction as the change that caused it, so both happen or neither does.
+2. **Who gets what.** New request: the partner. Accepted (pay now): the customer. Confirmed: the customer; paid: the partner.
+   Rejected: the customer. Cancelled: the other side. Expired: the customer. Refund sent: the customer. Reminder: the customer,
+   about 24 hours before a confirmed booking (`BookingReminderJob`, every 30 minutes; queued once per booking).
+3. **Privacy at sending time.** Before each send the recipient is checked again: a customer message goes only to that booking's
+   customer, a partner message only to the business's owner, never to a closed account. The text is generic English ("Your
+   booking is confirmed.") with no name, amount, listing, date or place; the only data sent is the type and the booking id. The
+   app opens the booking and loads details through the normal sign-in-protected API. Reminders and "pay now" messages are
+   dropped if no longer true.
+4. **Retry.** A failed send is retried after 1, 5, 30 and 120 minutes and given up on after five attempts (logged as an error). A
+   message older than 24 hours is dropped, not delivered late. Two Worker instances never send the same message (lease plus row
+   version).
+5. **Receipts.** Expo accepting a message is not the phone showing it, so its receipt is read later. A phone Expo says no longer
+   has the app (`DeviceNotRegistered`) is deleted at once.
+6. **Off by default.** `Notifications:Enabled` is `false`: messages queue but nothing is sent, and any older than 24 hours are
+   dropped when sending starts.
+
+### 23.2 The phone (`/devices`)
+
+- `POST /api/v1/devices` registers an Expo push token and platform (`android`/`ios`) for the caller's current session and returns
+  a device id; `DELETE /api/v1/devices/{id}` removes it. At most 10 phones per account.
+- The app asks for permission **once**, after the customer's first booking, never before and never again. It registers on each
+  sign-in only if permission was already given, and unregisters on sign-out. A phone is used only while the session that
+  registered it is still signed in (sign-out, expiry, reuse detection, role change and account deletion all end it), and a phone
+  registered by someone else later belongs to them.
+- Tapping a notification opens that booking, but only for a signed-in customer and only for a known type with a well-formed
+  booking id.
+- An Android phone cannot get an Expo token without an Expo (EAS) project id in the app configuration. Until there is one, the app
+  quietly does not register.
+
+---
+
+## 24. Partner statements and payouts
+
+A statement is what one business is owed for the bookings that finished in a period. It is built from the ledger and checked
+against it, so it is a view of the books and never a second opinion.
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft: administrator drafts (business, period)
+    draft --> [*]: discarded (bookings return to the pool)
+    draft --> approved: administrator approves
+    approved --> paid: administrator records the bank reference
+    paid --> [*]
+```
+
+1. **Draft** (`POST /admin/settlements`, administrators only). A period is whole UTC days that have finished. Included: bookings
+   `completed` by the end of the period, and `refunded` ones after a partial refund (the partner keeps what the customer was not
+   given back, for example after a late cancellation); not already on a statement. A booking refunded in full, or never paid
+   online, owes nothing and never appears. A refund that comes after its sale was settled is carried on a later statement. Totals:
+   gross sales, commission kept (less any returned), refunds, and net. For each booking the arithmetic must equal what the ledger
+   says the partner is owed, otherwise nothing is drafted (`settlement_ledger_mismatch`). No net payable gives
+   `settlement_nothing_due`; the same period twice gives `settlement_period_exists`; at most 500 bookings per statement.
+2. **Approve.** Makes it visible to the partner. A draft is the administrators' working copy only.
+3. **Pay.** The administrator transfers the money themselves (or, later, Razorpay Route does), then records the bank reference
+   (UTR). This books the payout in the ledger and cannot be undone. Nothing approved or paid is ever changed or discarded.
+4. **Concurrency.** Statements carry a row version, and the ledger refuses a second payout of the same statement, so two
+   administrators acting at once cannot both succeed; the other gets `settlement_busy` or `settlement_invalid_state` (409).
+5. **Partners** see only their own approved and paid statements (`GET /partner/businesses/{id}/statements`, detail, and a CSV
+   download); anyone else gets 404. The CSV is UTF-8 with a byte-order mark, and text typed by partners that begins with `=`,
+   `+`, `-` or `@` is defused against spreadsheet formula injection.
+6. **Console.** Administrators: **Payments** (payments, refunds, reconciliation; no customer details, only the booking id) and
+   **Statements**. Partners: **Statements** on their business page. Every step is in the audit log.
+
+Not built: Razorpay Route payouts (D21), GST and tax-collected-at-source on commission (waiting for the legal and tax review),
+per-listing commission.
+
+---
+
+## 25. Not built
 
 | Area | Status |
 |---|---|
-| Online payment, `awaiting_payment`, `failed`, `refund_pending`, `refunded`, refund rules from the cancellation policy | Modelled in domain/schema; blocked on gateway choice (D3) and legal/tax review. |
-| Push notifications (booking updates, reminders) | Blocked on provider choice (D7). |
-| SMS / e-mail provider for real code delivery | Open decision D19; **launch blocker**. |
+| Live payments and payouts | **Sandbox only.** Waiting for the legal and tax review, sign-off of the commission (D21) and refund rule (D22), partner agreements and Razorpay live KYC (go-live gate in phase-7-plan.md §9). |
+| Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
+| Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
+| SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
 | Reviews and ratings, food ordering, rides | Later phases. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |
