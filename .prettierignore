@@ -17,3 +17,5 @@ coverage/
 # Next.js build output (apps/web-console)
 apps/*/.next/
 apps/*/out/
+# Written by Next.js on every build and not tracked
+apps/*/next-env.d.ts

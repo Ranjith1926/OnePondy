@@ -10,7 +10,8 @@ import { requireAdministrator } from '@/lib/session';
 const steps = ['publish', 'send-back', 'suspend', 'reinstate'] as const;
 type Step = (typeof steps)[number];
 
-const isStep = (value: unknown): value is Step => typeof value === 'string' && (steps as readonly string[]).includes(value);
+const isStep = (value: unknown): value is Step =>
+  typeof value === 'string' && (steps as readonly string[]).includes(value);
 
 /** Only ids shaped like the API's GUIDs are put into request paths. */
 function guid(value: FormDataEntryValue | null): string | null {
@@ -23,7 +24,10 @@ function optional(form: FormData, name: string): string | null {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-export async function changeListingStatus(_previous: FormState, form: FormData): Promise<FormState> {
+export async function changeListingStatus(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
   await requireAdministrator();
   const id = guid(form.get('id'));
   const step = form.get('step');

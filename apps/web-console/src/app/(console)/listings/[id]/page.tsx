@@ -76,7 +76,9 @@ export default async function ListingPage({
             </div>
             <div>
               <dt className="font-semibold">Base price</dt>
-              <dd className="text-muted">{listing.basePrice !== null ? `${listing.currency} ${listing.basePrice}` : '—'}</dd>
+              <dd className="text-muted">
+                {listing.basePrice !== null ? `${listing.currency} ${listing.basePrice}` : '—'}
+              </dd>
             </div>
             {listing.cancellationPolicy ? (
               <div className="sm:col-span-2">

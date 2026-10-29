@@ -29,7 +29,10 @@ function problem(
 }
 
 /** Both steps of partner sign-in: the same one-time code flow a customer uses in the app (spec §1). */
-export async function signIn(previous: PartnerSignInState, form: FormData): Promise<PartnerSignInState> {
+export async function signIn(
+  previous: PartnerSignInState,
+  form: FormData,
+): Promise<PartnerSignInState> {
   const intent = form.get('intent');
 
   if (intent === 'restart') {

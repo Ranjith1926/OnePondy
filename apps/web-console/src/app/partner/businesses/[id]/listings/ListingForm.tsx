@@ -13,10 +13,19 @@ import { createListing, updateListing } from './actions';
 
 const listingTypes = Object.keys(listingTypeLabels) as ListingType[];
 
-export function ListingForm({ businessId, listing }: { businessId: string; listing?: ListingDetail }) {
-  const [state, action] = useActionState<FormState, FormData>(listing ? updateListing : createListing, {
-    status: 'idle',
-  });
+export function ListingForm({
+  businessId,
+  listing,
+}: {
+  businessId: string;
+  listing?: ListingDetail;
+}) {
+  const [state, action] = useActionState<FormState, FormData>(
+    listing ? updateListing : createListing,
+    {
+      status: 'idle',
+    },
+  );
   const [listingType, setListingType] = useState<ListingType>(listing?.listingType ?? 'activity');
   const [isBookable, setIsBookable] = useState(listing?.isBookable ?? false);
 
@@ -29,7 +38,9 @@ export function ListingForm({ businessId, listing }: { businessId: string; listi
           <input type="hidden" name="version" value={listing.version} />
         </>
       ) : null}
-      {state.status === 'error' && state.message ? <Alert kind="error">{state.message}</Alert> : null}
+      {state.status === 'error' && state.message ? (
+        <Alert kind="error">{state.message}</Alert>
+      ) : null}
 
       <TextField
         id="title"
@@ -115,7 +126,9 @@ export function ListingForm({ businessId, listing }: { businessId: string; listi
       ) : null}
 
       <div>
-        <SubmitButton pendingLabel="Saving…">{listing ? 'Save changes' : 'Create listing'}</SubmitButton>
+        <SubmitButton pendingLabel="Saving…">
+          {listing ? 'Save changes' : 'Create listing'}
+        </SubmitButton>
       </div>
     </form>
   );

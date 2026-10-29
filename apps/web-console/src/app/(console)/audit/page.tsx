@@ -29,14 +29,20 @@ function entityLink(entry: AuditEntry) {
   }
   if (entry.entityType === 'business') {
     return (
-      <Link href={`/partners/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+      <Link
+        href={`/partners/${entry.entityId}`}
+        className="font-semibold text-brand hover:underline"
+      >
         Open partner
       </Link>
     );
   }
   if (entry.entityType === 'listing') {
     return (
-      <Link href={`/listings/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+      <Link
+        href={`/listings/${entry.entityId}`}
+        className="font-semibold text-brand hover:underline"
+      >
         Open listing
       </Link>
     );

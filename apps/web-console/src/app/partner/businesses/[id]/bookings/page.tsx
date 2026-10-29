@@ -40,17 +40,25 @@ export default async function PartnerBookingsPage({
   const { id: businessId } = await params;
   const { status, done } = await searchParams;
   const query = status ? `?status=${encodeURIComponent(status)}` : '';
-  const bookings = await partnerApi<BookingSummary[]>(`/api/v1/partner/businesses/${businessId}/bookings${query}`);
+  const bookings = await partnerApi<BookingSummary[]>(
+    `/api/v1/partner/businesses/${businessId}/bookings${query}`,
+  );
   const notice = done ? doneMessages[done] : undefined;
 
   return (
     <>
       <p className="mb-2 text-sm">
-        <Link href={`/partner/businesses/${businessId}`} className="font-semibold text-brand hover:underline">
+        <Link
+          href={`/partner/businesses/${businessId}`}
+          className="font-semibold text-brand hover:underline"
+        >
           ← Business
         </Link>
       </p>
-      <PageHeader title="Bookings" description="Accept or reject requests, and mark completed bookings once the service is delivered." />
+      <PageHeader
+        title="Bookings"
+        description="Accept or reject requests, and mark completed bookings once the service is delivered."
+      />
       {notice ? (
         <div className="mb-6">
           <Alert kind="success">{notice}</Alert>
@@ -83,7 +91,10 @@ export default async function PartnerBookingsPage({
           >
             Filter
           </button>
-          <Link href={`/partner/businesses/${businessId}/bookings`} className="pb-2 text-sm font-semibold text-brand">
+          <Link
+            href={`/partner/businesses/${businessId}/bookings`}
+            className="pb-2 text-sm font-semibold text-brand"
+          >
             Clear
           </Link>
         </form>
@@ -102,9 +113,12 @@ export default async function PartnerBookingsPage({
                   <p className="font-semibold">{booking.listingTitle}</p>
                   <p className="text-sm text-muted">
                     {booking.guestCount} guest{booking.guestCount === 1 ? '' : 's'} ·{' '}
-                    {booking.startAt ? formatDateTime(booking.startAt) : 'No date'} · {booking.currency} {booking.totalAmount}
+                    {booking.startAt ? formatDateTime(booking.startAt) : 'No date'} ·{' '}
+                    {booking.currency} {booking.totalAmount}
                   </p>
-                  <p className="text-xs text-muted">Requested {formatDateTime(booking.createdAt)}</p>
+                  <p className="text-xs text-muted">
+                    Requested {formatDateTime(booking.createdAt)}
+                  </p>
                 </div>
                 <span
                   className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${statusTone[booking.status]}`}

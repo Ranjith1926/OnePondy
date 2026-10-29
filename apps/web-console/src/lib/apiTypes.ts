@@ -194,7 +194,8 @@ export interface CustomerProfile {
   createdAt: string;
 }
 
-export type BusinessType = 'restaurant' | 'hotel' | 'activity' | 'shop' | 'tourOperator' | 'service';
+export type BusinessType =
+  'restaurant' | 'hotel' | 'activity' | 'shop' | 'tourOperator' | 'service';
 
 export type BusinessApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
 

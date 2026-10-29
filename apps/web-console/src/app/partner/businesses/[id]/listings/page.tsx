@@ -17,12 +17,17 @@ const statusTone: Record<ListingStatus, string> = {
 
 export default async function PartnerListingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: businessId } = await params;
-  const listings = await partnerApi<ListingSummary[]>(`/api/v1/partner/businesses/${businessId}/listings`);
+  const listings = await partnerApi<ListingSummary[]>(
+    `/api/v1/partner/businesses/${businessId}/listings`,
+  );
 
   return (
     <>
       <p className="mb-2 text-sm">
-        <Link href={`/partner/businesses/${businessId}`} className="font-semibold text-brand hover:underline">
+        <Link
+          href={`/partner/businesses/${businessId}`}
+          className="font-semibold text-brand hover:underline"
+        >
           ← Business
         </Link>
       </p>

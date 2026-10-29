@@ -35,7 +35,9 @@ export default async function PartnersPage({ searchParams }: { searchParams: Pro
   await requireAdministrator();
   const filters = await searchParams;
   const page = Math.max(1, Number(filters.page) || 1);
-  const result = await api<Paged<BusinessSummary>>(`/api/v1/admin/businesses?${query(filters, page)}&pageSize=25`);
+  const result = await api<Paged<BusinessSummary>>(
+    `/api/v1/admin/businesses?${query(filters, page)}&pageSize=25`,
+  );
 
   return (
     <>

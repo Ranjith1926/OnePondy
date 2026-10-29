@@ -51,7 +51,10 @@ export async function uploadDocument(_previous: FormState, form: FormData): Prom
   body.set('kind', String(form.get('kind') ?? 'other'));
 
   try {
-    await partnerApi<BusinessDocument>(`/api/v1/partner/businesses/${id}/documents`, { method: 'POST', form: body });
+    await partnerApi<BusinessDocument>(`/api/v1/partner/businesses/${id}/documents`, {
+      method: 'POST',
+      form: body,
+    });
   } catch (error) {
     return failureState(error);
   }
@@ -62,6 +65,8 @@ export async function uploadDocument(_previous: FormState, form: FormData): Prom
 export async function removeDocument(form: FormData): Promise<void> {
   const id = String(form.get('id') ?? '');
   const documentId = String(form.get('documentId') ?? '');
-  await partnerApi<void>(`/api/v1/partner/businesses/${id}/documents/${documentId}`, { method: 'DELETE' });
+  await partnerApi<void>(`/api/v1/partner/businesses/${id}/documents/${documentId}`, {
+    method: 'DELETE',
+  });
   revalidatePath(`/partner/businesses/${id}`);
 }

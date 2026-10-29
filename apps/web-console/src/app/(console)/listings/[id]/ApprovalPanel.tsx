@@ -32,7 +32,9 @@ function StepForm({
 }
 
 export function ApprovalPanel({ listing }: { listing: ListingDetail }) {
-  const [state, action] = useActionState<FormState, FormData>(changeListingStatus, { status: 'idle' });
+  const [state, action] = useActionState<FormState, FormData>(changeListingStatus, {
+    status: 'idle',
+  });
   const errors = state.fieldErrors ?? {};
 
   return (
@@ -44,7 +46,9 @@ export function ApprovalPanel({ listing }: { listing: ListingDetail }) {
         {listing.status === 'suspended' && listing.reviewNote ? (
           <Alert kind="warning">Suspended: {listing.reviewNote}</Alert>
         ) : null}
-        {state.status === 'error' && state.message ? <Alert kind="error">{state.message}</Alert> : null}
+        {state.status === 'error' && state.message ? (
+          <Alert kind="error">{state.message}</Alert>
+        ) : null}
 
         {listing.status === 'draft' ? (
           <p className="text-muted">Waiting for the partner to submit this for review.</p>

@@ -75,13 +75,17 @@ export default async function PartnerBusinessPage({ params }: { params: Promise<
         ) : (
           <Card title="Details">
             <p className="text-sm text-muted">
-              This business is {businessStatusLabels[business.approvalStatus].toLowerCase()} and cannot be
-              edited here.
+              This business is {businessStatusLabels[business.approvalStatus].toLowerCase()} and
+              cannot be edited here.
             </p>
           </Card>
         )}
 
-        <DocumentManager businessId={business.id} documents={business.documents} canUpload={canEdit} />
+        <DocumentManager
+          businessId={business.id}
+          documents={business.documents}
+          canUpload={canEdit}
+        />
       </div>
     </>
   );

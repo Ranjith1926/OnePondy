@@ -5,7 +5,12 @@ import { notFound } from 'next/navigation';
 import { Alert, Card, PageHeader } from '@/components/Display';
 import { api, ApiError } from '@/lib/api';
 import type { BusinessDetail } from '@/lib/apiTypes';
-import { businessDocumentLabels, businessStatusLabels, businessTypeLabels, formatDateTime } from '@/lib/labels';
+import {
+  businessDocumentLabels,
+  businessStatusLabels,
+  businessTypeLabels,
+  formatDateTime,
+} from '@/lib/labels';
 import { requireAdministrator } from '@/lib/session';
 
 import { ApprovalPanel } from './ApprovalPanel';
@@ -106,8 +111,14 @@ export default async function PartnerPage({
             ) : (
               <ul className="flex flex-col gap-2 text-sm">
                 {business.documents.map((document) => (
-                  <li key={document.id} className="flex items-center justify-between gap-3 border-t border-line pt-2 first:border-t-0 first:pt-0">
-                    <span>{businessDocumentLabels[document.kind]} · {formatDateTime(document.uploadedAt)}</span>
+                  <li
+                    key={document.id}
+                    className="flex items-center justify-between gap-3 border-t border-line pt-2 first:border-t-0 first:pt-0"
+                  >
+                    <span>
+                      {businessDocumentLabels[document.kind]} ·{' '}
+                      {formatDateTime(document.uploadedAt)}
+                    </span>
                     <a
                       href={`/partners/${business.id}/documents/${document.id}`}
                       target="_blank"

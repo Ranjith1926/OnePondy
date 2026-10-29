@@ -35,7 +35,8 @@ export function SlotManager({
                 className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-2 first:border-t-0 first:pt-0"
               >
                 <span>
-                  {formatDateTime(slot.startAt)} – {formatDateTime(slot.endAt)} · {slot.reservedCount}/{slot.capacity} booked
+                  {formatDateTime(slot.startAt)} – {formatDateTime(slot.endAt)} ·{' '}
+                  {slot.reservedCount}/{slot.capacity} booked
                 </span>
                 {slot.reservedCount === 0 ? (
                   <form action={removeSlot}>
@@ -56,7 +57,9 @@ export function SlotManager({
           <h3 className="font-bold">Add a slot</h3>
           <input type="hidden" name="businessId" value={businessId} />
           <input type="hidden" name="listingId" value={listingId} />
-          {state.status === 'error' && state.message ? <Alert kind="error">{state.message}</Alert> : null}
+          {state.status === 'error' && state.message ? (
+            <Alert kind="error">{state.message}</Alert>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="flex flex-col gap-1">
               <label htmlFor="startAt" className="text-sm font-semibold">

@@ -83,7 +83,12 @@ export interface PartnerUser {
 export function parsePartnerUser(value: string | undefined): PartnerUser | null {
   const data = parseJson(value) as Partial<PartnerUser> | null;
   return data && typeof data.id === 'string' && typeof data.name === 'string'
-    ? { id: data.id, name: data.name, email: data.email ?? null, phoneNumber: data.phoneNumber ?? null }
+    ? {
+        id: data.id,
+        name: data.name,
+        email: data.email ?? null,
+        phoneNumber: data.phoneNumber ?? null,
+      }
     : null;
 }
 

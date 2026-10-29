@@ -32,7 +32,9 @@ function StepForm({
 }
 
 export function ApprovalPanel({ business }: { business: BusinessDetail }) {
-  const [state, action] = useActionState<FormState, FormData>(changeBusinessStatus, { status: 'idle' });
+  const [state, action] = useActionState<FormState, FormData>(changeBusinessStatus, {
+    status: 'idle',
+  });
   const errors = state.fieldErrors ?? {};
   const needsFssai = business.businessType === 'restaurant' && !business.fssaiLicenseNumber;
 
@@ -45,12 +47,16 @@ export function ApprovalPanel({ business }: { business: BusinessDetail }) {
         {business.approvalStatus === 'suspended' && business.reviewNote ? (
           <Alert kind="warning">Suspended: {business.reviewNote}</Alert>
         ) : null}
-        {state.status === 'error' && state.message ? <Alert kind="error">{state.message}</Alert> : null}
+        {state.status === 'error' && state.message ? (
+          <Alert kind="error">{state.message}</Alert>
+        ) : null}
 
         {business.approvalStatus === 'pending' ? (
           <>
             {needsFssai ? (
-              <p className="text-muted">A restaurant needs an FSSAI licence number before it can be approved.</p>
+              <p className="text-muted">
+                A restaurant needs an FSSAI licence number before it can be approved.
+              </p>
             ) : null}
             <StepForm business={business} step="approve" action={action}>
               <SubmitButton disabled={needsFssai} pendingLabel="Approving…">

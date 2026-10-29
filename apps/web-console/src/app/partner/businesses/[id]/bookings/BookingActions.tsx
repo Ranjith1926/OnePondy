@@ -33,8 +33,16 @@ function StepForm({
   );
 }
 
-export function BookingActions({ businessId, booking }: { businessId: string; booking: BookingSummary }) {
-  const [state, action] = useActionState<FormState, FormData>(changeBookingStatus, { status: 'idle' });
+export function BookingActions({
+  businessId,
+  booking,
+}: {
+  businessId: string;
+  booking: BookingSummary;
+}) {
+  const [state, action] = useActionState<FormState, FormData>(changeBookingStatus, {
+    status: 'idle',
+  });
   const errors = state.fieldErrors ?? {};
 
   if (booking.status !== 'pending' && booking.status !== 'confirmed') {
@@ -58,7 +66,14 @@ export function BookingActions({ businessId, booking }: { businessId: string; bo
             <summary className="cursor-pointer text-sm font-semibold text-brand">Reject</summary>
             <div className="mt-3">
               <StepForm businessId={businessId} booking={booking} step="reject" action={action}>
-                <TextArea id={`reason-${booking.id}`} name="reason" label="Reason" rows={2} maxLength={500} errors={errors.reason} />
+                <TextArea
+                  id={`reason-${booking.id}`}
+                  name="reason"
+                  label="Reason"
+                  rows={2}
+                  maxLength={500}
+                  errors={errors.reason}
+                />
                 <div>
                   <SubmitButton variant="secondary" pendingLabel="Rejecting…">
                     Reject
@@ -79,7 +94,13 @@ export function BookingActions({ businessId, booking }: { businessId: string; bo
             <summary className="cursor-pointer text-sm font-semibold text-brand">Cancel</summary>
             <div className="mt-3">
               <StepForm businessId={businessId} booking={booking} step="cancel" action={action}>
-                <TextArea id={`cancel-${booking.id}`} name="reason" label="Reason (optional)" rows={2} maxLength={500} />
+                <TextArea
+                  id={`cancel-${booking.id}`}
+                  name="reason"
+                  label="Reason (optional)"
+                  rows={2}
+                  maxLength={500}
+                />
                 <div>
                   <SubmitButton variant="secondary" pendingLabel="Cancelling…">
                     Cancel booking

@@ -18,8 +18,16 @@ export function ApplyForm() {
 
   return (
     <form action={action} className="flex flex-col gap-4" noValidate>
-      {state.status === 'error' && state.message ? <Alert kind="error">{state.message}</Alert> : null}
-      <TextField id="name" label="Business name" errors={state.fieldErrors?.name} required autoFocus />
+      {state.status === 'error' && state.message ? (
+        <Alert kind="error">{state.message}</Alert>
+      ) : null}
+      <TextField
+        id="name"
+        label="Business name"
+        errors={state.fieldErrors?.name}
+        required
+        autoFocus
+      />
       <SelectField
         id="businessType"
         label="Business type"
@@ -35,7 +43,12 @@ export function ApplyForm() {
       <TextArea id="description" label="Description" errors={state.fieldErrors?.description} />
       <div className="grid gap-4 sm:grid-cols-2">
         <TextField id="phoneNumber" label="Phone number" errors={state.fieldErrors?.phoneNumber} />
-        <TextField id="email" label="Business email" type="email" errors={state.fieldErrors?.email} />
+        <TextField
+          id="email"
+          label="Business email"
+          type="email"
+          errors={state.fieldErrors?.email}
+        />
       </div>
       <TextField id="address" label="Address" errors={state.fieldErrors?.address} />
       <div className="grid gap-4 sm:grid-cols-2">
@@ -47,7 +60,12 @@ export function ApplyForm() {
         />
         <TextField id="lng" label="Longitude" errors={state.fieldErrors?.longitude} />
       </div>
-      <TextField id="gstin" label="GSTIN" hint="Your GST registration number, if you have one." errors={state.fieldErrors?.gstin} />
+      <TextField
+        id="gstin"
+        label="GSTIN"
+        hint="Your GST registration number, if you have one."
+        errors={state.fieldErrors?.gstin}
+      />
       <TextField
         id="fssaiLicenseNumber"
         label="FSSAI licence number"

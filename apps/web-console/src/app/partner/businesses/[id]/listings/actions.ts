@@ -2,7 +2,7 @@
 
 import { redirect } from 'next/navigation';
 
-import { partnerApi } from '@/lib/api';
+import { ApiError, partnerApi } from '@/lib/api';
 import type { AvailabilitySlot, ListingDetail } from '@/lib/apiTypes';
 import { failureState, validationState, type FormState } from '@/lib/formState';
 
@@ -60,10 +60,13 @@ export async function updateListing(_previous: FormState, form: FormData): Promi
 export async function submitListing(form: FormData): Promise<void> {
   const businessId = String(form.get('businessId') ?? '');
   const id = String(form.get('id') ?? '');
-  await partnerApi<ListingDetail>(`/api/v1/partner/businesses/${businessId}/listings/${id}/submit`, {
-    method: 'POST',
-    json: { version: Number(form.get('version')) },
-  });
+  await partnerApi<ListingDetail>(
+    `/api/v1/partner/businesses/${businessId}/listings/${id}/submit`,
+    {
+      method: 'POST',
+      json: { version: Number(form.get('version')) },
+    },
+  );
   redirect(`/partner/businesses/${businessId}/listings/${id}?done=submit`);
 }
 
@@ -78,10 +81,17 @@ export async function createSlot(_previous: FormState, form: FormData): Promise<
   }
 
   try {
-    await partnerApi<AvailabilitySlot>(`/api/v1/partner/businesses/${businessId}/listings/${listingId}/slots`, {
-      method: 'POST',
-      json: { startAt: new Date(startAt).toISOString(), endAt: new Date(endAt).toISOString(), capacity },
-    });
+    await partnerApi<AvailabilitySlot>(
+      `/api/v1/partner/businesses/${businessId}/listings/${listingId}/slots`,
+      {
+        method: 'POST',
+        json: {
+          startAt: new Date(startAt).toISOString(),
+          endAt: new Date(endAt).toISOString(),
+          capacity,
+        },
+      },
+    );
   } catch (error) {
     return failureState(error);
   }
@@ -93,6 +103,20 @@ export async function removeSlot(form: FormData): Promise<void> {
   const businessId = String(form.get('businessId') ?? '');
   const listingId = String(form.get('listingId') ?? '');
   const slotId = String(form.get('slotId') ?? '');
-  await partnerApi<void>(`/api/v1/partner/businesses/${businessId}/listings/${listingId}/slots/${slotId}`, { method: 'DELETE' });
-  redirect(`/partner/businesses/${businessId}/listings/${listingId}#slots`);
+  let refused = false;
+  try {
+    await partnerApi<void>(
+      `/api/v1/partner/businesses/${businessId}/listings/${listingId}/slots/${slotId}`,
+      { method: 'DELETE' },
+    );
+  } catch (error) {
+    // A time that ever had a booking keeps its history, so it cannot be removed.
+    if (!(error instanceof ApiError && error.status === 409)) {
+      throw error;
+    }
+    refused = true;
+  }
+  redirect(
+    `/partner/businesses/${businessId}/listings/${listingId}${refused ? '?slot=kept' : ''}#slots`,
+  );
 }

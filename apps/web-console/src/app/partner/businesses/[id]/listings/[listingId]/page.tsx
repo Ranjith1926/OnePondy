@@ -23,7 +23,9 @@ async function loadListing(businessId: string, id: string): Promise<ListingDetai
     notFound();
   }
   try {
-    return await partnerApi<ListingDetail>(`/api/v1/partner/businesses/${businessId}/listings/${id}`);
+    return await partnerApi<ListingDetail>(
+      `/api/v1/partner/businesses/${businessId}/listings/${id}`,
+    );
   } catch (error) {
     if (error instanceof ApiError && error.status === 404) {
       notFound();
@@ -37,13 +39,15 @@ export default async function PartnerListingPage({
   searchParams,
 }: {
   params: Promise<{ id: string; listingId: string }>;
-  searchParams: Promise<{ saved?: string; done?: string }>;
+  searchParams: Promise<{ saved?: string; done?: string; slot?: string }>;
 }) {
   const { id: businessId, listingId } = await params;
-  const { saved, done } = await searchParams;
+  const { saved, done, slot } = await searchParams;
   const [listing, slots] = await Promise.all([
     loadListing(businessId, listingId),
-    partnerApi<AvailabilitySlot[]>(`/api/v1/partner/businesses/${businessId}/listings/${listingId}/slots`),
+    partnerApi<AvailabilitySlot[]>(
+      `/api/v1/partner/businesses/${businessId}/listings/${listingId}/slots`,
+    ),
   ]);
   const canEdit = listing.status === 'draft';
   const notice = saved ? 'Changes saved.' : done ? doneMessages[done] : undefined;
@@ -51,11 +55,17 @@ export default async function PartnerListingPage({
   return (
     <>
       <p className="mb-2 text-sm">
-        <Link href={`/partner/businesses/${businessId}/listings`} className="font-semibold text-brand hover:underline">
+        <Link
+          href={`/partner/businesses/${businessId}/listings`}
+          className="font-semibold text-brand hover:underline"
+        >
           ← Listings
         </Link>
       </p>
-      <PageHeader title={listing.title} description={`Status: ${listingStatusLabels[listing.status]}`} />
+      <PageHeader
+        title={listing.title}
+        description={`Status: ${listingStatusLabels[listing.status]}`}
+      />
       {notice ? (
         <div className="mb-6">
           <Alert kind="success">{notice}</Alert>
@@ -63,12 +73,22 @@ export default async function PartnerListingPage({
       ) : null}
       {listing.status === 'draft' && listing.reviewNote ? (
         <div className="mb-6">
-          <Alert kind="error">Sent back: {listing.reviewNote} Edit and submit again when ready.</Alert>
+          <Alert kind="error">
+            Sent back: {listing.reviewNote} Edit and submit again when ready.
+          </Alert>
         </div>
       ) : null}
       {listing.status === 'suspended' && listing.reviewNote ? (
         <div className="mb-6">
           <Alert kind="warning">Suspended: {listing.reviewNote}</Alert>
+        </div>
+      ) : null}
+      {slot === 'kept' ? (
+        <div className="mb-6">
+          <Alert kind="warning">
+            That time has booking history, so it cannot be removed. It keeps its record of who
+            booked it.
+          </Alert>
         </div>
       ) : null}
 
@@ -86,12 +106,15 @@ export default async function PartnerListingPage({
             </div>
           ) : (
             <p className="text-sm text-muted">
-              This listing is {listingStatusLabels[listing.status].toLowerCase()} and cannot be edited here.
+              This listing is {listingStatusLabels[listing.status].toLowerCase()} and cannot be
+              edited here.
             </p>
           )}
         </Card>
 
-        {listing.isBookable ? <SlotManager businessId={businessId} listingId={listing.id} slots={slots} /> : null}
+        {listing.isBookable ? (
+          <SlotManager businessId={businessId} listingId={listing.id} slots={slots} />
+        ) : null}
       </div>
     </>
   );

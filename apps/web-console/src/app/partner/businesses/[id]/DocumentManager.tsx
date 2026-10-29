@@ -39,7 +39,9 @@ export function DocumentManager({
               >
                 <div>
                   <p className="font-semibold">{businessDocumentLabels[document.kind]}</p>
-                  <p className="text-xs text-muted">Uploaded {formatDateTime(document.uploadedAt)}</p>
+                  <p className="text-xs text-muted">
+                    Uploaded {formatDateTime(document.uploadedAt)}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <a
@@ -64,11 +66,17 @@ export function DocumentManager({
         )}
 
         {canUpload ? (
-          <form action={action} className="flex flex-col gap-3 border-t border-line pt-4" noValidate>
+          <form
+            action={action}
+            className="flex flex-col gap-3 border-t border-line pt-4"
+            noValidate
+          >
             <h3 className="font-bold">Upload a document</h3>
             <p className="text-sm text-muted">PDF, JPEG or PNG up to 10 MB.</p>
             <input type="hidden" name="id" value={businessId} />
-            {state.status === 'error' && state.message ? <Alert kind="error">{state.message}</Alert> : null}
+            {state.status === 'error' && state.message ? (
+              <Alert kind="error">{state.message}</Alert>
+            ) : null}
             <div className="flex flex-col gap-1">
               <label htmlFor="file" className="text-sm font-semibold">
                 File

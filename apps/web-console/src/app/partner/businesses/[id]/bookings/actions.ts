@@ -9,14 +9,18 @@ import { failureState, validationState, type FormState } from '@/lib/formState';
 const steps = ['accept', 'reject', 'cancel', 'complete'] as const;
 type Step = (typeof steps)[number];
 
-const isStep = (value: unknown): value is Step => typeof value === 'string' && (steps as readonly string[]).includes(value);
+const isStep = (value: unknown): value is Step =>
+  typeof value === 'string' && (steps as readonly string[]).includes(value);
 
 function optional(form: FormData, name: string): string | null {
   const value = form.get(name);
   return typeof value === 'string' && value.trim() ? value.trim() : null;
 }
 
-export async function changeBookingStatus(_previous: FormState, form: FormData): Promise<FormState> {
+export async function changeBookingStatus(
+  _previous: FormState,
+  form: FormData,
+): Promise<FormState> {
   const businessId = String(form.get('businessId') ?? '');
   const id = String(form.get('id') ?? '');
   const step = form.get('step');
@@ -30,10 +34,13 @@ export async function changeBookingStatus(_previous: FormState, form: FormData):
   }
 
   try {
-    await partnerApi<BookingDetail>(`/api/v1/partner/businesses/${businessId}/bookings/${id}/${step}`, {
-      method: 'POST',
-      json: { version: Number(form.get('version')), reason },
-    });
+    await partnerApi<BookingDetail>(
+      `/api/v1/partner/businesses/${businessId}/bookings/${id}/${step}`,
+      {
+        method: 'POST',
+        json: { version: Number(form.get('version')), reason },
+      },
+    );
   } catch (error) {
     return failureState(error);
   }

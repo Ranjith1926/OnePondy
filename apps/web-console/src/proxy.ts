@@ -38,7 +38,11 @@ interface SessionCookies {
   signInPath: string;
 }
 
-const staffCookies: SessionCookies = { session: SESSION_COOKIE, user: USER_COOKIE, signInPath: '/sign-in' };
+const staffCookies: SessionCookies = {
+  session: SESSION_COOKIE,
+  user: USER_COOKIE,
+  signInPath: '/sign-in',
+};
 const partnerCookies: SessionCookies = {
   session: PARTNER_SESSION_COOKIE,
   user: PARTNER_USER_COOKIE,
@@ -99,10 +103,15 @@ async function handleSession(request: NextRequest, cookies: SessionCookies) {
 }
 
 export async function proxy(request: NextRequest) {
-  return handleSession(request, request.nextUrl.pathname.startsWith('/partner') ? partnerCookies : staffCookies);
+  return handleSession(
+    request,
+    request.nextUrl.pathname.startsWith('/partner') ? partnerCookies : staffCookies,
+  );
 }
 
 export const config = {
   // Everything except both sign-in pages, the session-ended handler, photos and Next.js assets.
-  matcher: ['/((?!sign-in|partner/sign-in|session-expired|media/|_next/static|_next/image|favicon.ico).*)'],
+  matcher: [
+    '/((?!sign-in|partner/sign-in|session-expired|media/|_next/static|_next/image|favicon.ico).*)',
+  ],
 };
