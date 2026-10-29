@@ -137,10 +137,14 @@ public sealed class TourismApiTests : IAsyncLifetime
     {
         using var client = Factory.CreateClient();
         var editor = await EditorTokenAsync();
-        var (beachId, _) = await PublishedPlaceAsync(client, editor, "Distance Test Beach", 11.8915, 79.8257);
-        var (lakeId, _) = await PublishedPlaceAsync(client, editor, "Distance Test Lake", 11.9562, 79.7429);
 
-        var result = await ReadAsync(await client.GetAsync("/api/v1/places?lat=11.9&lng=79.83"));
+        // A tag unique to this run, so the test still finds its two places when the database already
+        // holds many others (the default page would otherwise push them off the list).
+        var tag = Guid.NewGuid().ToString("N")[..8];
+        var (beachId, _) = await PublishedPlaceAsync(client, editor, $"Distance Test Beach {tag}", 11.8915, 79.8257);
+        var (lakeId, _) = await PublishedPlaceAsync(client, editor, $"Distance Test Lake {tag}", 11.9562, 79.7429);
+
+        var result = await ReadAsync(await client.GetAsync($"/api/v1/places?lat=11.9&lng=79.83&q={tag}"));
         var ids = result.GetProperty("items").EnumerateArray().Select(p => p.GetProperty("id").GetString()).ToList();
 
         Assert.True(ids.IndexOf(beachId) < ids.IndexOf(lakeId));

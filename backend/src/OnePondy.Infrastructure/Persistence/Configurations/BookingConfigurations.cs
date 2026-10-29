@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnePondy.Application.Bookings;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Listings;
+using OnePondy.Infrastructure.Identity;
 
 namespace OnePondy.Infrastructure.Persistence.Configurations;
 
@@ -63,8 +64,11 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
             .HasPrincipalKey("Id", "BusinessId")
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Bookings outlive the customer's account, which is anonymised rather than deleted (spec §17.3).
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(b => b.CustomerUserId).OnDelete(DeleteBehavior.Restrict);
+
         builder.HasIndex(b => new { b.CustomerUserId, b.IdempotencyKey }).IsUnique().HasDatabaseName("ux_bookings_idempotency");
-        builder.HasIndex(b => new { b.CustomerUserId, b.CreatedAt }).HasDatabaseName("ix_bookings_customer_created");
+        builder.HasIndex(b => new { b.CustomerUserId, b.CreatedAt }).IsDescending(false, true).HasDatabaseName("ix_bookings_customer_created");
         builder.HasIndex(b => new { b.BusinessId, b.Status, b.StartAt }).HasDatabaseName("ix_bookings_business_status");
         builder.HasIndex(b => b.ExpiresAt)
             .HasDatabaseName("ix_bookings_hold_expiry")
@@ -74,12 +78,19 @@ public sealed class BookingConfiguration : IEntityTypeConfiguration<Booking>
         {
             history.ToTable("booking_status_history", table =>
             {
+                table.HasCheckConstraint(
+                    "ck_booking_history_status",
+                    $"new_status IN ({SnakeCaseEnum<BookingStatus>.SqlList}) AND (previous_status IS NULL OR previous_status IN ({SnakeCaseEnum<BookingStatus>.SqlList}))");
                 table.HasCheckConstraint("ck_booking_history_actor_type", $"changed_by_type IN ({SnakeCaseEnum<BookingActorType>.SqlList})");
                 table.HasCheckConstraint(
                     "ck_booking_history_actor",
                     $"(changed_by_type = '{SnakeCaseEnum<BookingActorType>.ToDatabase(BookingActorType.System)}') = (changed_by_user_id IS NULL)");
             });
+            // Append-only and never cascade-deleted (spec §17.3). In the database the foreign key is
+            // RESTRICT and a trigger rejects UPDATE and DELETE (migration HardenBookingSchema); EF
+            // cannot record a non-cascade ownership key in its model snapshot, so that part lives in SQL.
             history.WithOwner().HasForeignKey("BookingId");
+            history.HasOne<ApplicationUser>().WithMany().HasForeignKey(h => h.ActorUserId).OnDelete(DeleteBehavior.Restrict);
             history.HasKey(h => h.Id);
             history.Property(h => h.Id).ValueGeneratedNever();
             history.Property(h => h.PreviousStatus).HasConversion(SnakeCaseEnum<BookingStatus>.Converter).HasMaxLength(32).HasColumnName("previous_status");

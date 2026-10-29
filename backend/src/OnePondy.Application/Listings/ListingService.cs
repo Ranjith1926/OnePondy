@@ -356,7 +356,9 @@ public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, Time
             return ListingErrors.SlotNotFound;
         }
 
-        if (slot.ReservedCount > 0)
+        // Places still held, or any booking that ever used this slot, even a cancelled one: its
+        // history must keep pointing at the slot (the database refuses the delete otherwise).
+        if (slot.ReservedCount > 0 || await db.BookingSlots.AsNoTracking().AnyAsync(bs => bs.SlotId == slotId, cancellationToken))
         {
             return ListingErrors.SlotHasReservations;
         }

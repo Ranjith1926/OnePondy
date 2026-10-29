@@ -386,6 +386,7 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasFilter("status IN ('pending', 'awaiting_payment')");
 
                     b.HasIndex("CustomerUserId", "CreatedAt")
+                        .IsDescending(false, true)
                         .HasDatabaseName("ix_bookings_customer_created");
 
                     b.HasIndex("CustomerUserId", "IdempotencyKey")
@@ -1625,6 +1626,13 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
             modelBuilder.Entity("OnePondy.Domain.Bookings.Booking", b =>
                 {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_bookings_app_users_customer_user_id");
+
                     b.HasOne("OnePondy.Domain.Listings.Listing", null)
                         .WithMany()
                         .HasForeignKey("ListingId", "BusinessId")
@@ -1676,6 +1684,9 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                             b1.HasKey("Id")
                                 .HasName("pk_booking_status_history");
 
+                            b1.HasIndex("ActorUserId")
+                                .HasDatabaseName("ix_booking_status_history_actor_user_id");
+
                             b1.HasIndex("BookingId", "CreatedAt")
                                 .HasDatabaseName("ix_booking_status_history_booking_time");
 
@@ -1684,7 +1695,15 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                                     t.HasCheckConstraint("ck_booking_history_actor", "(changed_by_type = 'system') = (changed_by_user_id IS NULL)");
 
                                     t.HasCheckConstraint("ck_booking_history_actor_type", "changed_by_type IN ('customer', 'partner', 'admin', 'system')");
+
+                                    t.HasCheckConstraint("ck_booking_history_status", "new_status IN ('pending', 'awaiting_payment', 'confirmed', 'failed', 'expired', 'rejected', 'cancelled', 'refund_pending', 'refunded', 'completed') AND (previous_status IS NULL OR previous_status IN ('pending', 'awaiting_payment', 'confirmed', 'failed', 'expired', 'rejected', 'cancelled', 'refund_pending', 'refunded', 'completed'))");
                                 });
+
+                            b1.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                                .WithMany()
+                                .HasForeignKey("ActorUserId")
+                                .OnDelete(DeleteBehavior.Restrict)
+                                .HasConstraintName("fk_booking_status_history_app_users_actor_user_id");
 
                             b1.WithOwner()
                                 .HasForeignKey("BookingId")

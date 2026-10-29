@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
+using Npgsql;
 using OnePondy.Application.Bookings;
 using OnePondy.Application.Identity;
 using OnePondy.Domain.Identity;
@@ -265,6 +266,79 @@ public sealed class BookingApiTests : IAsyncLifetime
         await using var scope = Factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
         Assert.False(await db.SavedListings.AnyAsync(s => s.UserId == userId));
+    }
+
+    [DatabaseFact]
+    public async Task Two_customers_racing_for_the_last_place_never_both_get_it()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+
+        // Several rounds, each on a fresh one-place slot, because a single race may not interleave.
+        for (var round = 0; round < 6; round++)
+        {
+            var (_, _, listingId, slotId) = await PublishedListingAsync(client, admin, capacity: 1);
+            var first = await SignInCustomerAsync(client);
+            var second = await SignInCustomerAsync(client);
+
+            var responses = await Task.WhenAll(
+                SendAsync(client, HttpMethod.Post, "/api/v1/bookings", first, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }),
+                SendAsync(client, HttpMethod.Post, "/api/v1/bookings", second, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+
+            var codes = responses.Select(r => r.StatusCode).OrderBy(c => c).ToList();
+            Assert.Equal([HttpStatusCode.Created, HttpStatusCode.Conflict], codes);
+
+            var slots = await ReadAsync(await client.GetAsync($"/api/v1/listings/{listingId}/availability"));
+            Assert.Equal(1, Assert.Single(slots.EnumerateArray()).GetProperty("reservedCount").GetInt32());
+        }
+    }
+
+    [DatabaseFact]
+    public async Task A_slot_with_booking_history_is_refused_cleanly_rather_than_failing()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (owner, businessId, listingId, slotId) = await PublishedListingAsync(client, admin);
+        var customer = await SignInCustomerAsync(client);
+        var booking = await ReadAsync(await SendAsync(
+            client, HttpMethod.Post, "/api/v1/bookings", customer, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+        await ReadAsync(await SendAsync(
+            client,
+            HttpMethod.Post,
+            $"/api/v1/bookings/{booking.GetProperty("id").GetString()}/cancel",
+            customer,
+            new { version = booking.GetProperty("version").GetUInt32() }));
+
+        var removed = await SendAsync(client, HttpMethod.Delete, $"/api/v1/partner/businesses/{businessId}/listings/{listingId}/slots/{slotId}", owner);
+
+        Assert.Equal(HttpStatusCode.Conflict, removed.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task A_bookings_status_history_cannot_be_changed_or_removed()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (_, _, listingId, slotId) = await PublishedListingAsync(client, admin);
+        var customer = await SignInCustomerAsync(client);
+        var booking = await ReadAsync(await SendAsync(
+            client, HttpMethod.Post, "/api/v1/bookings", customer, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+        var bookingId = Guid.Parse(booking.GetProperty("id").GetString()!);
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
+
+        var update = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("UPDATE booking_status_history SET reason = 'edited'"));
+        var delete = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("DELETE FROM booking_status_history"));
+        var truncate = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("TRUNCATE booking_status_history"));
+        Assert.Contains("append-only", update.MessageText);
+        Assert.Contains("append-only", delete.MessageText);
+        Assert.Contains("append-only", truncate.MessageText);
+
+        // A booking with history cannot be deleted either: the history is never cascade-deleted.
+        var deleteBooking = await Assert.ThrowsAsync<PostgresException>(
+            () => db.Database.ExecuteSqlAsync($"DELETE FROM bookings WHERE id = {bookingId}"));
+        Assert.Equal(PostgresErrorCodes.RestrictViolation, deleteBooking.SqlState);
     }
 
     [DatabaseFact]

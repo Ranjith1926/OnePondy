@@ -110,6 +110,17 @@ public class BookingServiceTests
     }
 
     [Fact]
+    public async Task A_slot_that_was_ever_booked_cannot_be_removed_even_after_the_booking_is_cancelled()
+    {
+        var created = (await _harness.Bookings.CreateAsync(_harness.Customer, _harness.Input(), default)).Value!;
+        await _harness.Bookings.CancelMineAsync(created.Id, _harness.Customer, null, created.Version, default);
+
+        var removed = await _harness.Listings.DeleteSlotAsync(_harness.ListingId, _harness.SlotId, _harness.Owner, default);
+
+        Assert.Equal("slot_has_reservations", removed!.Code);
+    }
+
+    [Fact]
     public async Task Expiring_an_overdue_hold_releases_its_slot()
     {
         var created = (await _harness.Bookings.CreateAsync(_harness.Customer, _harness.Input(), default)).Value!;
