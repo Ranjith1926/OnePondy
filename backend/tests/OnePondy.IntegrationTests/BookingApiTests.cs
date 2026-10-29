@@ -30,7 +30,13 @@ public sealed class BookingApiTests : IAsyncLifetime
             return;
         }
 
-        _factory = new ApiFactory(connectionString);
+        // Codes can be re-requested at once here (the deletion test asks for two); the limits
+        // themselves are covered by unit tests.
+        _factory = new ApiFactory(connectionString, new Dictionary<string, string>
+        {
+            ["Auth:Otp:ResendInterval"] = "00:00:00",
+            ["Auth:Otp:MaxPerDestination"] = "100",
+        });
         await TestDatabase.MigrateOnceAsync(_factory.Services);
     }
 
@@ -56,7 +62,9 @@ public sealed class BookingApiTests : IAsyncLifetime
         return tokens.AccessToken.Value;
     }
 
-    private async Task<string> SignInCustomerAsync(HttpClient client)
+    private async Task<string> SignInCustomerAsync(HttpClient client) => (await SignInWithPhoneAsync(client)).Token;
+
+    private async Task<(string Token, string Phone)> SignInWithPhoneAsync(HttpClient client)
     {
         var phone = ApiFactory.NewIndianMobile();
         var requested = await client.PostAsJsonAsync("/api/v1/auth/otp/request", new { channel = "sms", destination = phone });
@@ -64,7 +72,19 @@ public sealed class BookingApiTests : IAsyncLifetime
         var verified = await client.PostAsJsonAsync(
             "/api/v1/auth/otp/verify",
             new { challengeId, code = Factory.Codes.For("+91" + phone) });
-        return (await ReadAsync(verified)).GetProperty("accessToken").GetString()!;
+        return ((await ReadAsync(verified)).GetProperty("accessToken").GetString()!, phone);
+    }
+
+    /// <summary>Asks to delete the account with the one-time code the API "sent", and returns the confirm response.</summary>
+    private async Task<HttpResponseMessage> TryDeleteAccountAsync(HttpClient client, string token, string phone)
+    {
+        var requested = await ReadAsync(await SendAsync(client, HttpMethod.Post, "/api/v1/account/deletion/code", token));
+        return await SendAsync(
+            client,
+            HttpMethod.Post,
+            "/api/v1/account/deletion/confirm",
+            token,
+            new { challengeId = requested.GetProperty("challengeId").GetString(), code = Factory.Codes.For("+91" + phone) });
     }
 
     /// <summary>Applies as a partner, approves the business, and creates, submits and publishes a bookable listing with one slot.</summary>
@@ -185,6 +205,66 @@ public sealed class BookingApiTests : IAsyncLifetime
         Assert.Single(pending.EnumerateArray());
         var confirmed = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/bookings?status=confirmed", owner));
         Assert.Empty(confirmed.EnumerateArray());
+    }
+
+    [DatabaseFact]
+    public async Task Saving_a_listing_needs_it_to_be_live_and_is_idempotent()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (owner, businessId, listingId, _) = await PublishedListingAsync(client, admin);
+        var draft = await ReadAsync(await SendAsync(
+            client,
+            HttpMethod.Post,
+            $"/api/v1/partner/businesses/{businessId}/listings",
+            owner,
+            new { listingType = "activity", title = "Not live yet", isBookable = true, basePrice = 100, freeCancellationHours = 1, refundPercentage = 0 }));
+        var customer = await SignInCustomerAsync(client);
+
+        var draftSave = await SendAsync(client, HttpMethod.Post, "/api/v1/saved-listings", customer, new { listingId = draft.GetProperty("id").GetString() });
+        Assert.Equal(HttpStatusCode.BadRequest, draftSave.StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(client, HttpMethod.Post, "/api/v1/saved-listings", customer, new { listingId })).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(client, HttpMethod.Post, "/api/v1/saved-listings", customer, new { listingId })).StatusCode);
+
+        var saved = await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/saved-listings", customer));
+        Assert.Equal("Sunset Kayak Tour", Assert.Single(saved.EnumerateArray()).GetProperty("listing").GetProperty("title").GetString());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(client, HttpMethod.Delete, $"/api/v1/saved-listings/{listingId}", customer)).StatusCode);
+        Assert.Empty((await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/saved-listings", customer))).EnumerateArray());
+    }
+
+    [DatabaseFact]
+    public async Task Deleting_an_account_waits_for_bookings_in_progress()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (_, _, listingId, slotId) = await PublishedListingAsync(client, admin);
+        var (customer, phone) = await SignInWithPhoneAsync(client);
+        var userId = Guid.Parse((await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/profile", customer))).GetProperty("id").GetString()!);
+        await SendAsync(client, HttpMethod.Post, "/api/v1/saved-listings", customer, new { listingId });
+        var booking = await ReadAsync(await SendAsync(
+            client, HttpMethod.Post, "/api/v1/bookings", customer, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+
+        // The signed-in user hears about it before any code is sent.
+        var blocked = await SendAsync(client, HttpMethod.Post, "/api/v1/account/deletion/code", customer);
+        Assert.Equal(HttpStatusCode.Conflict, blocked.StatusCode);
+        var problem = await blocked.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("deletion_blocked", problem.GetProperty("code").GetString());
+        Assert.Contains("bookings_in_progress", problem.GetProperty("reasons").EnumerateArray().Select(r => r.GetString()));
+
+        await ReadAsync(await SendAsync(
+            client,
+            HttpMethod.Post,
+            $"/api/v1/bookings/{booking.GetProperty("id").GetString()}/cancel",
+            customer,
+            new { version = booking.GetProperty("version").GetUInt32() }));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await TryDeleteAccountAsync(client, customer, phone)).StatusCode);
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
+        Assert.False(await db.SavedListings.AnyAsync(s => s.UserId == userId));
     }
 
     [DatabaseFact]

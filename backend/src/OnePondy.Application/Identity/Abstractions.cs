@@ -73,10 +73,7 @@ public interface IAccountDeletionGuard
     Task<IReadOnlyList<string>> GetBlockersAsync(Guid userId, CancellationToken cancellationToken);
 }
 
-/// <summary>
-/// No bookings, orders or refunds exist before Phases 6–8, so nothing blocks deletion yet. Those
-/// modules will contribute their own checks.
-/// </summary>
+/// <summary>A guard with nothing to check, for tests of the deletion flow itself.</summary>
 public sealed class NoCommitmentsDeletionGuard : IAccountDeletionGuard
 {
     public Task<IReadOnlyList<string>> GetBlockersAsync(Guid userId, CancellationToken cancellationToken) =>

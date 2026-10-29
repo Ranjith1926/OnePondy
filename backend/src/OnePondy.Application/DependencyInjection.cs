@@ -27,7 +27,7 @@ public static class DependencyInjection
         services.Configure<TripPlannerOptions>(configuration.GetSection(TripPlannerOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
-        services.TryAddScoped<IAccountDeletionGuard, NoCommitmentsDeletionGuard>();
+        services.TryAddScoped<IAccountDeletionGuard, BookingsDeletionGuard>();
 
         services.AddScoped<OtpChallengeService>();
         services.AddScoped<AuthService>();
@@ -47,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<TripPlannerService>();
         services.AddScoped<BusinessService>();
         services.AddScoped<ListingService>();
+        services.AddScoped<SavedListingsService>();
         services.AddScoped<BookingService>();
         services.AddScoped<BookingHoldExpiry>();
 

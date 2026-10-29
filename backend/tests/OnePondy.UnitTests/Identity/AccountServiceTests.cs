@@ -48,12 +48,29 @@ public class AccountServiceTests
     }
 
     [Fact]
-    public async Task Deletion_waits_for_activity_in_progress()
+    public async Task No_deletion_code_is_sent_while_activity_is_in_progress()
     {
         var harness = new AuthHarness(deletionGuard: new BlockingDeletionGuard("booking_in_progress"));
         var signedIn = await harness.SignInAsync();
         harness.Time.Advance(TimeSpan.FromMinutes(1));
+        var signInCode = harness.Sender.LastCodes[Phone];
+
         var requested = await harness.AccountService.RequestDeletionCodeAsync(signedIn.User.Id, None);
+
+        Assert.Equal("deletion_blocked", requested.Error?.Code);
+        Assert.Equal(["booking_in_progress"], requested.Error?.Reasons);
+        Assert.Equal(signInCode, harness.Sender.LastCodes[Phone]);
+    }
+
+    [Fact]
+    public async Task Deletion_still_waits_for_activity_that_started_after_the_code_was_sent()
+    {
+        var guard = new ToggleDeletionGuard();
+        var harness = new AuthHarness(deletionGuard: guard);
+        var signedIn = await harness.SignInAsync();
+        harness.Time.Advance(TimeSpan.FromMinutes(1));
+        var requested = await harness.AccountService.RequestDeletionCodeAsync(signedIn.User.Id, None);
+        guard.Reasons = ["booking_in_progress"];
 
         var error = await harness.AccountService.DeleteAccountAsync(
             signedIn.User.Id,

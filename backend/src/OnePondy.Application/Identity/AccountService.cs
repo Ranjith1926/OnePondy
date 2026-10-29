@@ -45,13 +45,23 @@ public sealed class AccountService(
             : AuthErrors.AccountNotFound;
     }
 
-    /// <summary>Sends a code to the account's own contact; deleting requires proof of access to it.</summary>
+    /// <summary>
+    /// Sends a code to the account's own contact; deleting requires proof of access to it. A signed-in
+    /// user is told up front what must finish first, so no code is wasted on a deletion that cannot
+    /// go ahead. (The public form cannot do this: it must not reveal whether an account exists.)
+    /// </summary>
     public async Task<Result<OtpRequested>> RequestDeletionCodeAsync(Guid userId, CancellationToken cancellationToken)
     {
         var contact = await accounts.GetContactAsync(userId, cancellationToken);
         if (contact is null)
         {
             return AuthErrors.AccountNotFound;
+        }
+
+        var blockers = await deletionGuard.GetBlockersAsync(userId, cancellationToken);
+        if (blockers.Count > 0)
+        {
+            return AuthErrors.DeletionBlocked(blockers);
         }
 
         return await challenges.IssueAsync(
@@ -155,6 +165,7 @@ public sealed class AccountService(
         // deletes saved places ... and itineraries". Loaded and removed rather than ExecuteDelete, so
         // this works the same against every provider, including the in-memory one tests use.
         db.SavedPlaces.RemoveRange(await db.SavedPlaces.Where(s => s.UserId == userId).ToListAsync(cancellationToken));
+        db.SavedListings.RemoveRange(await db.SavedListings.Where(s => s.UserId == userId).ToListAsync(cancellationToken));
         db.Itineraries.RemoveRange(await db.Itineraries.Where(i => i.UserId == userId).ToListAsync(cancellationToken));
 
         await db.SaveChangesAsync(cancellationToken);

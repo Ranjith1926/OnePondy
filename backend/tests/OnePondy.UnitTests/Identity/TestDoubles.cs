@@ -298,6 +298,15 @@ public sealed class FakeAccessTokenIssuer(TimeProvider time) : IAccessTokenIssue
         new($"access:{userId}:{sessionId}", time.GetUtcNow().AddMinutes(15));
 }
 
+/// <summary>A guard whose blockers can change mid-test, like a booking made after a code was sent.</summary>
+public sealed class ToggleDeletionGuard : IAccountDeletionGuard
+{
+    public IReadOnlyList<string> Reasons { get; set; } = [];
+
+    public Task<IReadOnlyList<string>> GetBlockersAsync(Guid userId, CancellationToken cancellationToken) =>
+        Task.FromResult(Reasons);
+}
+
 public sealed class BlockingDeletionGuard(params string[] reasons) : IAccountDeletionGuard
 {
     public Task<IReadOnlyList<string>> GetBlockersAsync(Guid userId, CancellationToken cancellationToken) =>
