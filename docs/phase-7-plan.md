@@ -368,9 +368,13 @@ attempt in any state except already captured, because a customer can still pay a
   signed-in API, so a forged link reveals nothing. While the app is open a notification shows as a quiet banner.
 - **Push needs an Expo project.** An Android phone cannot get an Expo push token without an EAS `projectId` (and Firebase). Until that
   exists in the app config, registration quietly does nothing ("unavailable"), so the rest of the app is unaffected.
-- **Not yet verified on a real checkout.** Razorpay's "customer closed Checkout" error code is taken as 2 (its documented
-  Android value); confirm it on a device with a test card, because a wrong value would show a closed Checkout as "failed" rather
-  than "cancelled" (harmless, only the wording differs).
+- **Emulator run (2026-10-29), partial.** Against a local API and scratch database with the Razorpay test keys: sign-in, booking,
+  the partner's accept, the pay card (amount, countdown, cancel), a real Razorpay test order and the launch of Checkout all worked, and a
+  Checkout that could not load ended as "didn't go through" with Pay still available. A test-card payment to `confirmed` was **not**
+  completed because Razorpay Checkout crashes the emulator on the development PC (QEMU access violation, whatever the graphics mode).
+  Still to do on a physical Android phone: pay with a test card, see the booking become `confirmed` with its receipt, and confirm
+  Razorpay's "customer closed Checkout" code, taken as 2 (a wrong value would show a closed Checkout as "failed" rather than
+  "cancelled": harmless, only the wording differs).
 - **Tests.** Backend: 11 unit tests (receipt, refunds, refresh) and 4 integration tests (owner confirms through the refresh, a stranger
   and anonymous are refused, a booking not awaiting payment is returned untouched, a late payment after cancelling shows its refund).
   App: the pay flow (every outcome, polling, server over checkout), the Checkout error mapping, push registration (every branch),

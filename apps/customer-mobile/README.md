@@ -14,6 +14,13 @@ npm start         # later runs: start Metro and open the installed OnePondy app
 
 Copy `.env.example` to `.env` to point the app at your local API.
 
+Emulator gotchas found while testing payments: if a page inside the app cannot load (Razorpay Checkout shows
+`ERR_NAME_NOT_RESOLVED`), start the emulator with `-dns-server 8.8.8.8`. An emulator restored from its quick-boot snapshot
+rolls back anything installed since, including a rebuilt development build; start it with `-no-snapshot` after installing, or
+reinstall the APK (`android/app/build/outputs/apk/debug`). Metro and the IIS-hosted API both default to port 8081, so run Metro
+on another port (`npx expo start --dev-client --port 8082`) and open the app with
+`adb shell am start -a android.intent.action.VIEW -d "exp+onepondy://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8082"`.
+
 In development builds, **Profile > Developer > Component gallery** shows every design-system
 component and state (loading, empty, error, offline) for visual QA in light and dark mode.
 

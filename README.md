@@ -557,10 +557,15 @@ a real PostgreSQL 18 database, three consecutive runs.
 
 Known limitations:
 
-- **Not yet driven end to end on a device.** The Android development build was rebuilt with Razorpay Checkout and notifications and
-  installed, but a test-card payment through the emulator against a local API was not run, and the console's new pages were checked
-  with lint, types, component tests and a production build, not clicked through in a browser. Razorpay's code for "customer closed
-  Checkout" is taken as 2 and should be confirmed on a device (a wrong value only changes the wording shown).
+- **Driven on the Android emulator up to Razorpay Checkout, not through it.** Against a local API and a scratch database (Razorpay test
+  keys), the app signed in a new customer, booked a slot, showed the partner's acceptance as a "Pay to confirm" card with the amount and a
+  live countdown, and Cancel booking stayed available. Pay created a real Razorpay test order (server side) and launched Checkout. When
+  Checkout could not load (the emulator had no DNS) the app showed "That payment didn't go through, you haven't been charged" and kept Pay
+  available, and the booking stayed awaiting payment. **A test-card payment to "confirmed" was not completed:** Razorpay Checkout crashed
+  this PC's emulator (the QEMU process, with an access violation) every time it opened, with hardware, software and no graphics
+  acceleration, so it needs a physical Android phone. Razorpay's code for "customer closed Checkout" is taken as 2 and is still
+  unconfirmed (backing out of a Checkout that had failed to load showed the "didn't go through" message, not the cancelled one). The
+  console's new pages were checked with lint, types, component tests and a production build, not clicked through in a browser.
 - **Push needs an Expo (EAS) project id and a Firebase project**; until then the app quietly does not register for notifications.
   Delivery to a real phone has not been seen.
 - **Payouts are recorded, not made.** An administrator transfers the money and records the bank reference; Razorpay Route (D21) and
