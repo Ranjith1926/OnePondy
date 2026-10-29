@@ -182,6 +182,24 @@ Routing (spec §13); IIS does not run Node.js code directly.
    side; the console's own cookies are marked `Secure` and will not be set over plain HTTP in
    production.
 
+### Partner area and the Worker (Phase 6)
+
+Partners are ordinary customers who own a business: they sign in at `/partner/sign-in` on the
+console with an email code (no separate account type, spec §1), apply at `/partner/apply`, and an
+administrator approves them under Partners. An approved business adds listings (an administrator
+publishes them under Listings), availability and a booking inbox. Console administrators therefore
+see two new sections, Partners and Listings.
+
+- Uploaded GSTIN and licence documents go to `BusinessDocuments:RootPath` (default
+  `App_Data/business-documents` under the API's folder), never to a folder IIS serves. Give the API's
+  application pool write access to it and back it up with the database.
+- **Run the Worker** (`dotnet run --project backend/src/OnePondy.Worker`, or install it as a Windows
+  Service). Besides the hourly sign-in clean-up it expires booking holds every minute; without it a
+  booking nobody acts on keeps its places held for ever. It needs the same connection string and
+  `Auth:HashingKey` as the API.
+- The customer app shows Stays and Activities once an administrator sets those two module flags to
+  available under Configuration.
+
 ## Checks
 
 ```powershell
@@ -256,6 +274,10 @@ the app, so it must never be secret.
 | 1 — Design system and app shell | Done — see verification below |
 | 2 — App state, authentication and accounts | Done — see verification below |
 | 3 — Web console and content management | Done — see verification below |
+| 4 — Tourism discovery and itineraries | Done — places, saved places, itineraries, nearby sorting (decision D6: list only, no map SDK) |
+| 5 — AI trip planner | Done — behind `IItineraryPlanner`, Gemini implementation (decision D5, owner to confirm) |
+| 6 — Partner listings and booking engine | Done, except payment, which is Phase 7 — see verification below |
+| 7 — Payments, ledger and notifications | **Not started: waiting on decisions D3 (payment gateway) and D7 (push provider) and the legal and tax review (spec §21)** |
 
 ### Phase 0 verification (2026-10-26)
 
@@ -362,3 +384,37 @@ Known limitations:
 - The console's HTTPS and cookie-security settings were exercised in Development only; `/health`
   equivalents and a real IIS hosting run for the console itself are still to be done, same caveat
   as Phase 2's API hosting.
+
+### Phase 6 verification (2026-10-29)
+
+| Acceptance criterion (spec §10, Phase 6) | Result |
+|---|---|
+| Two concurrent requests cannot reserve the same exclusive inventory | A slot carries PostgreSQL's `xmin` as a concurrency token and the capacity check runs before the save, so the loser of a race is refused. An integration test fires two parallel requests for the last place, six rounds per run; across three runs every race produced exactly one booking and one `409`, with one place reserved. |
+| Retrying a booking request with the same idempotency key returns the original booking | Tested against PostgreSQL: the second call returns the first booking and reserves nothing more. A unique index on customer and key backs it up if two identical requests race. |
+| Expired holds release their inventory | The Worker expires pending holds every minute, one save per booking so a lost race never blocks the rest. Tested end to end against PostgreSQL by running the expiry with a clock set past the hold, then booking the freed place. |
+| Every booking transition is validated on the server and recorded in history | The state machine is in the domain and rejects every other transition. Each change writes a history row in the same save, and the database rejects `UPDATE`, `DELETE` and `TRUNCATE` on that table and `DELETE` of a booking that has history (tested). |
+| The price and cancellation terms shown at booking match the stored snapshot | Both are copied onto the booking when it is made, and the booking screen shows the copy, not the live listing. |
+
+Driven live on the Android emulator against a local API and a throwaway PostgreSQL database:
+browse Stays and Activities, open a listing, book a slot with two guests, see it in Bookings, have
+the partner accept it through the API, cancel another and see its places freed, save a listing and
+find it under Saved, and be refused account deletion with a booking pending (no code sent).
+
+Checks: Prettier, ESLint and `tsc` clean across both app workspaces; Jest 174/174 for the app;
+Vitest 15/15 for the console; backend 9 architecture, 207 unit and 40 integration tests, the last
+against a real PostgreSQL 18 database (three consecutive runs).
+
+Known limitations:
+
+- **No payment yet.** Every booking is treated as free or pay-at-venue and a partner confirms it
+  directly; `awaiting_payment`, `failed`, `refund_pending` and `refunded` exist in the state machine
+  but nothing moves a booking into them until Phase 7 (decisions D3, D7 and the §21 review).
+- **D13 needs confirming:** Phase 6 says services are discovery-only, but the schema lets a service
+  take bookings, and the schema was followed (see the decisions register).
+- Listings have no photos (the reference schema has no media for them) and the console has no
+  administrator view of all bookings; only partners see their own inbox.
+- A business's optional `place_id` link and the PostGIS `location` column in the reference schema
+  are not built, the same deferral as for places.
+- The app was driven on an Android emulator only; the console's new pages were built and checked
+  with lint, types and a production build but not clicked through in a browser.
+- A cancelled booking returns its places but nothing refunds or charges anything, by the same rule.
