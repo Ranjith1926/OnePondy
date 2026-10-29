@@ -74,6 +74,22 @@ public static class DependencyInjection
     private static void AddOtpDelivery(IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         var delivery = configuration["Auth:Otp:Delivery"];
+        if (string.Equals(delivery, "Twilio", StringComparison.OrdinalIgnoreCase))
+        {
+            var twilio = configuration.GetSection(TwilioOptions.SectionName).Get<TwilioOptions>() ?? new TwilioOptions();
+            if (!twilio.IsConfigured)
+            {
+                throw new InvalidOperationException(
+                    "Auth:Otp:Delivery 'Twilio' needs Twilio:AccountSid, Twilio:AuthToken and either Twilio:From or " +
+                    "Twilio:MessagingServiceSid. For local development use 'dotnet user-secrets set' with " +
+                    "--project src/OnePondy.Api (see README).");
+            }
+
+            services.AddOptions<TwilioOptions>().Bind(configuration.GetSection(TwilioOptions.SectionName));
+            services.AddHttpClient<IOtpSender, TwilioOtpSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
+            return;
+        }
+
         if (!string.Equals(delivery, "Log", StringComparison.OrdinalIgnoreCase))
         {
             services.AddSingleton<IOtpSender, UnavailableOtpSender>();

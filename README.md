@@ -95,6 +95,23 @@ dotnet user-secrets set "Auth:HashingKey" (& $key) --project src/OnePondy.Api
 
 Create the tables with `dotnet tool run dotnet-ef database update --project src/OnePondy.Infrastructure --startup-project src/OnePondy.Api`.
 
+To send real SMS codes during development, use Twilio (the production SMS provider is MSG91, which
+needs DLT registration first). Set the credentials as user secrets, never in a file that is
+committed, then set `Auth:Otp:Delivery` to `Twilio`:
+
+```powershell
+cd backend
+dotnet user-secrets set "Twilio:AccountSid" "<account sid>" --project src/OnePondy.Api
+dotnet user-secrets set "Twilio:AuthToken" "<auth token>" --project src/OnePondy.Api
+dotnet user-secrets set "Twilio:From" "<your Twilio number, e.g. +1555...>" --project src/OnePondy.Api
+dotnet user-secrets set "Auth:Otp:Delivery" "Twilio" --project src/OnePondy.Api
+```
+
+A Twilio trial account can only text numbers verified in the Twilio console, and sending to India
+may need extra permission under Messaging > Settings > Geo permissions. Only SMS is sent; email
+codes still fail until an email provider is chosen. Instead of `Twilio:From` you can set
+`Twilio:MessagingServiceSid`.
+
 Until an SMS and email provider is chosen (spec D19), the API cannot deliver one-time codes. In
 Development the `appsettings.Development.json` setting `Auth:Otp:Delivery = Log` prints each code
 to the API console as a `DEVELOPMENT ONLY` warning. The API refuses that setting in any other

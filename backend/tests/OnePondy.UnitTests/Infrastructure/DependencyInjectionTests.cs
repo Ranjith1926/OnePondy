@@ -74,4 +74,37 @@ public class DependencyInjectionTests
 
         Assert.Contains("only allowed in Development", exception.Message);
     }
+
+    [Fact]
+    public void Twilio_delivery_without_credentials_fails_at_startup_with_guidance()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:OnePondy", ConnectionString),
+            ("Auth:Otp:Delivery", "Twilio"),
+            ("Twilio:AccountSid", "ACtest"));
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new ServiceCollection().AddInfrastructure(configuration, new TestEnvironment("Production")));
+
+        Assert.Contains("Twilio:AuthToken", exception.Message);
+    }
+
+    [Fact]
+    public void Twilio_delivery_with_credentials_registers_the_twilio_sender()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:OnePondy", ConnectionString),
+            ("Auth:Jwt:SigningKey", Convert.ToBase64String(new byte[32])),
+            ("Auth:HashingKey", Convert.ToBase64String(new byte[32])),
+            ("Auth:Otp:Delivery", "Twilio"),
+            ("Twilio:AccountSid", "ACtest"),
+            ("Twilio:AuthToken", "token"),
+            ("Twilio:From", "+15005550006"));
+        var services = new ServiceCollection().AddLogging();
+        services.AddInfrastructure(configuration, new TestEnvironment("Production"));
+
+        using var provider = services.BuildServiceProvider();
+
+        Assert.IsType<TwilioOtpSender>(provider.GetRequiredService<IOtpSender>());
+    }
 }
