@@ -154,6 +154,40 @@ public sealed class BookingApiTests : IAsyncLifetime
     }
 
     [DatabaseFact]
+    public async Task Listings_availability_and_the_partner_inbox_can_be_browsed()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (owner, businessId, listingId, slotId) = await PublishedListingAsync(client, admin);
+        var customer = await SignInCustomerAsync(client);
+
+        var all = await ReadAsync(await client.GetAsync("/api/v1/listings?pageSize=100"));
+        Assert.Contains(all.GetProperty("items").EnumerateArray(), l => l.GetProperty("id").GetString() == listingId);
+        var activities = await ReadAsync(await client.GetAsync("/api/v1/listings?type=activity&pageSize=100"));
+        Assert.Contains(activities.GetProperty("items").EnumerateArray(), l => l.GetProperty("id").GetString() == listingId);
+        var stays = await ReadAsync(await client.GetAsync("/api/v1/listings?type=stay&pageSize=100"));
+        Assert.DoesNotContain(stays.GetProperty("items").EnumerateArray(), l => l.GetProperty("id").GetString() == listingId);
+
+        var detail = await ReadAsync(await client.GetAsync($"/api/v1/listings/{listingId}"));
+        Assert.Equal("Backwater Adventures", detail.GetProperty("businessName").GetString());
+        var availability = await ReadAsync(await client.GetAsync($"/api/v1/listings/{listingId}/availability"));
+        Assert.Equal(slotId, Assert.Single(availability.EnumerateArray()).GetProperty("id").GetString());
+
+        var adminList = await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/admin/listings?status=published&pageSize=100", admin));
+        Assert.Contains(adminList.GetProperty("items").EnumerateArray(), l => l.GetProperty("id").GetString() == listingId);
+
+        await ReadAsync(await SendAsync(
+            client, HttpMethod.Post, "/api/v1/bookings", customer, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+
+        var inbox = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/bookings", owner));
+        Assert.Equal("Sunset Kayak Tour", Assert.Single(inbox.EnumerateArray()).GetProperty("listingTitle").GetString());
+        var pending = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/bookings?status=pending", owner));
+        Assert.Single(pending.EnumerateArray());
+        var confirmed = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/bookings?status=confirmed", owner));
+        Assert.Empty(confirmed.EnumerateArray());
+    }
+
+    [DatabaseFact]
     public async Task A_second_booking_cannot_take_more_than_the_slot_has_left()
     {
         using var client = Factory.CreateClient();

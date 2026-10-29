@@ -117,13 +117,8 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
         return await ToDetailAsync(booking, cancellationToken);
     }
 
-    public async Task<IReadOnlyList<BookingSummary>> ListMineAsync(Guid customerUserId, CancellationToken cancellationToken)
-    {
-        var bookings = await BookingsWithContext(db.Bookings.AsNoTracking().Where(b => b.CustomerUserId == customerUserId))
-            .OrderByDescending(x => x.booking.CreatedAt)
-            .ToListAsync(cancellationToken);
-        return [.. bookings.Select(x => ToSummary(x.booking, x.listing, x.business))];
-    }
+    public Task<IReadOnlyList<BookingSummary>> ListMineAsync(Guid customerUserId, CancellationToken cancellationToken) =>
+        SummariesAsync(db.Bookings.AsNoTracking().Where(b => b.CustomerUserId == customerUserId), cancellationToken);
 
     public async Task<Result<BookingDetail>> GetMineAsync(Guid id, Guid customerUserId, CancellationToken cancellationToken)
     {
@@ -162,9 +157,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
             query = query.Where(b => b.Status == s);
         }
 
-        var bookings = await BookingsWithContext(query).OrderByDescending(x => x.booking.CreatedAt).ToListAsync(cancellationToken);
-        IReadOnlyList<BookingSummary> summaries = [.. bookings.Select(x => ToSummary(x.booking, x.listing, x.business))];
-        return Result<IReadOnlyList<BookingSummary>>.Success(summaries);
+        return Result<IReadOnlyList<BookingSummary>>.Success(await SummariesAsync(query, cancellationToken));
     }
 
     public async Task<Result<BookingDetail>> GetForBusinessAsync(Guid businessId, Guid id, Guid ownerUserId, CancellationToken cancellationToken)
@@ -306,11 +299,17 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
     private async Task<bool> OwnsBusinessAsync(Guid businessId, Guid ownerUserId, CancellationToken cancellationToken) =>
         await db.Businesses.AsNoTracking().AnyAsync(b => b.Id == businessId && b.OwnerUserId == ownerUserId, cancellationToken);
 
-    private IQueryable<(Booking booking, Listing listing, Business business)> BookingsWithContext(IQueryable<Booking> bookings) =>
-        from booking in bookings
-        join listing in db.Listings.AsNoTracking() on booking.ListingId equals listing.Id
-        join business in db.Businesses.AsNoTracking() on booking.BusinessId equals business.Id
-        select new ValueTuple<Booking, Listing, Business>(booking, listing, business);
+    // Three plain queries rather than one join: EF Core cannot order or filter after projecting a
+    // join into a tuple, and a booking list never spans more than a handful of listings.
+    private async Task<IReadOnlyList<BookingSummary>> SummariesAsync(IQueryable<Booking> query, CancellationToken cancellationToken)
+    {
+        var bookings = await query.OrderByDescending(b => b.CreatedAt).ToListAsync(cancellationToken);
+        var listingIds = bookings.Select(b => b.ListingId).Distinct().ToList();
+        var businessIds = bookings.Select(b => b.BusinessId).Distinct().ToList();
+        var listings = await db.Listings.AsNoTracking().Where(l => listingIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, cancellationToken);
+        var businesses = await db.Businesses.AsNoTracking().Where(b => businessIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, cancellationToken);
+        return [.. bookings.Select(b => ToSummary(b, listings[b.ListingId], businesses[b.BusinessId]))];
+    }
 
     private async Task<BookingDetail> ToDetailAsync(Booking booking, CancellationToken cancellationToken)
     {
