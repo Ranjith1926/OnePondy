@@ -396,8 +396,10 @@ attempt in any state except already captured, because a customer can still pay a
   ledger transaction id comes from the statement, and the ledger refuses a second one. Eight administrators paying the same
   statement at once pay it once; the rest get 409. A save that loses such a race can surface from EF as a `DbUpdateException` or,
   when PostgreSQL picks it as a deadlock victim, as an `InvalidOperationException` wrapping one: `WriteConflicts.Is` recognises both.
-  **The payment services of 7.3-7.7 still catch only `DbUpdateException`**, so the same rare deadlock there would answer 500
-  instead of 409 (nothing is lost; the webhook is retried). That is a known follow-up.
+  The payment, webhook, reconciliation, booking and notification services caught only `DbUpdateException` when this was
+  written; a follow-up (2026-10-29) moved them all onto `WriteConflicts.Is`, and made the payment and refund "busy" answers clear
+  the half-applied changes so the same context can be reused (unit tests cover both shapes of lost race, and that a genuine
+  fault is still thrown). Stale-row-version conflicts are caught separately, as before.
 - **API.** Administrators: `GET /api/v1/admin/payments`, `/refunds` (status filter, paging; no customer details, only the booking
   id), `GET/POST /admin/settlements`, `GET /admin/settlements/{id}`, `POST .../{id}/approve`, `.../paid`, `.../discard` (each with the
   row `version`). Partners: `GET /api/v1/partner/businesses/{id}/statements`, `/{statementId}` and `/{statementId}/csv`, for

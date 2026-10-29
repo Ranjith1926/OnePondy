@@ -336,7 +336,7 @@ public sealed class BookingReminders(IOnePondyDbContext db, NotificationOutbox o
                 await db.SaveChangesAsync(cancellationToken);
                 queued++;
             }
-            catch (DbUpdateException)
+            catch (Exception ex) when (WriteConflicts.Is(ex))
             {
                 // Another run queued the same reminder at the same moment; the unique key kept it to one.
                 db.ClearTracked();

@@ -565,7 +565,5 @@ Known limitations:
   Delivery to a real phone has not been seen.
 - **Payouts are recorded, not made.** An administrator transfers the money and records the bank reference; Razorpay Route (D21) and
   GST/TCS on commission wait for the legal and tax review. The commission (10%) is provisional.
-- **A known gap in race handling:** the payment services of steps 7.3 to 7.7 catch only `DbUpdateException`, so a rare deadlock there
-  would answer 500 instead of 409 (nothing is lost; the webhook is retried). The statement code handles both (`WriteConflicts`).
 - Phase 7 migrations (`AddPaymentsAndLedger` through `AddSettlementRowVersion`) may not yet be applied to the shared development database; apply every pending migration as `onepondy_app`.
 - **Secrets to rotate:** the Twilio auth token and the Razorpay test secret were shared in chat during development.

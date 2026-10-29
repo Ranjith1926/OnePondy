@@ -53,7 +53,7 @@ public sealed class DeviceService(IOnePondyDbContext db, TimeProvider time)
             {
                 await db.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException) when (attempt == 0)
+            catch (Exception ex) when (attempt == 0 && WriteConflicts.Is(ex))
             {
                 // The same token was registered on another request at the same moment: look again and refresh that one.
                 db.ClearTracked();

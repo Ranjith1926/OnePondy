@@ -587,7 +587,7 @@ public sealed class ReconciliationService(
             tally.Raised++;
             logger.LogWarning("Payment reconciliation found a problem ({Kind}): {Detail}", kind, created.Detail);
         }
-        catch (DbUpdateException)
+        catch (Exception ex) when (WriteConflicts.Is(ex))
         {
             // The same problem was recorded by another run at the same moment; that one stands.
             db.ClearTracked();
@@ -622,7 +622,7 @@ public sealed class ReconciliationService(
             tally.AutoResolved++;
             logger.LogWarning("Payment reconciliation fixed a difference from the gateway ({Kind}): {Detail}", kind, created.Detail);
         }
-        catch (DbUpdateException)
+        catch (Exception ex) when (WriteConflicts.Is(ex))
         {
             db.ClearTracked();
         }

@@ -108,7 +108,7 @@ public sealed class PaymentService(
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException)
+        catch (Exception ex) when (WriteConflicts.Is(ex))
         {
             // A parallel request opened an order first (one open attempt per booking is a database rule). Ours is
             // left unused at the gateway, which is harmless; hand back the winner.
@@ -199,13 +199,15 @@ public sealed class PaymentService(
         {
             // The booking (or the attempt) changed in the same instant, for example the customer cancelling while
             // this payment arrived. Nothing was saved; the gateway retries, and the retry sees the new state.
+            db.ClearTracked();
             return PaymentErrors.Busy;
         }
-        catch (DbUpdateException exception)
+        catch (Exception ex) when (WriteConflicts.Is(ex))
         {
             // The same payment was applied on another request at the same moment: the ledger refuses to book it twice.
             // Nothing of ours was saved; the retry finds it already recorded.
-            logger.LogWarning(exception, "Payment {AttemptId} was being applied elsewhere at the same time", attempt.Id);
+            logger.LogWarning(ex, "Payment {AttemptId} was being applied elsewhere at the same time", attempt.Id);
+            db.ClearTracked();
             return PaymentErrors.Busy;
         }
 
@@ -332,10 +334,11 @@ public sealed class PaymentService(
         {
             await db.SaveChangesAsync(cancellationToken);
         }
-        catch (DbUpdateException exception)
+        catch (Exception ex) when (WriteConflicts.Is(ex))
         {
             // A concurrency conflict, or the same refund being booked on another request at the same moment.
-            logger.LogWarning(exception, "Refund {RefundId} was being recorded elsewhere at the same time", refund.Id);
+            logger.LogWarning(ex, "Refund {RefundId} was being recorded elsewhere at the same time", refund.Id);
+            db.ClearTracked();
             return PaymentErrors.Busy;
         }
 

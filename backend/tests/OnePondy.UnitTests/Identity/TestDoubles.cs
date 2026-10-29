@@ -106,6 +106,20 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public void ClearTracked() => ChangeTracker.Clear();
 
+    /// <summary>Makes the next save fail with this exception, once, as a lost race or a deadlock victim would.</summary>
+    public Exception? FailNextSaveWith { get; set; }
+
+    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        if (FailNextSaveWith is { } failure)
+        {
+            FailNextSaveWith = null;
+            throw failure;
+        }
+
+        return base.SaveChangesAsync(cancellationToken);
+    }
+
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         Database.BeginTransactionAsync(cancellationToken);
 

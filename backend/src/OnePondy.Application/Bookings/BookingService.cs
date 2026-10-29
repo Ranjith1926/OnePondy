@@ -111,7 +111,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         {
             return BookingErrors.NotEnoughAvailability;
         }
-        catch (DbUpdateException)
+        catch (Exception ex) when (WriteConflicts.Is(ex))
         {
             var racedExisting = await FindByIdempotencyKeyAsync(customerUserId, input.IdempotencyKey, cancellationToken);
             if (racedExisting is not null)
@@ -336,7 +336,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         {
             return BookingErrors.Changed;
         }
-        catch (DbUpdateException) when (refund is not null)
+        catch (Exception ex) when (refund is not null && WriteConflicts.Is(ex))
         {
             // Someone else cancelled and refunded this booking at the same moment: the database refuses a second
             // refund for money that has already been given back. Nothing of ours was saved; report it as a change.

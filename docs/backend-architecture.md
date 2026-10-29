@@ -259,7 +259,7 @@ only reaches their own booking, and a partner only reaches bookings of their own
 | Deferred constraint trigger | Every ledger transaction must sum to zero when it commits. |
 | Row-lock trigger | `refunds` of one payment can never exceed what was captured, even when requested simultaneously. |
 | Idempotent events | Webhook events are unique by provider event id; ledger transactions are derived from the event, so a repeat is refused; a booking has one open payment order. |
-| `WriteConflicts.Is` | A save that lost a race is either a `DbUpdateException` or, for a deadlock victim, an `InvalidOperationException` wrapping one. The statement code handles both and answers `409`; the 7.3–7.7 payment services still handle only the first (a known, rare gap: nothing is lost and the webhook is retried). |
+| `WriteConflicts.Is` | A save that lost a race is either a `DbUpdateException` or, for a deadlock victim, an `InvalidOperationException` wrapping one. Every service that treats a lost race as benign (bookings, payments, webhooks, reconciliation, statements, notifications) uses this one check, answers `409` where there is a caller, and clears its half-applied changes. A genuine fault is still thrown. Stale-row-version conflicts (`DbUpdateConcurrencyException`) are handled separately, as before. |
 
 Testing consequence: the EF in-memory provider cannot reproduce races, `xmin`, deferrable
 constraints or `ExecuteUpdate`/`ExecuteDelete`. Domain and booking/listing code therefore avoids

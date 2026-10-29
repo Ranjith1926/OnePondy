@@ -90,7 +90,7 @@ public sealed class PaymentWebhookService(
             {
                 await db.SaveChangesAsync(cancellationToken);
             }
-            catch (DbUpdateException)
+            catch (Exception ex) when (WriteConflicts.Is(ex))
             {
                 // The same event arrived on another request at the same moment and won the insert.
                 db.GatewayEvents.Remove(gatewayEvent);
