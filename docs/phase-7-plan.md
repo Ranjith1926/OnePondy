@@ -199,3 +199,35 @@ MSG91 sender live so real users can sign in.
 
 Steps 7.1 to 7.7 need none of the third-party accounts except step 7.2's sandbox order, so I can start
 building as soon as the payment window is confirmed.
+
+## 11. Build notes (as built)
+
+These record where what was built differs from, or settles a question in, the plan above.
+
+**7.2 (payment start).** Cancelling while `awaiting_payment` is allowed for the customer (spec table updated). One open
+payment attempt per booking is a database rule (`ux_payment_attempts_open_booking`). A capture is accepted for an
+attempt in any state except already captured, because a customer can still pay an order we had given up on.
+
+**7.3 (webhook), `PaymentWebhookService` and `POST /api/v1/webhooks/payments`.**
+
+- **Authentication is the signature.** HMAC-SHA256 of the exact raw body with `Payments:Razorpay:WebhookSecret`, compared in
+  constant time. A missing or wrong signature answers 400 and is **not stored**, so an unauthenticated caller cannot fill the
+  table. With no secret configured the endpoint answers 503.
+- **Each event is applied once.** `X-Razorpay-Event-Id` is unique in `gateway_events`. A redelivery of a finished event answers
+  200 `duplicate`. An event that was stored but never finished (the server stopped part way) is applied on the next delivery;
+  applying is idempotent. Two identical deliveries at the same instant produce one confirmation (tested against PostgreSQL).
+- **Answers the gateway acts on.** 2xx stops retries: processed, duplicate, ignored, and "needs attention" (valid but not
+  applicable, such as an unknown order or a wrong amount, stored with the reason for a person to review). 409
+  `payment_busy` asks the gateway to deliver again, used when the booking changed at the same instant.
+- **Stored payload is sanitised, a change from "raw JSON".** Razorpay's payment event carries the payer's email, phone number
+  and card or UPI details. Only the event type, payment, order and refund ids, amount, currency, status, method and error code
+  are kept. This keeps personal data out of the table (DPDP) and nothing needs the rest: reconciliation (7.6) asks Razorpay
+  directly.
+- **`payment.failed` does not fail the booking.** Razorpay lets a customer retry on the same order until the window ends, so
+  failing the booking on the first failed try would turn a later successful retry into a refund. The failed try is recorded,
+  and the booking ends by payment or by expiry. The domain's `Fail` move stays available for a different rule if wanted.
+- **Events handled:** `payment.captured` and `order.paid` (confirm, or refund in full if the booking no longer wants the
+  money), `payment.failed` (record), `refund.processed` (mark the refund processed, and a cancelled or rejected booking becomes
+  `refunded`), `refund.failed` (mark failed, booking keeps waiting). Others are stored and ignored. Only `captured` payments in
+  INR for exactly the amount due are applied.
+- The webhook works whether or not the `payments` module flag is on: a payment already made must always be recorded.

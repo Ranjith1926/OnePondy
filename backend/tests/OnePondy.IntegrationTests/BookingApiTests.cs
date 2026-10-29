@@ -22,6 +22,8 @@ namespace OnePondy.IntegrationTests;
 /// </summary>
 public sealed class BookingApiTests : IAsyncLifetime
 {
+    private const string WebhookSecret = "integration-webhook-secret";
+
     private ApiFactory? _factory;
 
     private ApiFactory Factory => _factory ?? throw new InvalidOperationException("No test database configured.");
@@ -489,6 +491,7 @@ public sealed class BookingApiTests : IAsyncLifetime
         {
             builder.UseSetting("Payments:Razorpay:KeyId", "rzp_test_integration");
             builder.UseSetting("Payments:Razorpay:KeySecret", "integration-secret");
+            builder.UseSetting("Payments:Razorpay:WebhookSecret", WebhookSecret);
             builder.ConfigureTestServices(services => services.AddSingleton<IPaymentGateway>(gateway));
         });
 
@@ -905,6 +908,235 @@ public sealed class BookingApiTests : IAsyncLifetime
         }
 
         Assert.Single(gateway.RefundRequests);
+    }
+
+    // --- Phase 7 step 7.3: the signed webhook, over HTTP and real PostgreSQL ---
+
+    private static string PaymentCapturedJson(string orderId, string paymentId, long paise, string eventType = "payment.captured") =>
+        JsonSerializer.Serialize(new
+        {
+            entity = "event",
+            @event = eventType,
+            payload = new
+            {
+                payment = new
+                {
+                    entity = new
+                    {
+                        id = paymentId,
+                        order_id = orderId,
+                        amount = paise,
+                        currency = "INR",
+                        status = "captured",
+                        email = "customer@example.com",
+                        contact = "+919876543210",
+                    },
+                },
+            },
+        });
+
+    private static async Task<HttpResponseMessage> PostWebhookAsync(
+        HttpClient client,
+        string json,
+        string? eventId,
+        string? signature = null,
+        string secret = WebhookSecret)
+    {
+        var body = System.Text.Encoding.UTF8.GetBytes(json);
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/v1/webhooks/payments") { Content = new ByteArrayContent(body) };
+        request.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+        request.Headers.Add("X-Razorpay-Signature", signature ?? RazorpaySignature.Compute(secret, body));
+        if (eventId is not null)
+        {
+            request.Headers.Add("X-Razorpay-Event-Id", eventId);
+        }
+
+        return await client.SendAsync(request);
+    }
+
+    private static string NewEventId() => "evt_it_" + Guid.NewGuid().ToString("N");
+
+    /// <summary>A booking waiting for payment, with its gateway order already created through the real endpoint.</summary>
+    private async Task<(string Customer, Guid BookingId, string OrderId)> BookingWithOpenOrderAsync(HttpClient client)
+    {
+        var (customer, bookingId) = await AwaitingPaymentBookingAsync();
+        var started = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment", customer));
+        return (customer, bookingId, started.GetProperty("orderId").GetString()!);
+    }
+
+    private async Task<string> BookingStatusAsync(Guid bookingId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        return SnakeCaseText((await DbOf(scope).Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId)).Status.ToString());
+    }
+
+    private static string SnakeCaseText(string name) =>
+        string.Concat(name.Select((c, i) => i > 0 && char.IsUpper(c) ? "_" + char.ToLowerInvariant(c) : char.ToLowerInvariant(c).ToString()));
+
+    [DatabaseFact]
+    public async Task A_signed_payment_webhook_confirms_the_booking_and_a_repeat_changes_nothing()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var json = PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000);
+        var eventId = NewEventId();
+
+        var first = await PostWebhookAsync(client, json, eventId);
+        var second = await PostWebhookAsync(client, json, eventId);
+
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal("processed", (await ReadAsync(first)).GetProperty("status").GetString());
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal("duplicate", (await ReadAsync(second)).GetProperty("status").GetString());
+        Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        Assert.Equal(1, await db.GatewayEvents.AsNoTracking().CountAsync(e => e.ProviderEventId == eventId));
+        var history = await db.Bookings.AsNoTracking().Where(b => b.Id == bookingId).SelectMany(b => b.History).CountAsync(h => h.NewStatus == OnePondy.Domain.Bookings.BookingStatus.Confirmed);
+        Assert.Equal(1, history);
+        Assert.Empty(gateway.RefundRequests);
+    }
+
+    [DatabaseFact]
+    public async Task A_webhook_with_a_bad_signature_is_refused_and_leaves_no_trace()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var json = PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000);
+        var eventId = NewEventId();
+
+        var wrong = await PostWebhookAsync(client, json, eventId, signature: "00" + new string('a', 62));
+        var otherSecret = await PostWebhookAsync(client, json, eventId, secret: "someone-elses-secret");
+        var noSignature = await client.PostAsync("/api/v1/webhooks/payments", new StringContent(json, System.Text.Encoding.UTF8, "application/json"));
+
+        foreach (var response in new[] { wrong, otherSecret, noSignature })
+        {
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("webhook_signature_invalid", await ErrorCodeAsync(response));
+        }
+
+        Assert.Equal("awaiting_payment", await BookingStatusAsync(bookingId));
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.Equal(0, await DbOf(scope).GatewayEvents.AsNoTracking().CountAsync(e => e.ProviderEventId == eventId));
+    }
+
+    [DatabaseFact]
+    public async Task A_signed_body_that_was_altered_afterwards_is_refused()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+        var signedFor = System.Text.Encoding.UTF8.GetBytes(PaymentCapturedJson(orderId, paymentId, 50_000));
+        var signature = RazorpaySignature.Compute(WebhookSecret, signedFor);
+
+        var forged = await PostWebhookAsync(client, PaymentCapturedJson(orderId, paymentId, 1), NewEventId(), signature);
+
+        Assert.Equal(HttpStatusCode.BadRequest, forged.StatusCode);
+        Assert.Equal("awaiting_payment", await BookingStatusAsync(bookingId));
+    }
+
+    [DatabaseFact]
+    public async Task A_webhook_without_an_event_id_is_refused_and_one_without_a_server_secret_is_unavailable()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, _, orderId) = await BookingWithOpenOrderAsync(client);
+        var json = PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000);
+
+        var noId = await PostWebhookAsync(client, json, eventId: null);
+        Assert.Equal(HttpStatusCode.BadRequest, noId.StatusCode);
+        Assert.Equal("webhook_malformed", await ErrorCodeAsync(noId));
+
+        // The shared test server has no webhook secret configured, so it cannot verify anything.
+        using var unconfigured = Factory.CreateClient();
+        var refused = await PostWebhookAsync(unconfigured, json, NewEventId());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, refused.StatusCode);
+        Assert.Equal("webhook_not_configured", await ErrorCodeAsync(refused));
+    }
+
+    [DatabaseFact]
+    public async Task A_payment_the_customer_cancelled_before_it_landed_is_refunded_through_the_webhook()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var current = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
+        await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/cancel", customer, new { version = current.GetProperty("version").GetUInt32(), reason = (string?)null });
+        var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+
+        var response = await PostWebhookAsync(client, PaymentCapturedJson(orderId, paymentId, 50_000), NewEventId());
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("refund_pending", await BookingStatusAsync(bookingId));
+        var sent = Assert.Single(gateway.RefundRequests);
+        Assert.Equal(paymentId, sent.PaymentId);
+        Assert.Equal(50_000, sent.AmountPaise);
+
+        // Razorpay then reports the refund paid out.
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var refundId = (await DbOf(scope).Refunds.AsNoTracking().SingleAsync(r => r.BookingId == bookingId)).ProviderRefundId!;
+        var processed = JsonSerializer.Serialize(new { entity = "event", @event = "refund.processed", payload = new { refund = new { entity = new { id = refundId, payment_id = paymentId, amount = 50_000, status = "processed" } } } });
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(client, processed, NewEventId())).StatusCode);
+        Assert.Equal("refunded", await BookingStatusAsync(bookingId));
+    }
+
+    [DatabaseFact]
+    public async Task A_payment_webhook_for_an_unknown_order_is_acknowledged_and_recorded_for_follow_up()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var eventId = NewEventId();
+
+        var response = await PostWebhookAsync(client, PaymentCapturedJson("order_not_ours_" + Guid.NewGuid().ToString("N"), "pay_" + Guid.NewGuid().ToString("N"), 50_000), eventId);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("needsattention", (await ReadAsync(response)).GetProperty("status").GetString());
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var stored = await DbOf(scope).GatewayEvents.AsNoTracking().SingleAsync(e => e.ProviderEventId == eventId);
+        Assert.Equal("payment_unknown_order", stored.Error);
+        Assert.DoesNotContain("customer@example.com", stored.Payload);
+        Assert.DoesNotContain("9876543210", stored.Payload);
+    }
+
+    [DatabaseFact]
+    public async Task The_same_webhook_delivered_many_times_at_once_confirms_the_booking_exactly_once()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var json = PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000);
+        var eventId = NewEventId();
+
+        var responses = await Task.WhenAll(Enumerable.Range(0, 8).Select(_ => PostWebhookAsync(client, json, eventId)));
+
+        // Each delivery either did the work, saw it done, or was told to try again; never a server error.
+        foreach (var response in responses)
+        {
+            Assert.True(
+                response.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict,
+                $"unexpected {(int)response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
+        }
+
+        // A retry after the burst settles on the duplicate answer.
+        Assert.Equal("duplicate", (await ReadAsync(await PostWebhookAsync(client, json, eventId))).GetProperty("status").GetString());
+        Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        Assert.Equal(1, await db.GatewayEvents.AsNoTracking().CountAsync(e => e.ProviderEventId == eventId));
+        Assert.Equal(1, await db.Bookings.AsNoTracking().Where(b => b.Id == bookingId).SelectMany(b => b.History).CountAsync(h => h.NewStatus == OnePondy.Domain.Bookings.BookingStatus.Confirmed));
+        Assert.Equal(1, await db.PaymentAttempts.AsNoTracking().CountAsync(a => a.BookingId == bookingId && a.Status == OnePondy.Domain.Payments.PaymentAttemptStatus.Captured));
+        Assert.Empty(gateway.RefundRequests);
     }
 
     [DatabaseFact]

@@ -152,6 +152,20 @@ leave both alone until legal review and a settlement test are complete (docs/pha
 webhook secret is used from step 7.3. Other settings, all optional: `Payments:PaymentWindow` (default
 30 minutes after a partner accepts), `Payments:CommissionPercent` (provisional 10, not used yet).
 
+**Webhook (so a payment can confirm a booking).** Razorpay reports every payment result to
+`POST /api/v1/webhooks/payments`; the app's own word is never trusted. In the Razorpay Dashboard
+(Test Mode): Settings, Webhooks, Add New Webhook. Use the public HTTPS address of the API
+(`https://<your-host>/api/v1/webhooks/payments`; Razorpay cannot reach `localhost`, so a local run
+needs a tunnel), choose your own secret, and tick `payment.captured`, `order.paid`, `payment.failed`,
+`refund.processed` and `refund.failed`. Then store the same secret as `Payments:Razorpay:WebhookSecret`.
+Without it the endpoint answers 503 and no payment can confirm a booking. Deliveries are checked with
+HMAC-SHA256 against that secret, recorded once by Razorpay's event id (a redelivery changes nothing),
+and stored with only ids, amounts and statuses: no email, phone, card or UPI details.
+
+To run the one test that calls Razorpay's real test API (it creates a ₹1 test order and charges
+nothing), set `ONEPONDY_RAZORPAY_TEST_KEY_ID` and `ONEPONDY_RAZORPAY_TEST_KEY_SECRET` to a test key
+pair before `dotnet test`; without them it is skipped.
+
 On a server running under IIS the API does not read user secrets: put the same keys in the server's
 `appsettings.<Environment>.json` and keep that file private. Apply database migrations as the
 `onepondy_app` role, not `postgres`, so the tables are owned by the role the API connects as.

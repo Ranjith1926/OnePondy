@@ -71,6 +71,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<Refund> Refunds => Set<Refund>();
 
+    public DbSet<GatewayEvent> GatewayEvents => Set<GatewayEvent>();
+
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -163,6 +165,7 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<BookingSlot>().HasKey(bs => new { bs.BookingId, bs.SlotId });
         modelBuilder.Entity<PaymentAttempt>().HasKey(a => a.Id);
         modelBuilder.Entity<Refund>().HasKey(r => r.Id);
+        modelBuilder.Entity<GatewayEvent>().HasKey(e => e.Id);
     }
 }
 

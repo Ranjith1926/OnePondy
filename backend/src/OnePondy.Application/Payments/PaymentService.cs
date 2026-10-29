@@ -191,6 +191,71 @@ public sealed class PaymentService(
         return new CaptureResult(CaptureOutcome.RefundRaised, refund.Id);
     }
 
+    /// <summary>
+    /// The gateway reports a refund as paid out. Safe to repeat. A booking waiting on its refund
+    /// (<c>refund_pending</c>) becomes <c>refunded</c> once none of its refunds are still outstanding; an expired
+    /// booking is already final, so only the refund record changes.
+    /// </summary>
+    public async Task<Result<bool>> RecordRefundProcessedAsync(string providerRefundId, CancellationToken cancellationToken)
+    {
+        var refund = await db.Refunds.SingleOrDefaultAsync(r => r.ProviderRefundId == providerRefundId, cancellationToken);
+        if (refund is null)
+        {
+            return PaymentErrors.UnknownRefund;
+        }
+
+        if (refund.Status == RefundStatus.Processed)
+        {
+            return true;
+        }
+
+        var now = time.GetUtcNow();
+        refund.MarkProcessed(providerRefundId, now);
+
+        var booking = await db.Bookings.SingleAsync(b => b.Id == refund.BookingId, cancellationToken);
+        if (booking.Status == BookingStatus.RefundPending)
+        {
+            var othersOutstanding = await db.Refunds.AnyAsync(
+                r => r.BookingId == booking.Id && r.Id != refund.Id && r.Status == RefundStatus.Pending,
+                cancellationToken);
+            if (!othersOutstanding)
+            {
+                booking.MarkRefunded(now);
+                db.MarkAdded(booking.History[^1]);
+            }
+        }
+
+        try
+        {
+            await db.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            return PaymentErrors.Busy;
+        }
+
+        return true;
+    }
+
+    /// <summary>The gateway reports a refund failed. It is recorded for follow-up; the booking stays <c>refund_pending</c>.</summary>
+    public async Task<Result<bool>> RecordRefundFailedAsync(string providerRefundId, CancellationToken cancellationToken)
+    {
+        var refund = await db.Refunds.SingleOrDefaultAsync(r => r.ProviderRefundId == providerRefundId, cancellationToken);
+        if (refund is null)
+        {
+            return PaymentErrors.UnknownRefund;
+        }
+
+        if (refund.Status == RefundStatus.Pending)
+        {
+            refund.MarkFailed(time.GetUtcNow());
+            await db.SaveChangesAsync(cancellationToken);
+            logger.LogWarning("Refund {RefundId} failed at the gateway and needs follow-up", refund.Id);
+        }
+
+        return true;
+    }
+
     private async Task RetryUnsentRefundsAsync(PaymentAttempt attempt, CancellationToken cancellationToken)
     {
         var unsent = await db.Refunds

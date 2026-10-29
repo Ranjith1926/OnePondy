@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using OnePondy.Application.Payments;
 
@@ -13,7 +14,34 @@ public static class PaymentEndpoints
             .RequireAuthorization()
             .WithTags("Payments");
 
+        // Called by Razorpay, not by a signed-in user, so it has no sign-in: the signature is the authentication.
+        app.MapPost("/api/v1/webhooks/payments", ReceiveWebhook)
+            .WithMetadata(new RequestSizeLimitAttribute(MaxWebhookBytes))
+            .WithTags("Payments");
+
         return app;
+    }
+
+    private const int MaxWebhookBytes = 256 * 1024;
+
+    private static async Task<IResult> ReceiveWebhook(
+        PaymentWebhookService service,
+        HttpContext httpContext,
+        CancellationToken cancellationToken)
+    {
+        // The signature is over the exact bytes sent, so the body is read raw and never re-serialised.
+        using var buffer = new MemoryStream();
+        await httpContext.Request.Body.CopyToAsync(buffer, cancellationToken);
+
+        var result = await service.HandleAsync(
+            buffer.ToArray(),
+            httpContext.Request.Headers["X-Razorpay-Signature"].ToString(),
+            httpContext.Request.Headers["X-Razorpay-Event-Id"].ToString(),
+            cancellationToken);
+
+        return result.IsSuccess
+            ? Results.Ok(new { status = result.Value.Outcome.ToString().ToLowerInvariant() })
+            : ProblemResults.From(result.Error, httpContext);
     }
 
     private static async Task<IResult> StartPayment(

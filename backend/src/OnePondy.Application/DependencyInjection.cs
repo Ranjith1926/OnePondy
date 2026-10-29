@@ -53,6 +53,7 @@ public static class DependencyInjection
         services.AddScoped<BookingService>();
         services.AddScoped<BookingHoldExpiry>();
         services.AddScoped<PaymentService>();
+        services.AddScoped<PaymentWebhookService>();
 
         return services;
     }

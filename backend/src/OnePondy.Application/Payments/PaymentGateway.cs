@@ -65,4 +65,28 @@ public static class PaymentErrors
         "payment_busy",
         ErrorKind.Conflict,
         "The booking changed at the same moment. Retry the payment result.");
+
+    public static readonly AppError UnknownRefund = new(
+        "payment_unknown_refund",
+        ErrorKind.NotFound,
+        "No refund matches that gateway refund. It may have been made in the gateway dashboard.");
+}
+
+/// <summary>Why a webhook was turned away. The gateway retries anything that is not a 2xx, so these are deliberate.</summary>
+public static class WebhookErrors
+{
+    public static readonly AppError NotConfigured = new(
+        "webhook_not_configured",
+        ErrorKind.Unavailable,
+        "Payment webhooks are not set up on this server.");
+
+    public static readonly AppError InvalidSignature = new(
+        "webhook_signature_invalid",
+        ErrorKind.Validation,
+        "The webhook signature is missing or does not match.");
+
+    public static readonly AppError Malformed = new(
+        "webhook_malformed",
+        ErrorKind.Validation,
+        "The webhook could not be read.");
 }

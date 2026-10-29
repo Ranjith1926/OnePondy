@@ -56,6 +56,8 @@ public interface IOnePondyDbContext
 
     DbSet<Refund> Refunds { get; }
 
+    DbSet<GatewayEvent> GatewayEvents { get; }
+
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an
     /// edit based on stale data is rejected instead of overwriting someone else's change. Works for
