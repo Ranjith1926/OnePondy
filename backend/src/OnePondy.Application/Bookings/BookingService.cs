@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
 using OnePondy.Application.Listings;
+using OnePondy.Application.Payments;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
+using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Listings;
 
 namespace OnePondy.Application.Bookings;
@@ -12,7 +15,7 @@ namespace OnePondy.Application.Bookings;
 /// full status history. Phase 6 treats every booking as free or pay-at-venue, since the payment
 /// gateway is Phase 7 — a partner confirms a request directly, with no <c>awaiting_payment</c> step.
 /// </summary>
-public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
+public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOptions<PaymentsOptions> payments)
 {
     public const int MaxGuestCount = 50;
     public const int MaxReasonLength = 500;
@@ -171,8 +174,36 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
         return booking is null ? BookingErrors.NotFound : await ToDetailAsync(booking, cancellationToken);
     }
 
-    public Task<Result<BookingDetail>> AcceptAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, CancellationToken cancellationToken) =>
-        ForBusinessTransitionAsync(businessId, id, expectedVersion, ownerUserId, b => b.Confirm(ownerUserId, time.GetUtcNow()), cancellationToken);
+    /// <summary>
+    /// Accepting a priced booking while online payment is switched on moves it to <c>awaiting_payment</c>
+    /// with a fresh payment window; anything free, or any booking while payments are off, is confirmed
+    /// directly as before.
+    /// </summary>
+    public async Task<Result<BookingDetail>> AcceptAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, CancellationToken cancellationToken)
+    {
+        var paymentsOpen = await db.ModuleFlags
+            .AsNoTracking()
+            .AnyAsync(f => f.Key == ModuleKeys.Payments && f.Status == ModuleStatus.Available, cancellationToken);
+        var paymentWindow = payments.Value.PaymentWindow;
+
+        return await ForBusinessTransitionAsync(
+            businessId,
+            id,
+            expectedVersion,
+            ownerUserId,
+            b =>
+            {
+                if (paymentsOpen && b.TotalAmount > 0m)
+                {
+                    b.AcceptForPayment(ownerUserId, time.GetUtcNow(), paymentWindow);
+                }
+                else
+                {
+                    b.Confirm(ownerUserId, time.GetUtcNow());
+                }
+            },
+            cancellationToken);
+    }
 
     public Task<Result<BookingDetail>> RejectAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, string? reason, CancellationToken cancellationToken)
     {

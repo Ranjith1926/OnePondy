@@ -76,6 +76,31 @@ public class DependencyInjectionTests
     }
 
     [Fact]
+    public void A_live_razorpay_key_stops_the_application_starting_unless_live_payments_are_enabled()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:OnePondy", ConnectionString),
+            ("Payments:Razorpay:KeyId", "rzp_live_abc123"));
+
+        var exception = Assert.Throws<InvalidOperationException>(
+            () => new ServiceCollection().AddInfrastructure(configuration, new TestEnvironment("Production")));
+
+        Assert.Contains("live payments are not enabled", exception.Message);
+    }
+
+    [Fact]
+    public void A_test_razorpay_key_is_accepted()
+    {
+        var configuration = Configuration(
+            ("ConnectionStrings:OnePondy", ConnectionString),
+            ("Auth:Jwt:SigningKey", Convert.ToBase64String(new byte[32])),
+            ("Auth:HashingKey", Convert.ToBase64String(new byte[32])),
+            ("Payments:Razorpay:KeyId", "rzp_test_abc123"));
+
+        new ServiceCollection().AddInfrastructure(configuration, new TestEnvironment("Production"));
+    }
+
+    [Fact]
     public void Twilio_delivery_without_credentials_fails_at_startup_with_guidance()
     {
         var configuration = Configuration(

@@ -68,8 +68,11 @@ Rules:
 - **Which bookings need payment:** total amount above zero while the `payments` module flag is `available`.
   Free listings, and everything while the flag is off, keep today's behaviour (accept → confirmed).
 - **Accept** moves to `awaiting_payment` and sets `expires_at = now + 30 min`. Seats stay held.
-- **Reject** is only possible while `pending`, so a rejection never needs a refund. A partner who wants out
-  after accepting uses cancel, which refunds (below).
+- **Reject** follows the spec table: allowed from `pending` and from `awaiting_payment`, and it releases the seats. A
+  rejection before payment needs no refund; one that races a payment is handled by the late-payment refund (7.4).
+- **Cancel** is allowed from `pending` and `confirmed` only, as the spec table says. **Open question for the owner:** while a
+  booking is `awaiting_payment` neither the customer nor the partner can cancel it (it ends by payment, failure, rejection
+  or expiry). Allowing `awaiting_payment` to `cancelled` would need a spec change.
 - **Payment attempts:** a customer may retry; each attempt is a row. An order is created once per attempt and
   reused if the screen is reopened while it is still open.
 - **Failure:** a verified failure moves `awaiting_payment → failed` and releases seats, as the spec says; the
@@ -90,14 +93,13 @@ New tables (all money `numeric(12,2)`, status columns with `CHECK` lists, snake_
 | Table | Purpose and key constraints |
 |---|---|
 | `payment_attempts` | One row per Razorpay order: `booking_id`, `provider` (`razorpay`), `provider_order_id` (unique), `provider_payment_id`, `amount`, `currency`, `status` (`created`, `captured`, `failed`, `expired`), timestamps. `xmin` version. |
-| `gateway_events` | Every webhook received, raw JSON, `provider_event_id` unique per provider so replays are ignored, `signature_valid`, `processed_at`, `error`. Append-only. |
+| `gateway_events` | Every webhook received, raw JSON, `provider_event_id` unique per provider so replays are ignored, `signature_valid`, `processed_at`, `error`. Rows are never deleted by the application. |
 | `refunds` | `payment_attempt_id`, `booking_id`, `amount`, `reason`, `status` (`pending`, `processed`, `failed`), `provider_refund_id` unique, requested/processed times. Sum of refunds ≤ captured amount (trigger). |
-| `ledger_accounts` | Small fixed set: `gateway_clearing`, `customer_refunds`, `platform_commission`, `partner_payable:{business}` and `partner_paid:{business}`. |
 | `ledger_entries` | Double-entry: `transaction_id`, `account`, signed `amount`, `booking_id`, `description`. A **deferred constraint trigger** requires every `transaction_id` to sum to zero. Append-only like `audit_log`. |
 | `settlements` and `settlement_items` | A statement per business per period: items are completed bookings (and refund adjustments), totals, `status` (`draft`, `approved`, `paid`), payout reference. |
 | `outbox_messages` | `type`, JSON `payload`, `created_at`, `dispatched_at`, `attempts`, `last_error`, partial index on undispatched. Written in the same transaction as the state change. |
-| `device_tokens` | `user_id`, Expo token (unique), platform, `last_seen_at`, revoked flag. Removed on sign-out and account deletion. |
-| `notification_log` | What was sent to whom, receipt status, for support and for removing dead tokens. |
+| `device_tokens` (step 7.7 migration, not Migration 3) | `user_id`, Expo token (unique), platform, `last_seen_at`, revoked flag. Removed on sign-out and account deletion. |
+| `notification_log` (step 7.7 migration) | What was sent to whom, receipt status, for support and for removing dead tokens. |
 
 Also: extend `customer_history` with payment status, add `payments` to the module keys, and add commission
 settings to `app_settings`. Account-deletion guard already blocks on `awaiting_payment`, `confirmed` and

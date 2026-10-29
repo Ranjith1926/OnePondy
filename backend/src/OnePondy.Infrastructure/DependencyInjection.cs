@@ -7,6 +7,7 @@ using OnePondy.Application.Businesses;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Application.Media;
+using OnePondy.Application.Payments;
 using OnePondy.Application.Staff;
 using OnePondy.Application.TripPlanner;
 using OnePondy.Infrastructure.Businesses;
@@ -66,6 +67,7 @@ public static class DependencyInjection
         services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
         services.AddSingleton<ISecretHasher, HmacSecretHasher>();
 
+        PaymentsGuard.EnsureSafe(configuration.GetSection(PaymentsOptions.SectionName).Get<PaymentsOptions>() ?? new PaymentsOptions());
         AddOtpDelivery(services, configuration, environment);
         AddTripPlannerProvider(services, configuration);
         return services;

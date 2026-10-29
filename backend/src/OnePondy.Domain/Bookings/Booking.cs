@@ -151,9 +151,31 @@ public sealed class Booking
         return booking;
     }
 
-    /// <summary>The partner accepts the request. Phase 6 treats every booking as free or pay-at-venue (Phase 7 adds a payment step).</summary>
+    /// <summary>
+    /// The partner accepts a free or pay-at-venue request, which confirms it straight away. A booking
+    /// that needs online payment goes through <see cref="AcceptForPayment"/> instead.
+    /// </summary>
     public void Confirm(Guid partnerUserId, DateTimeOffset now) =>
-        TransitionTo(BookingStatus.Confirmed, BookingActorType.Partner, partnerUserId, null, now, BookingStatus.Pending, BookingStatus.AwaitingPayment);
+        TransitionTo(BookingStatus.Confirmed, BookingActorType.Partner, partnerUserId, null, now, BookingStatus.Pending);
+
+    /// <summary>
+    /// The partner accepts a request that must be paid for online (spec §7: pending to awaiting_payment).
+    /// The seats stay held, and the customer gets a fresh window to pay that replaces the request hold.
+    /// </summary>
+    public void AcceptForPayment(Guid partnerUserId, DateTimeOffset now, TimeSpan paymentWindow)
+    {
+        if (paymentWindow <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(paymentWindow), "The payment window must be positive.");
+        }
+
+        TransitionTo(BookingStatus.AwaitingPayment, BookingActorType.Partner, partnerUserId, null, now, BookingStatus.Pending);
+        ExpiresAt = now + paymentWindow;
+    }
+
+    /// <summary>A verified payment arrived for a booking waiting on it (spec §7: awaiting_payment to confirmed).</summary>
+    public void ConfirmPayment(DateTimeOffset now) =>
+        TransitionTo(BookingStatus.Confirmed, BookingActorType.System, null, null, now, BookingStatus.AwaitingPayment);
 
     public void Reject(Guid partnerUserId, string reason, DateTimeOffset now)
     {
@@ -170,10 +192,6 @@ public sealed class Booking
 
     public void Complete(Guid actorUserId, BookingActorType actorType, DateTimeOffset now) =>
         TransitionTo(BookingStatus.Completed, actorType, actorUserId, null, now, BookingStatus.Confirmed);
-
-    /// <summary>Phase 7: a payment attempt was created against the gateway.</summary>
-    public void MoveToAwaitingPayment(DateTimeOffset now) =>
-        TransitionTo(BookingStatus.AwaitingPayment, BookingActorType.System, null, null, now, BookingStatus.Pending);
 
     /// <summary>Phase 7: the gateway reported a verified failure.</summary>
     public void Fail(string reason, DateTimeOffset now)

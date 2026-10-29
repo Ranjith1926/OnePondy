@@ -9,6 +9,7 @@ using OnePondy.Application.Identity;
 using OnePondy.Application.Itineraries;
 using OnePondy.Application.Listings;
 using OnePondy.Application.Media;
+using OnePondy.Application.Payments;
 using OnePondy.Application.Places;
 using OnePondy.Application.Staff;
 using OnePondy.Application.TripPlanner;
@@ -25,6 +26,7 @@ public static class DependencyInjection
         services.Configure<MediaOptions>(configuration.GetSection(MediaOptions.SectionName));
         services.Configure<ConsoleOptions>(configuration.GetSection(ConsoleOptions.SectionName));
         services.Configure<TripPlannerOptions>(configuration.GetSection(TripPlannerOptions.SectionName));
+        services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IAccountDeletionGuard, BookingsDeletionGuard>();

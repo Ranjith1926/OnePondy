@@ -663,6 +663,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         {
                             Key = "support",
                             Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "payments",
+                            Status = "coming_soon"
                         });
                 });
 
@@ -1059,6 +1064,461 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_saved_listings_listing_id");
 
                     b.ToTable("saved_listings", (string)null);
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.GatewayEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("error");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderEventId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("provider_event_id");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<bool>("SignatureValid")
+                        .HasColumnType("boolean")
+                        .HasColumnName("signature_valid");
+
+                    b.HasKey("Id")
+                        .HasName("pk_gateway_events");
+
+                    b.HasIndex("ReceivedAt")
+                        .HasDatabaseName("ix_gateway_events_unprocessed")
+                        .HasFilter("processed_at IS NULL");
+
+                    b.HasIndex("Provider", "ProviderEventId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_gateway_events_event");
+
+                    b.ToTable("gateway_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_gateway_event_provider", "provider IN ('razorpay')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.LedgerEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Account")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("account");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("description");
+
+                    b.Property<Guid>("TransactionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("transaction_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ledger_entries");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_ledger_entries_booking");
+
+                    b.HasIndex("TransactionId")
+                        .HasDatabaseName("ix_ledger_entries_transaction");
+
+                    b.HasIndex("Account", "CreatedAt")
+                        .HasDatabaseName("ix_ledger_entries_account");
+
+                    b.ToTable("ledger_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ledger_account", "account ~ '^(gateway_clearing|customer_refunds|platform_commission|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
+
+                            t.HasCheckConstraint("ck_ledger_amount", "amount <> 0");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DispatchedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("dispatched_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_outbox_messages");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_outbox_pending")
+                        .HasFilter("dispatched_at IS NULL");
+
+                    b.ToTable("outbox_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_outbox_attempts", "attempts >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.PaymentAttempt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("ProviderOrderId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("provider_order_id");
+
+                    b.Property<string>("ProviderPaymentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("provider_payment_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_payment_attempts");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_payment_attempts_open")
+                        .HasFilter("status = 'created'");
+
+                    b.HasIndex("ProviderOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_payment_attempts_order");
+
+                    b.HasIndex("ProviderPaymentId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_payment_attempts_payment")
+                        .HasFilter("provider_payment_id IS NOT NULL");
+
+                    b.HasIndex("BookingId", "CreatedAt")
+                        .HasDatabaseName("ix_payment_attempts_booking");
+
+                    b.ToTable("payment_attempts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_payment_attempt_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_payment_attempt_captured", "status <> 'captured' OR provider_payment_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_payment_attempt_provider", "provider IN ('razorpay')");
+
+                            t.HasCheckConstraint("ck_payment_attempt_status", "status IN ('created', 'captured', 'failed', 'expired')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.Refund", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid>("PaymentAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_attempt_id");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("ProviderRefundId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("provider_refund_id");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_refunds");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_refunds_booking");
+
+                    b.HasIndex("PaymentAttemptId")
+                        .HasDatabaseName("ix_refunds_payment_attempt");
+
+                    b.HasIndex("ProviderRefundId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_refunds_provider_refund")
+                        .HasFilter("provider_refund_id IS NOT NULL");
+
+                    b.ToTable("refunds", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_refund_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_refund_processed", "status <> 'processed' OR provider_refund_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_refund_reason", "reason IN ('rejected', 'partner_cancelled', 'customer_cancelled', 'late_payment')");
+
+                            t.HasCheckConstraint("ck_refund_status", "status IN ('pending', 'processed', 'failed')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.Settlement", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("ApprovedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("approved_at");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("commission_amount");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<decimal>("GrossAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("gross_amount");
+
+                    b.Property<decimal>("NetAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("net_amount");
+
+                    b.Property<DateTimeOffset?>("PaidAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("paid_at");
+
+                    b.Property<string>("PayoutReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("payout_reference");
+
+                    b.Property<DateOnly>("PeriodEnd")
+                        .HasColumnType("date")
+                        .HasColumnName("period_end");
+
+                    b.Property<DateOnly>("PeriodStart")
+                        .HasColumnType("date")
+                        .HasColumnName("period_start");
+
+                    b.Property<decimal>("RefundAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("refund_amount");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_settlements");
+
+                    b.HasIndex("BusinessId", "PeriodStart", "PeriodEnd")
+                        .IsUnique()
+                        .HasDatabaseName("ux_settlements_period");
+
+                    b.ToTable("settlements", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_settlement_amounts", "gross_amount >= 0 AND commission_amount >= 0 AND refund_amount >= 0");
+
+                            t.HasCheckConstraint("ck_settlement_net", "net_amount = gross_amount - commission_amount - refund_amount");
+
+                            t.HasCheckConstraint("ck_settlement_paid", "status <> 'paid' OR (payout_reference IS NOT NULL AND paid_at IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_settlement_period", "period_end >= period_start");
+
+                            t.HasCheckConstraint("ck_settlement_status", "status IN ('draft', 'approved', 'paid')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.SettlementItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<decimal>("CommissionAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("commission_amount");
+
+                    b.Property<decimal>("GrossAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("gross_amount");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("SettlementId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("settlement_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_settlement_items");
+
+                    b.HasIndex("SettlementId")
+                        .HasDatabaseName("ix_settlement_items_settlement");
+
+                    b.HasIndex("BookingId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_settlement_items_booking_kind");
+
+                    b.ToTable("settlement_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_settlement_item_amounts", "gross_amount >= 0 AND commission_amount >= 0");
+
+                            t.HasCheckConstraint("ck_settlement_item_kind", "kind IN ('sale', 'refund')");
+                        });
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>
@@ -1938,6 +2398,69 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_saved_listings_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.LedgerEntry", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ledger_entries_bookings_booking_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.PaymentAttempt", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_payment_attempts_bookings_booking_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.Refund", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_refunds_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Payments.PaymentAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_refunds_payment_attempts_payment_attempt_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.Settlement", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_settlements_businesses_business_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.SettlementItem", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_settlement_items_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Payments.Settlement", null)
+                        .WithMany()
+                        .HasForeignKey("SettlementId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_settlement_items_settlements_settlement_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Places.Place", b =>

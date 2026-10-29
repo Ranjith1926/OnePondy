@@ -10,6 +10,7 @@ using OnePondy.Domain.Identity;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Identity;
@@ -54,6 +55,20 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<Booking> Bookings => Set<Booking>();
 
     public DbSet<BookingSlot> BookingSlots => Set<BookingSlot>();
+
+    public DbSet<PaymentAttempt> PaymentAttempts => Set<PaymentAttempt>();
+
+    public DbSet<GatewayEvent> GatewayEvents => Set<GatewayEvent>();
+
+    public DbSet<Refund> Refunds => Set<Refund>();
+
+    public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+
+    public DbSet<Settlement> Settlements => Set<Settlement>();
+
+    public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     /// <summary>Provider settings shared by the app and the design-time factory used for migrations.</summary>
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>

@@ -11,8 +11,11 @@ public enum ModuleStatus
 /// <summary>Module keys the app knows. They match the app's own keys, so the API can return them as is.</summary>
 public static class ModuleKeys
 {
+    /// <summary>Online payment for bookings. While it is not available, a partner's acceptance confirms the booking directly.</summary>
+    public const string Payments = "payments";
+
     public static readonly IReadOnlyList<string> All =
-        ["food", "rides", "stays", "activities", "tripPlanner", "notifications", "support"];
+        ["food", "rides", "stays", "activities", "tripPlanner", "notifications", "support", Payments];
 
     public static bool IsKnown(string key) => All.Contains(key);
 }

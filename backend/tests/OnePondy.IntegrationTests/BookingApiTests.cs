@@ -438,7 +438,7 @@ public sealed class BookingApiTests : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
             var later = new FakeTimeProvider(DateTimeOffset.UtcNow + OnePondy.Domain.Bookings.Booking.HoldDuration + TimeSpan.FromMinutes(5));
-            var expiredCount = await new BookingHoldExpiry(db, new BookingService(db, later), later).ExpireDueHoldsAsync(default);
+            var expiredCount = await new BookingHoldExpiry(db, new BookingService(db, later, Microsoft.Extensions.Options.Options.Create(new OnePondy.Application.Payments.PaymentsOptions())), later).ExpireDueHoldsAsync(default);
             Assert.True(expiredCount >= 1);
         }
 
@@ -449,6 +449,274 @@ public sealed class BookingApiTests : IAsyncLifetime
 
         var expired = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/bookings/{bookingId}", customer));
         Assert.Equal("expired", expired.GetProperty("status").GetString());
+    }
+
+    // --- Phase 7 step 7.1: payments schema and the awaiting_payment flow, against real PostgreSQL ---
+
+    private async Task<Guid> NewBookingIdAsync()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (_, _, listingId, slotId) = await PublishedListingAsync(client, admin);
+        var customer = await SignInCustomerAsync(client);
+        var booking = await ReadAsync(await SendAsync(
+            client, HttpMethod.Post, "/api/v1/bookings", customer, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+        return Guid.Parse(booking.GetProperty("id").GetString()!);
+    }
+
+    private static OnePondyDbContext DbOf(AsyncServiceScope scope) => scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
+
+    /// <summary>The user who owns the business a booking is for: a real account, as the history table requires.</summary>
+    private async Task<Guid> PartnerOfAsync(Guid bookingId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var businessId = await db.Bookings.AsNoTracking().Where(b => b.Id == bookingId).Select(b => b.BusinessId).SingleAsync();
+        return await db.Businesses.AsNoTracking().Where(b => b.Id == businessId).Select(b => b.OwnerUserId).SingleAsync();
+    }
+
+    [DatabaseFact]
+    public async Task The_payments_module_flag_exists_and_starts_off()
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+
+        var flag = await DbOf(scope).ModuleFlags.AsNoTracking().SingleAsync(f => f.Key == "payments");
+
+        Assert.Equal(OnePondy.Domain.Configuration.ModuleStatus.ComingSoon, flag.Status);
+    }
+
+    [DatabaseFact]
+    public async Task A_booking_can_wait_for_payment_then_be_confirmed_by_the_system()
+    {
+        var bookingId = await NewBookingIdAsync();
+        var partner = await PartnerOfAsync(bookingId);
+        var now = DateTimeOffset.UtcNow;
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var booking = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            booking.AcceptForPayment(partner, now, TimeSpan.FromMinutes(30));
+            db.MarkAdded(booking.History[^1]);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var booking = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            Assert.Equal(OnePondy.Domain.Bookings.BookingStatus.AwaitingPayment, booking.Status);
+            Assert.InRange(booking.ExpiresAt!.Value, now.AddMinutes(29), now.AddMinutes(31));
+
+            booking.ConfirmPayment(now.AddMinutes(5));
+            db.MarkAdded(booking.History[^1]);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var booking = await DbOf(scope).Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId);
+            Assert.Equal(OnePondy.Domain.Bookings.BookingStatus.Confirmed, booking.Status);
+            Assert.Null(booking.ExpiresAt);
+        }
+    }
+
+    [DatabaseFact]
+    public async Task An_unpaid_booking_is_expired_by_the_worker_and_its_slot_freed()
+    {
+        var bookingId = await NewBookingIdAsync();
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var booking = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            booking.AcceptForPayment(await PartnerOfAsync(bookingId), DateTimeOffset.UtcNow, TimeSpan.FromMinutes(30));
+            db.MarkAdded(booking.History[^1]);
+            await db.SaveChangesAsync();
+        }
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var service = new BookingService(db, TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new OnePondy.Application.Payments.PaymentsOptions()));
+            Assert.True(await service.TryExpireAsync(bookingId, default));
+        }
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var booking = await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId);
+            Assert.Equal(OnePondy.Domain.Bookings.BookingStatus.Expired, booking.Status);
+            var reserved = await db.BookingSlots.AsNoTracking()
+                .Where(bs => bs.BookingId == bookingId)
+                .Join(db.AvailabilitySlots.AsNoTracking(), bs => bs.SlotId, s => s.Id, (_, s) => s.ReservedCount)
+                .SingleAsync();
+            Assert.Equal(0, reserved);
+        }
+    }
+
+    [DatabaseFact]
+    public async Task A_payment_order_id_can_only_be_used_once()
+    {
+        var bookingId = await NewBookingIdAsync();
+        var orderId = "order_" + Guid.NewGuid().ToString("N");
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        db.PaymentAttempts.Add(OnePondy.Domain.Payments.PaymentAttempt.Create(bookingId, orderId, 500m, "INR", DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync();
+
+        db.PaymentAttempts.Add(OnePondy.Domain.Payments.PaymentAttempt.Create(bookingId, orderId, 500m, "INR", DateTimeOffset.UtcNow));
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)failure.InnerException!).SqlState);
+    }
+
+    [DatabaseFact]
+    public async Task A_captured_payment_must_name_the_gateway_payment()
+    {
+        var bookingId = await NewBookingIdAsync();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var attempt = OnePondy.Domain.Payments.PaymentAttempt.Create(bookingId, "order_" + Guid.NewGuid().ToString("N"), 500m, "INR", DateTimeOffset.UtcNow);
+        db.PaymentAttempts.Add(attempt);
+        await db.SaveChangesAsync();
+
+        var failure = await Assert.ThrowsAsync<PostgresException>(
+            () => db.Database.ExecuteSqlAsync($"UPDATE payment_attempts SET status = 'captured' WHERE id = {attempt.Id}"));
+
+        Assert.Equal(PostgresErrorCodes.CheckViolation, failure.SqlState);
+    }
+
+    [DatabaseFact]
+    public async Task A_webhook_delivered_twice_is_recorded_once()
+    {
+        var eventId = "evt_" + Guid.NewGuid().ToString("N");
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        db.GatewayEvents.Add(OnePondy.Domain.Payments.GatewayEvent.Receive(eventId, "payment.captured", """{"event":"payment.captured"}""", true, DateTimeOffset.UtcNow));
+        await db.SaveChangesAsync();
+
+        db.GatewayEvents.Add(OnePondy.Domain.Payments.GatewayEvent.Receive(eventId, "payment.captured", """{"event":"payment.captured"}""", true, DateTimeOffset.UtcNow));
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)failure.InnerException!).SqlState);
+        Assert.Equal(1, await db.GatewayEvents.AsNoTracking().CountAsync(e => e.ProviderEventId == eventId));
+    }
+
+    [DatabaseFact]
+    public async Task A_balanced_ledger_transaction_commits_and_an_unbalanced_one_is_refused()
+    {
+        var business = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow;
+        var balanced = Guid.NewGuid();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+
+        db.LedgerEntries.AddRange(
+            OnePondy.Domain.Payments.LedgerEntry.Create(balanced, OnePondy.Domain.Payments.LedgerAccounts.GatewayClearing, 1000m, null, "Captured", now),
+            OnePondy.Domain.Payments.LedgerEntry.Create(balanced, OnePondy.Domain.Payments.LedgerAccounts.PlatformCommission, -100m, null, "Commission", now),
+            OnePondy.Domain.Payments.LedgerEntry.Create(balanced, OnePondy.Domain.Payments.LedgerAccounts.PartnerPayable(business), -900m, null, "Partner share", now));
+        await db.SaveChangesAsync();
+        Assert.Equal(3, await db.LedgerEntries.AsNoTracking().CountAsync(e => e.TransactionId == balanced));
+
+        var unbalanced = Guid.NewGuid();
+        db.LedgerEntries.AddRange(
+            OnePondy.Domain.Payments.LedgerEntry.Create(unbalanced, OnePondy.Domain.Payments.LedgerAccounts.GatewayClearing, 1000m, null, "Captured", now),
+            OnePondy.Domain.Payments.LedgerEntry.Create(unbalanced, OnePondy.Domain.Payments.LedgerAccounts.PlatformCommission, -100m, null, "Commission only", now));
+        var failure = await Assert.ThrowsAsync<PostgresException>(() => db.SaveChangesAsync());
+        Assert.Contains("does not balance", failure.MessageText);
+    }
+
+    [DatabaseFact]
+    public async Task Ledger_entries_cannot_be_changed_removed_or_given_an_unknown_account()
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+
+        var update = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("UPDATE ledger_entries SET description = 'edited'"));
+        var delete = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("DELETE FROM ledger_entries"));
+        var truncate = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlRawAsync("TRUNCATE ledger_entries"));
+        Assert.Contains("append-only", update.MessageText);
+        Assert.Contains("append-only", delete.MessageText);
+        Assert.Contains("append-only", truncate.MessageText);
+
+        var transaction = Guid.NewGuid();
+        db.LedgerEntries.AddRange(
+            OnePondy.Domain.Payments.LedgerEntry.Create(transaction, "made_up_account", 10m, null, "x", DateTimeOffset.UtcNow),
+            OnePondy.Domain.Payments.LedgerEntry.Create(transaction, OnePondy.Domain.Payments.LedgerAccounts.GatewayClearing, -10m, null, "x", DateTimeOffset.UtcNow));
+        var unknown = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal(PostgresErrorCodes.CheckViolation, ((PostgresException)unknown.InnerException!).SqlState);
+    }
+
+    [DatabaseFact]
+    public async Task Refunds_can_never_add_up_to_more_than_was_paid()
+    {
+        var bookingId = await NewBookingIdAsync();
+        var now = DateTimeOffset.UtcNow;
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var attempt = OnePondy.Domain.Payments.PaymentAttempt.Create(bookingId, "order_" + Guid.NewGuid().ToString("N"), 1000m, "INR", now);
+        attempt.MarkCaptured("pay_" + Guid.NewGuid().ToString("N"), now);
+        db.PaymentAttempts.Add(attempt);
+        await db.SaveChangesAsync();
+
+        db.Refunds.Add(OnePondy.Domain.Payments.Refund.Request(attempt.Id, bookingId, 600m, OnePondy.Domain.Payments.RefundReason.CustomerCancelled, now));
+        await db.SaveChangesAsync();
+
+        db.Refunds.Add(OnePondy.Domain.Payments.Refund.Request(attempt.Id, bookingId, 500m, OnePondy.Domain.Payments.RefundReason.CustomerCancelled, now));
+        var failure = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Contains("would exceed", ((PostgresException)failure.InnerException!).MessageText);
+        db.ChangeTracker.Clear();
+
+        // The rest of the money can still be refunded, and a failed refund frees its share again.
+        var rest = OnePondy.Domain.Payments.Refund.Request(attempt.Id, bookingId, 400m, OnePondy.Domain.Payments.RefundReason.PartnerCancelled, now);
+        db.Refunds.Add(rest);
+        await db.SaveChangesAsync();
+        rest.MarkFailed(now);
+        await db.SaveChangesAsync();
+        db.Refunds.Add(OnePondy.Domain.Payments.Refund.Request(attempt.Id, bookingId, 400m, OnePondy.Domain.Payments.RefundReason.PartnerCancelled, now));
+        await db.SaveChangesAsync();
+    }
+
+    [DatabaseFact]
+    public async Task A_settlement_must_add_up_and_a_booking_is_settled_once()
+    {
+        var bookingId = await NewBookingIdAsync();
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var businessId = await db.Bookings.AsNoTracking().Where(b => b.Id == bookingId).Select(b => b.BusinessId).SingleAsync();
+        var start = new DateOnly(2030, 1, 1);
+
+        var bad = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync(
+            $"INSERT INTO settlements (id, business_id, period_start, period_end, gross_amount, commission_amount, refund_amount, net_amount, status, created_at) VALUES ({Guid.NewGuid()}, {businessId}, {start}, {start}, 1000, 100, 0, 999, 'draft', now())"));
+        Assert.Equal(PostgresErrorCodes.CheckViolation, bad.SqlState);
+
+        var settlement = OnePondy.Domain.Payments.Settlement.Draft(businessId, start, start.AddDays(6), 1000m, 100m, 0m, DateTimeOffset.UtcNow);
+        db.Settlements.Add(settlement);
+        db.SettlementItems.Add(OnePondy.Domain.Payments.SettlementItem.Create(settlement.Id, bookingId, OnePondy.Domain.Payments.SettlementItemKind.Sale, 1000m, 100m));
+        await db.SaveChangesAsync();
+        Assert.Equal(900m, (await db.Settlements.AsNoTracking().SingleAsync(s => s.Id == settlement.Id)).NetAmount);
+
+        var second = OnePondy.Domain.Payments.Settlement.Draft(businessId, start.AddDays(7), start.AddDays(13), 1000m, 100m, 0m, DateTimeOffset.UtcNow);
+        db.Settlements.Add(second);
+        db.SettlementItems.Add(OnePondy.Domain.Payments.SettlementItem.Create(second.Id, bookingId, OnePondy.Domain.Payments.SettlementItemKind.Sale, 1000m, 100m));
+        var twice = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)twice.InnerException!).SqlState);
+    }
+
+    [DatabaseFact]
+    public async Task Outbox_messages_are_stored_with_their_payload()
+    {
+        var message = OnePondy.Domain.Payments.OutboxMessage.Create("booking.accepted", """{"bookingId":"x"}""", DateTimeOffset.UtcNow);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        db.OutboxMessages.Add(message);
+        await db.SaveChangesAsync();
+
+        var stored = await db.OutboxMessages.AsNoTracking().SingleAsync(m => m.Id == message.Id);
+
+        Assert.Null(stored.DispatchedAt);
+        Assert.Contains("bookingId", stored.Payload);
     }
 
     private static HttpRequestMessage Authorized(HttpMethod method, string path, string token)
