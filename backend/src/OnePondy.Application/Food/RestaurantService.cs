@@ -157,6 +157,22 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
         return ToPublic(found.Business, found.Profile, areas.GetValueOrDefault(businessId, []));
     }
 
+    /// <summary>
+    /// A restaurant that is open to customers right now, with the areas it serves, or null. Ordering uses this so it can never
+    /// accept an order the browse screens would not have shown.
+    /// </summary>
+    public async Task<OpenRestaurantInfo?> FindOpenAsync(Guid businessId, CancellationToken cancellationToken)
+    {
+        var found = await OpenRestaurantsQuery(businessId).SingleOrDefaultAsync(cancellationToken);
+        if (found is null)
+        {
+            return null;
+        }
+
+        var areas = await AreasOfAsync([businessId], cancellationToken);
+        return new OpenRestaurantInfo(found.Business, found.Profile, areas.GetValueOrDefault(businessId, []));
+    }
+
     // --- Shared ---
 
     private sealed record OpenRestaurant(Business Business, RestaurantProfile Profile);

@@ -71,6 +71,8 @@ public static class DependencyInjection
         services.AddSingleton<ISecretHasher, HmacSecretHasher>();
 
         PaymentsGuard.EnsureSafe(configuration.GetSection(PaymentsOptions.SectionName).Get<PaymentsOptions>() ?? new PaymentsOptions());
+        OnePondy.Application.Food.FoodOptionsGuard.EnsureSafe(
+            configuration.GetSection(OnePondy.Application.Food.FoodOptions.SectionName).Get<OnePondy.Application.Food.FoodOptions>() ?? new OnePondy.Application.Food.FoodOptions());
         AddOtpDelivery(services, configuration, environment);
         AddPaymentGateway(services, configuration);
         AddPushSender(services, configuration);

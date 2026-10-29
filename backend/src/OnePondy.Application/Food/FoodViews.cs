@@ -58,6 +58,9 @@ public sealed record PublicRestaurant(
     decimal MinOrderAmount,
     IReadOnlyList<string> DeliveryAreas);
 
+/// <summary>An open restaurant's records, for ordering.</summary>
+public sealed record OpenRestaurantInfo(OnePondy.Domain.Businesses.Business Business, OnePondy.Domain.Food.RestaurantProfile Profile, IReadOnlyList<string> Areas);
+
 public sealed record PublicMenu(PublicRestaurant Restaurant, IReadOnlyList<MenuCategoryView> Categories);
 
 public static class FoodErrors

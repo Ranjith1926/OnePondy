@@ -74,6 +74,10 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
 
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
 
+    public DbSet<FoodOrder> FoodOrders => Set<FoodOrder>();
+
+    public DbSet<FoodOrderLine> FoodOrderLines => Set<FoodOrderLine>();
+
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
     public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();

@@ -671,6 +671,284 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("ClosedReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("closed_reason");
+
+                    b.Property<string>("ContactPhone")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("contact_phone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character(3)")
+                        .HasColumnName("currency")
+                        .IsFixedLength();
+
+                    b.Property<Guid>("CustomerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_user_id");
+
+                    b.Property<string>("DeliveryAddress")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("delivery_address");
+
+                    b.Property<string>("DeliveryArea")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("delivery_area");
+
+                    b.Property<decimal>("DeliveryFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("delivery_fee");
+
+                    b.Property<string>("DeliveryNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("delivery_note");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<DateTimeOffset?>("EstimatedReadyAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("estimated_ready_at");
+
+                    b.Property<DateTimeOffset?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("idempotency_key");
+
+                    b.Property<decimal>("PackagingFee")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("packaging_fee");
+
+                    b.Property<int>("PrepTimeMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("prep_time_minutes");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("subtotal");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("tax_amount");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_food_orders");
+
+                    b.HasIndex("ExpiresAt")
+                        .HasDatabaseName("ix_food_orders_expiry")
+                        .HasFilter("status IN ('placed', 'awaiting_payment')");
+
+                    b.HasIndex("CustomerUserId", "CreatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_food_orders_customer_created");
+
+                    b.HasIndex("CustomerUserId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_food_orders_idempotency");
+
+                    b.HasIndex("BusinessId", "Status", "CreatedAt")
+                        .HasDatabaseName("ix_food_orders_business_status");
+
+                    b.ToTable("food_orders", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_food_order_amounts", "subtotal > 0 AND delivery_fee >= 0 AND packaging_fee >= 0 AND tax_amount >= 0 AND discount_amount >= 0 AND total_amount > 0");
+
+                            t.HasCheckConstraint("ck_food_order_area", "delivery_area IN ('whiteTown', 'tamilQuarter', 'auroville', 'lawspet', 'muthialpet', 'reddiarpalayam', 'ariyankuppam', 'villianur')");
+
+                            t.HasCheckConstraint("ck_food_order_hold", "status NOT IN ('placed', 'awaiting_payment') OR expires_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_food_order_prep_time", "prep_time_minutes > 0");
+
+                            t.HasCheckConstraint("ck_food_order_status", "status IN ('placed', 'awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'rejected', 'cancelled', 'expired', 'failed', 'refund_pending', 'refunded')");
+
+                            t.HasCheckConstraint("ck_food_order_total", "total_amount = subtotal + delivery_fee + packaging_fee + tax_amount - discount_amount");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrderLine", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("IsVeg")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_veg");
+
+                    b.Property<Guid>("MenuItemId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("menu_item_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("subtotal");
+
+                    b.Property<decimal>("TaxAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("tax_amount");
+
+                    b.Property<decimal>("TaxRatePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tax_rate_percent");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("unit_price");
+
+                    b.HasKey("Id")
+                        .HasName("pk_food_order_lines");
+
+                    b.HasIndex("MenuItemId")
+                        .HasDatabaseName("ix_food_order_lines_menu_item_id");
+
+                    b.HasIndex("OrderId", "MenuItemId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_food_order_lines_dish");
+
+                    b.ToTable("food_order_lines", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_food_order_line_price", "unit_price > 0 AND tax_rate_percent >= 0 AND tax_amount >= 0");
+
+                            t.HasCheckConstraint("ck_food_order_line_quantity", "quantity BETWEEN 1 AND 20");
+
+                            t.HasCheckConstraint("ck_food_order_line_subtotal", "subtotal = unit_price * quantity");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrderStatusEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("changed_by_type");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("changed_by_user_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("NewStatus")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("new_status");
+
+                    b.Property<Guid>("OrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("order_id");
+
+                    b.Property<string>("PreviousStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("previous_status");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.HasKey("Id")
+                        .HasName("pk_food_order_status_history");
+
+                    b.HasIndex("ActorUserId")
+                        .HasDatabaseName("ix_food_order_status_history_changed_by_user_id");
+
+                    b.HasIndex("OrderId", "CreatedAt")
+                        .HasDatabaseName("ix_food_order_status_history_order_time");
+
+                    b.ToTable("food_order_status_history", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_food_order_history_actor", "(changed_by_type = 'system') = (changed_by_user_id IS NULL)");
+
+                            t.HasCheckConstraint("ck_food_order_history_actor_type", "changed_by_type IN ('customer', 'partner', 'admin', 'system', 'driver')");
+
+                            t.HasCheckConstraint("ck_food_order_history_status", "new_status IN ('placed', 'awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'rejected', 'cancelled', 'expired', 'failed', 'refund_pending', 'refunded') AND (previous_status IS NULL OR previous_status IN ('placed', 'awaiting_payment', 'confirmed', 'preparing', 'ready_for_pickup', 'out_for_delivery', 'delivered', 'rejected', 'cancelled', 'expired', 'failed', 'refund_pending', 'refunded'))");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Food.MenuCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2748,6 +3026,56 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_module_flags_app_users_updated_by_user_id");
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrder", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_food_orders_businesses_business_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_food_orders_app_users_customer_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrderLine", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Food.MenuItem", null)
+                        .WithMany()
+                        .HasForeignKey("MenuItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_food_order_lines_menu_items_menu_item_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany("Lines")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_food_order_lines_food_orders_order_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrderStatusEntry", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_food_order_status_history_app_users_changed_by_user_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany("History")
+                        .HasForeignKey("OrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_food_order_status_history_food_orders_order_id");
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Food.MenuCategory", b =>
                 {
                     b.HasOne("OnePondy.Domain.Businesses.Business", null)
@@ -3218,6 +3546,13 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_trip_planner_request_logs_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.FoodOrder", b =>
+                {
+                    b.Navigation("History");
+
+                    b.Navigation("Lines");
                 });
 #pragma warning restore 612, 618
         }

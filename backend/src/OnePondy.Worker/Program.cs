@@ -13,6 +13,7 @@ builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 // Further jobs (outbox dispatch, reconciliation) are added in the phases that need them.
 builder.Services.AddHostedService<AuthDataRetentionJob>();
 builder.Services.AddHostedService<BookingHoldExpiryJob>();
+builder.Services.AddHostedService<FoodOrderExpiryJob>();
 builder.Services.AddHostedService<PendingRefundJob>();
 builder.Services.AddHostedService<PaymentReconciliationJob>();
 builder.Services.AddHostedService<OutboxDispatchJob>();

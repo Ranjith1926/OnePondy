@@ -33,7 +33,8 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 22. [Reconciliation (Worker)](#22-reconciliation-worker)
 23. [Notifications (Expo push)](#23-notifications-expo-push)
 24. [Partner statements and payouts](#24-partner-statements-and-payouts)
-25. [Not built](#25-not-built)
+25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-and-82)
+26. [Not built](#26-not-built)
 
 ---
 
@@ -866,7 +867,61 @@ per-listing commission.
 
 ---
 
-## 25. Not built
+## 25. Food orders (Phase 8, steps 8.1 and 8.2)
+
+### 25.1 States
+
+```
+placed ──accept (online payment on)──► awaiting_payment ──paid (step 8.3)──► confirmed ──► preparing ──► ready_for_pickup ──► out_for_delivery ──► delivered
+   │      accept (payment off / nothing to pay) ────────────────────────────► confirmed                    (the last two are the driver's, step 8.7)
+   ├─ reject (restaurant) ─► rejected
+   ├─ cancel (customer) ───► cancelled          awaiting_payment also: expired · failed
+   └─ no answer in time ───► expired
+rejected / cancelled ──(a payment was taken)──► refund_pending ──► refunded      (step 8.3)
+```
+
+Who may cancel: the **customer** from `placed`, `awaiting_payment` and `confirmed` (until the kitchen starts); the **restaurant** from `confirmed`,
+`preparing` and `ready_for_pickup`, with a reason (a waiting order is rejected instead); an **administrator** from any state before it leaves the
+restaurant or is on its way. Any other move is refused with `order_invalid_transition`. The table lives in `FoodOrder` and is tested row by row.
+
+### 25.2 Pricing and placing (`POST /food/quote`, `POST /food/orders`)
+
+1. The app sends the restaurant, the delivery area (a specific area, not the whole city) and dishes with quantities. **It never sends a price.**
+2. The server checks: the restaurant is open, approved, active and serves the area (the same rule the browse screens use); every dish is on *that*
+   restaurant's menu, not archived and not sold out (`order_item_unavailable` names them); quantities are 1 to 20, at most 30 dishes (a dish listed
+   twice becomes one line); the food total reaches the restaurant's minimum (`order_below_minimum`).
+3. Price: per line `unit price × quantity`, tax per line (the dish's rate, rounded to the paisa, away from zero), then a flat delivery fee and packaging
+   fee from settings. The order's tax is the sum of the lines'. Fees carry no tax in v1 (part of the tax review).
+4. **Placing** also needs the `food` module to be available, an `idempotencyKey` (the same key from the same customer returns the same order, even
+   under simultaneous retries), a delivery address and a phone the driver can call, and `expectedTotal`: the total the customer was shown. If the menu
+   changed since, the order is refused with `order_price_changed` and the new total, never charged at a different price.
+5. The order is saved with a **copy** of every dish (name, price, tax rate), a deadline (`Food:AcceptWindow`, 5 minutes) and its first history row.
+
+### 25.3 The restaurant's inbox
+
+`GET /partner/businesses/{id}/orders` lists newest first (optionally `?status=`). The restaurant sees dishes, amounts, the area and the status, but **not
+the customer's address or phone**: OnePondy's own drivers deliver (F1), so only the driver (step 8.7) will see them. Accept moves the order to
+`awaiting_payment` with a fresh window (`Food:PaymentWindow`, 10 minutes) while online payment is on, otherwise straight to `confirmed`. Starting to
+prepare sets the ready estimate from the restaurant's preparation time. Every action carries the order's `version`; a stale one gets `order_changed` (409).
+
+### 25.4 Simultaneous actions
+
+Two staff accepting at once, or the restaurant accepting while the customer cancels, both start from the same version: the database lets exactly one
+save through and the other receives `order_changed` (409), never an error and never two winners. The same goes for a deadlock victim.
+
+### 25.5 Expiry (Worker, `FoodOrderExpiryJob`, every minute)
+
+An order still `placed` or `awaiting_payment` after `expires_at` becomes `expired` (recorded as the system). Step 8.3 adds the gateway check before an
+`awaiting_payment` order expires, as bookings have.
+
+### 25.6 Not built yet
+
+Paying for an order and refunds (8.3), notifications about orders, the customer's food screens (8.4), the console inbox (8.5), the driver app and delivery
+(8.6 to 8.7), cash on delivery (8.8, only if approved), administrators' order monitoring (8.9).
+
+---
+
+## 26. Not built
 
 | Area | Status |
 |---|---|
@@ -874,6 +929,6 @@ per-listing commission.
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Reviews and ratings, food ordering, rides | Later phases. |
+| Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus and orders to the kitchen are built (section 25); paying, the app screens and delivery are not. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

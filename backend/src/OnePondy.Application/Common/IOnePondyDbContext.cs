@@ -70,6 +70,10 @@ public interface IOnePondyDbContext
 
     DbSet<MenuItem> MenuItems { get; }
 
+    DbSet<FoodOrder> FoodOrders { get; }
+
+    DbSet<FoodOrderLine> FoodOrderLines { get; }
+
     DbSet<Settlement> Settlements { get; }
 
     DbSet<SettlementItem> SettlementItems { get; }

@@ -14,8 +14,11 @@ public static class ModuleKeys
     /// <summary>Online payment for bookings. While it is not available, a partner's acceptance confirms the booking directly.</summary>
     public const string Payments = "payments";
 
+    /// <summary>Food ordering. Placing an order needs it to be available; browsing restaurants does not.</summary>
+    public const string Food = "food";
+
     public static readonly IReadOnlyList<string> All =
-        ["food", "rides", "stays", "activities", "tripPlanner", "notifications", "support", Payments];
+        [Food, "rides", "stays", "activities", "tripPlanner", "notifications", "support", Payments];
 
     public static bool IsKnown(string key) => All.Contains(key);
 }

@@ -85,6 +85,10 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<MenuItem> MenuItems => Set<MenuItem>();
 
+    public DbSet<FoodOrder> FoodOrders => Set<FoodOrder>();
+
+    public DbSet<FoodOrderLine> FoodOrderLines => Set<FoodOrderLine>();
+
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
     public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();
@@ -211,6 +215,16 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<RestaurantDeliveryArea>().HasKey(a => new { a.BusinessId, a.AreaCode });
         modelBuilder.Entity<MenuCategory>().HasKey(c => c.Id);
         modelBuilder.Entity<MenuItem>().HasKey(i => i.Id);
+        modelBuilder.Entity<FoodOrderLine>().HasKey(l => l.Id);
+        modelBuilder.Entity<FoodOrderStatusEntry>().HasKey(h => h.Id);
+        modelBuilder.Entity<FoodOrder>(order =>
+        {
+            order.HasKey(o => o.Id);
+            order.HasMany(o => o.Lines).WithOne().HasForeignKey(l => l.OrderId);
+            order.HasMany(o => o.History).WithOne().HasForeignKey(h => h.OrderId);
+            order.Navigation(o => o.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+            order.Navigation(o => o.History).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
         modelBuilder.Entity<Settlement>().HasKey(s => s.Id);
         modelBuilder.Entity<SettlementItem>().HasKey(i => i.Id);
         modelBuilder.Entity<ReconciliationException>().HasKey(e => e.Id);

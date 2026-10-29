@@ -318,6 +318,10 @@ The transactional outbox plus the Expo push service (D7). Messages are written w
 
 A statement is built from the ledger per business and period, approved by an administrator, and marked paid with the bank reference, which books the payout. Partners read their own and download CSV. Flow: [workflows.md](workflows.md) §24.
 
+### 7.11 Food (Phase 8, steps 8.1 and 8.2)
+
+A restaurant is a business of type restaurant plus a profile, delivery areas and a menu (`RestaurantService`, `MenuService`); customers browse only restaurants that are open, approved, active and serving their area. `OrderService` prices a cart from the menu, places an order (idempotent per customer, price revalidated against the total the customer was shown, snapshots of every dish), and moves it through the state table in `FoodOrder`: the restaurant accepts, rejects, starts and finishes cooking; the customer may cancel until cooking starts; the Worker expires orders nobody answered or paid for. The restaurant never sees the customer's address or phone (OnePondy's own drivers deliver, F1). Paying for orders (8.3), the driver app and delivery (8.6 to 8.7) are not built yet. Flow: [workflows.md](workflows.md) §25; plan: [phase-8-plan.md](phase-8-plan.md).
+
 ## 8. AI trip planner
 
 `TripPlannerService` is deliberately defensive; the model only ranks and arranges places the
@@ -345,6 +349,7 @@ and runnable as a console app in development. It shares Application and Infrastr
 | `AuthDataRetentionJob` | hourly (and once at start-up) | Calls `AuthDataRetention`: deletes OTP challenges created more than 1 day ago, refresh tokens expired or consumed more than 30 days ago, and sessions revoked or expired more than 90 days ago (their remaining tokens cascade). |
 | `BookingHoldExpiryJob` | every minute (and once at start-up) | Calls `BookingHoldExpiry`: takes up to 100 open holds past `expires_at`, oldest first, and runs `TryExpireAsync` on each. Each booking is saved separately, so a lost race (for example a second worker instance, or the partner accepting at that instant) never blocks the rest of the batch. |
 
+| `FoodOrderExpiryJob` | every minute (and once at start-up) | Calls `OrderService.ExpireDueAsync`: closes food orders past `expires_at` that are still `placed` (the restaurant never answered) or `awaiting_payment`. Each order is saved on its own, so a lost race never blocks the rest. |
 | `PendingRefundJob` | every minute | Sends pending refunds to Razorpay (the refund's own id is the idempotency key) and retries ones that never left. |
 | `PaymentReconciliationJob` | every 5 minutes | Checks open orders, stuck refunds and unprocessed webhooks, applies what a lost webhook missed, raises exceptions; once a day compares the previous day's payments with Razorpay's. |
 | `OutboxDispatchJob` | every 20 seconds | Sends due notifications through Expo, reads delivery receipts about 15 minutes later, deletes dead phones, and (hourly) removes old log and outbox rows. |
@@ -376,6 +381,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Ai:Gemini` | `ApiKey`, `Model`, `BaseUrl`, `Timeout` |
 | `Twilio` | `AccountSid`, `AuthToken`, and either `From` (`Auth:Otp:Delivery` = `Twilio`) or `VerifyServiceSid` (`TwilioVerify`). Development only; secrets, never committed. |
 | `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
+| `Food` | `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available. |
 | `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
 | `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
 | `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
@@ -444,6 +450,9 @@ administrator.
 | POST/GET `/bookings`, GET `/bookings/{id}`, POST `/bookings/{id}/cancel` | U | Create, list, view, cancel own bookings. The detail includes the receipt and refunds. |
 | POST `/bookings/{id}/payment`, POST `/bookings/{id}/payment/refresh` | U (own booking) | Start the gateway order; ask "is it paid yet?". |
 | POST `/devices`, DELETE `/devices/{id}` | U | Register or remove this phone for push notifications. |
+| GET `/restaurants?area=`, `/restaurants/{id}`, `/restaurants/{id}/menu` | P | Open restaurants for an area and their menus (not gated by the module flag). |
+| POST `/food/quote` | U | Prices a cart from the menu: lines, tax per line, fees, total. |
+| POST/GET `/food/orders`, GET `/food/orders/{id}`, POST `/food/orders/{id}/cancel` | U (own order) | Place (needs `idempotencyKey` and `expectedTotal`), list, view, cancel until cooking starts. |
 
 ### Payments (no sign-in)
 | Method and path | Auth | Purpose |
@@ -457,6 +466,8 @@ administrator.
 | `/partner/businesses/{id}/listings` CRUD, submit, slots CRUD | O | Listings and availability. |
 | `/partner/businesses/{id}/bookings` list, get, accept, reject, cancel, complete | O | Handle incoming bookings. |
 | `/partner/businesses/{id}/statements` list, get, `/{id}/csv` | O | Own approved and paid statements. |
+| `/partner/businesses/{id}/restaurant` get, put; `/menu` get; `/menu/categories`, `/menu/items` create, update, delete (categories), `/availability`, `/archive` | O | A restaurant's profile, areas and menu. |
+| `/partner/businesses/{id}/orders` list (`?status=`), get, accept, reject, preparing, ready, cancel | O | The restaurant's order inbox. Reject and cancel need a reason; every call takes the order's `version`. |
 
 Update calls take the entity's `version`; a mismatch returns `409`.
 

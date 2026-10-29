@@ -28,6 +28,7 @@ public static class DependencyInjection
         services.Configure<ConsoleOptions>(configuration.GetSection(ConsoleOptions.SectionName));
         services.Configure<TripPlannerOptions>(configuration.GetSection(TripPlannerOptions.SectionName));
         services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
+        services.Configure<OnePondy.Application.Food.FoodOptions>(configuration.GetSection(OnePondy.Application.Food.FoodOptions.SectionName));
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
@@ -61,6 +62,7 @@ public static class DependencyInjection
         services.AddScoped<SettlementService>();
         services.AddScoped<OnePondy.Application.Food.RestaurantService>();
         services.AddScoped<OnePondy.Application.Food.MenuService>();
+        services.AddScoped<OnePondy.Application.Food.OrderService>();
         services.AddScoped<PaymentAdminService>();
         services.AddScoped<NotificationOutbox>();
         services.AddScoped<DeviceService>();

@@ -88,3 +88,31 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   behind, so use a fresh one each time.
 - **Not done in 8.1:** ordering, carts and prices at checkout (8.2), photos for dishes or restaurants (no media for them yet), dish options and
   add-ons, opening hours by day (a single open/closed switch for now), and the customer app's food screens (8.4).
+
+**8.2 (orders and server-side pricing).**
+
+- **Quote and order:** `POST /api/v1/food/quote` prices a cart; `POST /api/v1/food/orders` places it. The app sends dishes and quantities, **never prices**:
+  the server reads them from the menu, works out tax per line (the dish's rate, rounded to the paisa) and adds a flat delivery fee and packaging fee
+  (`Food:DeliveryFee` 30, `Food:PackagingFee` 10; fees carry no tax in v1, which is part of the tax review). The same restaurant-visibility rule as the browse
+  screens decides whether a restaurant can be ordered from (`OrderService` asks `RestaurantService.FindOpenAsync`).
+- **Cart rules:** a specific delivery area (not the whole city); a restaurant that is open and serves it; dishes on *that* menu, available, not archived (named in the
+  error); quantity 1 to 20 per dish, at most 30 dishes (a dish listed twice becomes one line); the food total reaches the restaurant's minimum; the order total
+  stays under ₹100,000.
+- **Placing:** needs the `food` module available, an `idempotencyKey` (same key from the same customer = same order, also under simultaneous retries, enforced by
+  `ux_food_orders_idempotency`), an address, a phone, and **`expectedTotal`**, the total the customer was shown. If the menu changed in between, the order is
+  refused with `order_price_changed` and the new total. Every dish is copied onto the order (name, price, tax rate), so a later menu edit never changes it.
+- **States (`FoodOrder`, tested row by row):** placed → awaiting_payment | confirmed → preparing → ready_for_pickup → out_for_delivery → delivered; rejected,
+  cancelled, expired, failed; refund_pending → refunded. The restaurant has `accept`, `reject` (reason), `preparing`, `ready` and `cancel` (reason); the customer
+  may cancel from placed, awaiting_payment and confirmed, not once preparing has started (F8); an administrator may cancel anything not yet on its way. Accepting
+  confirms directly while online payment is off, and otherwise waits for payment (`Food:PaymentWindow`, 10 minutes). `out_for_delivery`, `delivered`, the refund
+  states and `failed` exist in the table now but are moved by steps 8.3 and 8.7.
+- **Privacy:** the restaurant's order views leave out the customer's address and phone; only OnePondy's drivers will see them (F1, step 8.7).
+- **Time limits:** `Food:AcceptWindow` (5 minutes) for the restaurant to answer; `FoodOrderExpiryJob` (Worker, every minute) expires orders nobody answered or paid for.
+- **Migration:** `AddFoodOrders` (three tables, no data changes, and triggers: lines and history are append-only; an order's subtotal and tax must equal the sums of its
+  lines at commit). Apply it as `onepondy_app` like the others.
+- **Tests:** 37 new unit tests (pricing and rounding, every cart rule, idempotency, price change, snapshots, ownership, restaurant privacy, accept with payment on and off,
+  reject, the kitchen steps, cancel rules, stale versions, a lost race, expiry, the whole state table, settings guard) and 10 PostgreSQL integration tests over HTTP (run on a fresh
+  PostgreSQL 18 database with the whole suite: 120 passed, 6 live-gateway tests skipped; the full flow, module off, validation, access control, cancel rules, stale version, eight simultaneous identical placements, accept against cancel, six simultaneous
+  accepts, and the database refusing edits to lines and history, bad totals and an order with no lines).
+- **Not done in 8.2:** paying for an order and refunds (8.3), push notifications about orders, a note to the kitchen (the order has a *delivery* note only), the app
+  screens (8.4), the console inbox (8.5), the driver side (8.6 to 8.7), a discount or coupon (the column exists and is always 0).

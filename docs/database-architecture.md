@@ -341,6 +341,29 @@ is shaped so that food orders (Phase 8) and rides (Phase 9) can be added as furt
 branches without changing readers. Phase 7 did **not** extend it with payment status (the plan
 considered it); the app reads the receipt and refunds from the booking detail instead.
 
+### 3.10 Food (Phase 8)
+
+**Restaurants and menus (step 8.1, migration 14).**
+
+- **`restaurant_profiles`** – one row per restaurant business (`business_id` is the key and a RESTRICT foreign key to `businesses`):
+  `prep_time_minutes` (5 to 180), `min_order_amount` (0 to 100,000), `is_accepting_orders` (the open switch, default closed), `xmin` version.
+- **`restaurant_delivery_areas`** – `(business_id, area_code)`, the area codes the app's picker uses (`puducherry` means the whole city), a CHECK on the code list.
+- **`menu_categories`** – `name` (unique per restaurant, `ux_menu_categories_name`), `position`. `ux_menu_categories_id_business` lets a dish point at `(category_id, business_id)`, so a dish can never sit in another restaurant's category.
+- **`menu_items`** – `price` (`numeric(12,2)`, more than 0), `is_veg`, `tax_rate_percent` (0 to 28, provisional default 5), `is_available` (sold out), `is_archived` (never deleted, because orders point at dishes; `ck_menu_item_archived_unavailable`).
+
+**Orders (step 8.2, migration 15, `AddFoodOrders`).**
+
+- **`food_orders`** – `customer_user_id` and `business_id` (both RESTRICT: orders outlive an anonymised account), `status` (13 values, CHECK),
+  `idempotency_key` (unique per customer, `ux_food_orders_idempotency`), `expires_at` (required while `placed` or `awaiting_payment`, `ck_food_order_hold`),
+  `delivery_area` (a specific area, never the whole city), `delivery_address`, `delivery_note`, `contact_phone`, `prep_time_minutes` and `estimated_ready_at`,
+  the price breakdown (`subtotal`, `delivery_fee`, `packaging_fee`, `tax_amount`, `discount_amount`, `total_amount`; `ck_food_order_total` makes the
+  total equal the parts), `closed_reason`, `xmin` version. Partial index `ix_food_orders_expiry` serves the Worker.
+- **`food_order_lines`** – one row per dish: `menu_item_id` (RESTRICT), and a **copy** of `name`, `is_veg`, `unit_price`, `quantity` (1 to 20),
+  `tax_rate_percent`, `subtotal` (`= unit_price × quantity`) and `tax_amount`, so a later menu edit never changes an order. One dish once per order.
+- **`food_order_status_history`** – append-only, like booking history: every step with the previous and new status, who (`customer`, `partner`, `admin`, `system`, `driver`) and why.
+- Triggers: `food_order_records_are_immutable()` refuses `UPDATE`, `DELETE` and `TRUNCATE` on lines and history; `food_order_matches_its_lines()` is a deferred
+  constraint trigger that, at commit, refuses an order whose `subtotal` and `tax_amount` are not the sums of its lines (so an order cannot exist without lines).
+
 ## 4. Foreign-key delete policy
 
 | Parent → child | Policy | Reason |
@@ -371,6 +394,8 @@ migration; EF Core cannot express a non-cascade ownership FK in the model snapsh
 | `trg_ledger_entries_balance` (row, **deferred constraint trigger**), function `ledger_entries_must_balance()` | `ledger_entries` | At commit, raises unless every ledger transaction touched sums to zero. A transaction that does not balance cannot be saved. |
 | `trg_ledger_entries_append_only` (row) and `trg_ledger_entries_no_truncate` (statement), function `ledger_entries_is_append_only()` | `ledger_entries` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: a mistake is corrected by a new, balanced transaction. |
 | `trg_refunds_within_captured` (row), function `refunds_within_captured_amount()` | `refunds` | Locks the payment and raises if its refunds (other than failed ones) would exceed what was captured, so two simultaneous refunds cannot both pass. |
+| `trg_food_order_status_history_append_only` / `_no_truncate` and `trg_food_order_lines_append_only` / `_no_truncate`, function `food_order_records_are_immutable()` | `food_order_status_history`, `food_order_lines` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: an order's lines and history are written once. |
+| `trg_food_orders_match_lines` and `trg_food_order_lines_match_order` (rows, **deferred constraint triggers**), function `food_order_matches_its_lines()` | `food_orders`, `food_order_lines` | At commit, raises unless the order's `subtotal` and `tax_amount` equal the sums of its lines. |
 
 ## 6. Migrations
 
@@ -391,6 +416,8 @@ Applied in this order (folder `Persistence/Migrations`):
 | 11 | `20261029095555_AddReconciliationExceptions` | `reconciliation_exceptions`. |
 | 12 | `20261029101305_AddPushNotifications` | `device_tokens`, `notification_log`, and `next_attempt_at`, `dedupe_key` on the outbox. |
 | 13 | `20261029110845_AddSettlementRowVersion` | `xmin` row version on `settlements` (no new physical column). |
+| 14 | `20261029130624_AddRestaurantsAndMenus` | `restaurant_profiles`, `restaurant_delivery_areas`, `menu_categories`, `menu_items`. |
+| 15 | `20261029152153_AddFoodOrders` | `food_orders`, `food_order_lines`, `food_order_status_history`; their immutability and sum-of-lines triggers. |
 
 Rules for new migrations:
 
