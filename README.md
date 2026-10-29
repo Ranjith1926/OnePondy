@@ -112,6 +112,20 @@ may need extra permission under Messaging > Settings > Geo permissions. Only SMS
 codes still fail until an email provider is chosen. Instead of `Twilio:From` you can set
 `Twilio:MessagingServiceSid`.
 
+**Recommended for India: Twilio Verify.** It needs no phone number of your own, because Twilio
+creates, sends and checks the code and routes SMS to India itself. OnePondy still applies its own
+5-minute expiry, attempt limit and send limits. Create a Verify service in the Twilio console, then:
+
+```powershell
+dotnet user-secrets set "Twilio:AccountSid" "<account sid>" --project src/OnePondy.Api
+dotnet user-secrets set "Twilio:AuthToken" "<auth token>" --project src/OnePondy.Api
+dotnet user-secrets set "Twilio:VerifyServiceSid" "<VA... service sid>" --project src/OnePondy.Api
+dotnet user-secrets set "Auth:Otp:Delivery" "TwilioVerify" --project src/OnePondy.Api
+```
+
+Verify cannot send the "account deleted" confirmation text, so that message is skipped in this
+mode. On a trial account the code can only go to numbers verified in your Twilio account.
+
 Until an SMS and email provider is chosen (spec D19), the API cannot deliver one-time codes. In
 Development the `appsettings.Development.json` setting `Auth:Otp:Delivery = Log` prints each code
 to the API console as a `DEVELOPMENT ONLY` warning. The API refuses that setting in any other

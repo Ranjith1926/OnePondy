@@ -61,6 +61,19 @@ public interface IOtpSender
         CancellationToken cancellationToken);
 
     Task SendAccountDeletedAsync(OtpChannel channel, string destination, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// True when the provider creates and checks the codes itself (Twilio Verify). OnePondy then does not
+    /// generate a code: it asks the provider to start a verification and later asks it to check one,
+    /// while still applying its own expiry, attempt and send limits.
+    /// </summary>
+    bool ProviderChecksCodes => false;
+
+    Task StartVerificationAsync(OtpChannel channel, string destination, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("This sender generates its own codes.");
+
+    Task<bool> CheckVerificationAsync(OtpChannel channel, string destination, string code, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("This sender generates its own codes.");
 }
 
 /// <summary>Thrown by an <see cref="IOtpSender"/> when a message cannot be delivered.</summary>

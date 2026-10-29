@@ -89,7 +89,8 @@ public sealed class OtpChallengeService(
             return AuthErrors.DailyLimitReached;
         }
 
-        var code = GenerateCode(_options.CodeLength);
+        // When the provider makes the codes, nothing we could check is stored: the hash is of a throwaway value.
+        var code = sender.ProviderChecksCodes ? Guid.NewGuid().ToString("N") : GenerateCode(_options.CodeLength);
         var challenge = OtpChallenge.Create(channel, purpose, destination, hasher.Hash(code), now, _options.Lifetime);
         db.OtpChallenges.Add(challenge);
         await db.SaveChangesAsync(cancellationToken);
@@ -98,7 +99,14 @@ public sealed class OtpChallengeService(
         {
             try
             {
-                await sender.SendCodeAsync(channel, destination, code, purpose, cancellationToken);
+                if (sender.ProviderChecksCodes)
+                {
+                    await sender.StartVerificationAsync(channel, destination, cancellationToken);
+                }
+                else
+                {
+                    await sender.SendCodeAsync(channel, destination, code, purpose, cancellationToken);
+                }
             }
             catch (OtpDeliveryException exception)
             {
@@ -130,7 +138,29 @@ public sealed class OtpChallengeService(
         }
 
         var submitted = code?.Trim() ?? string.Empty;
-        var result = challenge.Verify(hash => hasher.Matches(submitted, hash), time.GetUtcNow(), _options.MaxAttempts);
+        var now = time.GetUtcNow();
+        Func<byte[], bool> matches = hash => hasher.Matches(submitted, hash);
+        if (sender.ProviderChecksCodes)
+        {
+            // Ask the provider only for a challenge that is still open, so spent or expired ones cost nothing.
+            var approved = false;
+            if (challenge.ConsumedAt is null && now < challenge.ExpiresAt && challenge.Attempts < _options.MaxAttempts)
+            {
+                try
+                {
+                    approved = await sender.CheckVerificationAsync(challenge.Channel, challenge.Destination, submitted, cancellationToken);
+                }
+                catch (OtpDeliveryException exception)
+                {
+                    logger.LogError(exception, "Could not check a code with the provider");
+                    return AuthErrors.DeliveryUnavailable;
+                }
+            }
+
+            matches = _ => approved;
+        }
+
+        var result = challenge.Verify(matches, now, _options.MaxAttempts);
         await db.SaveChangesAsync(cancellationToken);
 
         return result switch

@@ -167,6 +167,34 @@ public sealed class CapturingOtpSender : IOtpSender
 
     public bool Fail { get; set; }
 
+    /// <summary>Acts like Twilio Verify: the provider makes and checks the codes.</summary>
+    public bool ProviderMode { get; set; }
+
+    public string ProviderCode { get; set; } = "654321";
+
+    public List<string> StartedVerifications { get; } = [];
+
+    public int Checks { get; private set; }
+
+    public bool ProviderChecksCodes => ProviderMode;
+
+    public Task StartVerificationAsync(OtpChannel channel, string destination, CancellationToken cancellationToken)
+    {
+        if (Fail)
+        {
+            throw new OtpDeliveryException("Provider down");
+        }
+
+        StartedVerifications.Add(destination);
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> CheckVerificationAsync(OtpChannel channel, string destination, string code, CancellationToken cancellationToken)
+    {
+        Checks++;
+        return Task.FromResult(code == ProviderCode);
+    }
+
     public Task SendCodeAsync(
         OtpChannel channel,
         string destination,

@@ -23,10 +23,17 @@ public sealed class TwilioOptions
 
     public string BaseUrl { get; set; } = "https://api.twilio.com/2010-04-01";
 
+    /// <summary>The Twilio Verify service used by the <c>TwilioVerify</c> delivery mode.</summary>
+    public string? VerifyServiceSid { get; set; }
+
+    public string VerifyBaseUrl { get; set; } = "https://verify.twilio.com/v2";
+
+    public bool HasAccount => !string.IsNullOrWhiteSpace(AccountSid) && !string.IsNullOrWhiteSpace(AuthToken);
+
     public bool IsConfigured =>
-        !string.IsNullOrWhiteSpace(AccountSid)
-        && !string.IsNullOrWhiteSpace(AuthToken)
-        && (!string.IsNullOrWhiteSpace(From) || !string.IsNullOrWhiteSpace(MessagingServiceSid));
+        HasAccount && (!string.IsNullOrWhiteSpace(From) || !string.IsNullOrWhiteSpace(MessagingServiceSid));
+
+    public bool IsVerifyConfigured => HasAccount && !string.IsNullOrWhiteSpace(VerifyServiceSid);
 }
 
 /// <summary>
