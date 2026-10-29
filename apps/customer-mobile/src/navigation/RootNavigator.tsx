@@ -6,8 +6,11 @@ import { DeleteAccountScreen } from '../features/auth/screens/DeleteAccountScree
 import { EditProfileScreen } from '../features/auth/screens/EditProfileScreen';
 import { SignInScreen } from '../features/auth/screens/SignInScreen';
 import { VerifyCodeScreen } from '../features/auth/screens/VerifyCodeScreen';
+import { BookingDetailScreen } from '../features/bookings/screens/BookingDetailScreen';
 import { ComponentGalleryScreen } from '../features/dev/screens/ComponentGalleryScreen';
 import { ItineraryDetailScreen } from '../features/itineraries/screens/ItineraryDetailScreen';
+import { ListingDetailScreen } from '../features/listings/screens/ListingDetailScreen';
+import { ListingsScreen } from '../features/listings/screens/ListingsScreen';
 import { LocationSelectorScreen } from '../features/location/screens/LocationSelectorScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
 import { PlaceDetailScreen } from '../features/tourism/screens/PlaceDetailScreen';
@@ -61,6 +64,9 @@ export const RootStack = createNativeStackNavigator({
         },
         PlaceDetail: PlaceDetailScreen,
         ItineraryDetail: ItineraryDetailScreen,
+        Listings: ListingsScreen,
+        ListingDetail: ListingDetailScreen,
+        BookingDetail: BookingDetailScreen,
         TripPlanner: {
           screen: TripPlannerFormScreen,
           options: { presentation: 'modal' },

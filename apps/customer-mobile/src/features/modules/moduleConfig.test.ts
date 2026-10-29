@@ -18,6 +18,15 @@ describe('effectiveModuleStatus', () => {
     expect(effectiveModuleStatus({ food: 'available' }).food).toBe('comingSoon');
   });
 
+  it('opens Stays and Activities now that bookings exist, but only when the server says so', () => {
+    expect(effectiveModuleStatus({ stays: 'available', activities: 'available' })).toMatchObject({
+      stays: 'available',
+      activities: 'available',
+    });
+    expect(effectiveModuleStatus({ stays: 'comingSoon' }).stays).toBe('comingSoon');
+    expect(effectiveModuleStatus({ activities: 'hidden' }).activities).toBe('hidden');
+  });
+
   it('ignores unknown values', () => {
     expect(effectiveModuleStatus({ food: 'live', casino: 'available' }).food).toBe('comingSoon');
   });

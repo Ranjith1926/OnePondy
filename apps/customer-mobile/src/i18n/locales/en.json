@@ -156,12 +156,51 @@
     "title": "Bookings",
     "empty": {
       "title": "No bookings yet",
-      "message": "Bookings for activities, stays and events will appear here once they open.",
-      "action": "Explore places"
+      "message": "Book an activity, stay or event and it will appear here, with its status.",
+      "action": "Browse what's on offer"
     },
     "guest": {
       "title": "Sign in to see your bookings",
       "message": "Your bookings for activities, stays and events stay with your account."
+    },
+    "loading": "Loading your bookings",
+    "error": {
+      "title": "Couldn't load your bookings",
+      "message": "Check your connection and try again."
+    },
+    "guestCount_one": "{{count}} guest",
+    "guestCount_other": "{{count}} guests",
+    "requested": "Requested {{date}}",
+    "cancel": "Cancel booking",
+    "cancelling": "Cancelling…",
+    "cancelConfirm": {
+      "title": "Cancel this booking?",
+      "message": "This can't be undone.",
+      "confirm": "Cancel booking",
+      "keep": "Keep booking"
+    },
+    "detail": {
+      "loading": "Loading booking",
+      "error": {
+        "title": "Couldn't load this booking",
+        "message": "Check your connection and try again."
+      },
+      "timeline": "Status history",
+      "cancellationPolicy": "Cancellation policy",
+      "freeUntil": "Free cancellation up to {{hours}}h before, then {{percent}}% refund.",
+      "reason": "Reason: {{reason}}"
+    },
+    "status": {
+      "pending": "Awaiting partner response",
+      "awaitingPayment": "Awaiting payment",
+      "confirmed": "Confirmed",
+      "failed": "Payment failed",
+      "expired": "Expired",
+      "rejected": "Rejected",
+      "cancelled": "Cancelled",
+      "refundPending": "Refund in progress",
+      "refunded": "Refunded",
+      "completed": "Completed"
     }
   },
   "saved": {
@@ -278,6 +317,52 @@
     "saved": "Saved",
     "addToTrip": "Add to trip",
     "addedToTrip": "Added to {{title}}"
+  },
+  "listings": {
+    "title": "Book",
+    "categoriesLabel": "Listing types",
+    "types": {
+      "all": "All",
+      "activity": "Activities",
+      "stay": "Stays",
+      "event": "Events",
+      "service": "Services",
+      "shop": "Shops"
+    },
+    "loading": "Loading listings",
+    "error": {
+      "title": "Couldn't load listings",
+      "message": "Check your connection and try again."
+    },
+    "empty": {
+      "title": "Nothing here yet",
+      "message": "Check back soon as partners add more."
+    },
+    "discoveryOnly": "Discovery only — contact the business directly.",
+    "from": "From {{currency}} {{price}}",
+    "detail": {
+      "loading": "Loading listing",
+      "error": {
+        "title": "Couldn't load this listing",
+        "message": "Check your connection and try again."
+      },
+      "about": "About",
+      "address": "Address",
+      "cancellationPolicy": "Cancellation policy",
+      "freeUntil": "Free cancellation up to {{hours}}h before, then {{percent}}% refund.",
+      "book": "Book now",
+      "noSlots": "No availability yet. Check back soon."
+    },
+    "book": {
+      "title": "Choose a time",
+      "guests": "Guests",
+      "placesLeft_one": "{{count}} place left",
+      "placesLeft_other": "{{count}} places left",
+      "confirm": "Request booking",
+      "requesting": "Requesting…",
+      "noSlots": "No availability for this listing yet.",
+      "success": "Booking requested! You'll be notified once {{business}} responds."
+    }
   },
   "days": {
     "monday": "Monday",

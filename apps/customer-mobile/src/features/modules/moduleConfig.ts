@@ -17,7 +17,11 @@ export const moduleKeys: readonly ModuleKey[] = [
  * Modules this app version can actually open. A module the server marks "available" but this
  * version cannot open stays "coming soon", so a flag can never promise more than the app delivers.
  */
-export const implementedModules: ReadonlySet<ModuleKey> = new Set<ModuleKey>(['tripPlanner']);
+export const implementedModules: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
+  'tripPlanner',
+  'activities',
+  'stays',
+]);
 
 const isStatus = (value: unknown): value is ModuleStatus =>
   value === 'available' || value === 'comingSoon' || value === 'hidden';

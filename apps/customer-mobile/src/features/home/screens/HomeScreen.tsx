@@ -23,6 +23,18 @@ export function HomeScreen() {
   const modules = useModuleStatus();
   const openExplore = () => navigation.navigate('Main', { screen: 'Explore' });
 
+  const onServicePress = (module: ModuleKey) => {
+    if (module === 'activities' && modules.activities === 'available') {
+      navigation.navigate('Listings', { type: 'activity' });
+      return;
+    }
+    if (module === 'stays' && modules.stays === 'available') {
+      navigation.navigate('Listings', { type: 'stay' });
+      return;
+    }
+    setComingSoon(module);
+  };
+
   return (
     <>
       <MainTabTemplate
@@ -41,7 +53,7 @@ export function HomeScreen() {
             onPress={() => navigation.navigate('Search')}
           />
         </View>
-        <ServiceGrid onServicePress={setComingSoon} />
+        <ServiceGrid onServicePress={onServicePress} />
         <HomeHero onExplore={openExplore} />
         <PopularPlacesSection onSeeAll={openExplore} />
         <CuratedCollectionsSection />
