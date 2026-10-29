@@ -23,8 +23,12 @@ public sealed class BookingHarness
         var paymentOptions = Microsoft.Extensions.Options.Options.Create(Payments);
         Ledger = new OnePondy.Application.Payments.LedgerService(Db, Time, paymentOptions);
         Refunds = new OnePondy.Application.Payments.RefundService(Db, Gateway, Time, paymentOptions, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.RefundService>.Instance);
-        Bookings = new BookingService(Db, Time, paymentOptions, Refunds);
-        PaymentService = new OnePondy.Application.Payments.PaymentService(Db, Gateway, Time, paymentOptions, Ledger, Refunds, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.PaymentService>.Instance);
+        Notifications = new OnePondy.Application.Notifications.NotificationOutbox(Db, Time);
+        Bookings = new BookingService(Db, Time, paymentOptions, Refunds, Notifications);
+        PaymentService = new OnePondy.Application.Payments.PaymentService(Db, Gateway, Time, paymentOptions, Ledger, Refunds, Notifications, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.PaymentService>.Instance);
+        Devices = new OnePondy.Application.Notifications.DeviceService(Db, Time);
+        Reminders = new OnePondy.Application.Notifications.BookingReminders(Db, Notifications, Time);
+        Dispatcher = new OnePondy.Application.Notifications.OutboxDispatcher(Db, Push, Accounts, Time, Microsoft.Extensions.Options.Options.Create(NotificationSettings), Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Notifications.OutboxDispatcher>.Instance);
         Expiry = new BookingHoldExpiry(Db, Bookings, PaymentService, Time, paymentOptions);
         Reconciliation = new OnePondy.Application.Payments.ReconciliationService(Db, Gateway, PaymentService, Time, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.ReconciliationService>.Instance);
         ReconciliationExceptions = new OnePondy.Application.Payments.ReconciliationExceptionService(Db, audit, Time);
@@ -62,6 +66,19 @@ public sealed class BookingHarness
 
     public FakePaymentGateway Gateway { get; } = new();
 
+    public OnePondy.Application.Notifications.NotificationOutbox Notifications { get; }
+
+    public OnePondy.Application.Notifications.DeviceService Devices { get; }
+
+    public OnePondy.Application.Notifications.BookingReminders Reminders { get; }
+
+    public OnePondy.Application.Notifications.OutboxDispatcher Dispatcher { get; }
+
+    public FakePushSender Push { get; } = new();
+
+    /// <summary>Push notifications are on in tests unless a test turns them off.</summary>
+    public OnePondy.Application.Notifications.NotificationOptions NotificationSettings { get; } = new() { Enabled = true };
+
     public OnePondy.Application.Payments.LedgerService Ledger { get; }
 
     public OnePondy.Application.Payments.RefundService Refunds { get; }
@@ -93,6 +110,11 @@ public sealed class BookingHarness
     /// <summary>Switches online payment on, the way an administrator does in the console.</summary>
     public async Task EnablePaymentsAsync()
     {
+        if (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AnyAsync(Db.ModuleFlags, f => f.Key == ModuleKeys.Payments))
+        {
+            return;
+        }
+
         Db.ModuleFlags.Add(new ModuleFlag(ModuleKeys.Payments, ModuleStatus.Available));
         await Db.SaveChangesAsync();
     }

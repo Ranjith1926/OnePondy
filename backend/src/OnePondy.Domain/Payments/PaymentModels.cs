@@ -389,6 +389,8 @@ public sealed class SettlementItem
 /// </summary>
 public sealed class OutboxMessage
 {
+    public const int MaxAttempts = 5;
+
     private OutboxMessage()
     {
     }
@@ -407,17 +409,55 @@ public sealed class OutboxMessage
 
     public string? LastError { get; private set; }
 
-    public static OutboxMessage Create(string type, string payload, DateTimeOffset now)
+    /// <summary>Not before this time. Set as a lease while one dispatcher has the message, and as a back-off after a failure.</summary>
+    public DateTimeOffset? NextAttemptAt { get; private set; }
+
+    /// <summary>When set, only one message with this key is ever stored, so an event that could be raised twice (a reminder) is sent once.</summary>
+    public string? DedupeKey { get; private set; }
+
+    /// <summary>Optimistic concurrency token (PostgreSQL xmin): two dispatchers cannot both take the same message.</summary>
+    public uint Version { get; private set; }
+
+    public bool IsPending => DispatchedAt is null && Attempts < MaxAttempts;
+
+    public static OutboxMessage Create(string type, string payload, DateTimeOffset now, string? dedupeKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(type);
-        return new OutboxMessage { Id = Guid.CreateVersion7(), Type = type, Payload = payload, CreatedAt = now };
+        return new OutboxMessage { Id = Guid.CreateVersion7(), Type = type, Payload = payload, CreatedAt = now, DedupeKey = dedupeKey };
     }
 
-    public void MarkDispatched(DateTimeOffset now) => DispatchedAt = now;
+    /// <summary>One dispatcher takes the message for a while. If it never finishes, the message becomes available again.</summary>
+    public void Lease(DateTimeOffset until) => NextAttemptAt = until;
 
-    public void MarkAttemptFailed(string error)
+    public void MarkDispatched(DateTimeOffset now)
+    {
+        DispatchedAt = now;
+        NextAttemptAt = null;
+    }
+
+    /// <summary>Finished without sending: there was nobody to send to, or it is no longer right to. The reason is kept.</summary>
+    public void Discard(string reason, DateTimeOffset now)
+    {
+        LastError = Truncate(reason);
+        MarkDispatched(now);
+    }
+
+    /// <summary>The attempt failed. It is tried again at <paramref name="retryAt"/>, until <see cref="MaxAttempts"/> is reached.</summary>
+    public void MarkAttemptFailed(string error, DateTimeOffset retryAt)
     {
         Attempts++;
-        LastError = error.Length > 500 ? error[..500] : error;
+        LastError = Truncate(error);
+        NextAttemptAt = retryAt;
     }
+
+    /// <summary>How long to wait before attempt number <paramref name="attempt"/> (1 is the first retry): 1 min, 5 min, 30 min, 2 h.</summary>
+    public static TimeSpan BackoffFor(int attempt) => attempt switch
+    {
+        <= 1 => TimeSpan.FromMinutes(1),
+        2 => TimeSpan.FromMinutes(5),
+        3 => TimeSpan.FromMinutes(30),
+        _ => TimeSpan.FromHours(2),
+    };
+
+    private static string Truncate(string text) => text.Length > 500 ? text[..500] : text;
 }

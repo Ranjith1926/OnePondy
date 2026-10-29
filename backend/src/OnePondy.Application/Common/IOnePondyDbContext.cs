@@ -7,6 +7,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
@@ -61,6 +62,12 @@ public interface IOnePondyDbContext
     DbSet<LedgerEntry> LedgerEntries { get; }
 
     DbSet<ReconciliationException> ReconciliationExceptions { get; }
+
+    DbSet<OutboxMessage> OutboxMessages { get; }
+
+    DbSet<DeviceToken> DeviceTokens { get; }
+
+    DbSet<NotificationLogEntry> NotificationLog { get; }
 
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an

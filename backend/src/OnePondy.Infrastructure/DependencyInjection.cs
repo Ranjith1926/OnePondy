@@ -7,6 +7,7 @@ using OnePondy.Application.Businesses;
 using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Application.Media;
+using OnePondy.Application.Notifications;
 using OnePondy.Application.Payments;
 using OnePondy.Application.Staff;
 using OnePondy.Application.TripPlanner;
@@ -14,6 +15,7 @@ using OnePondy.Infrastructure.Businesses;
 using OnePondy.Infrastructure.Identity;
 using OnePondy.Infrastructure.Media;
 using OnePondy.Infrastructure.Messaging;
+using OnePondy.Infrastructure.Notifications;
 using OnePondy.Infrastructure.Payments;
 using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
@@ -71,6 +73,7 @@ public static class DependencyInjection
         PaymentsGuard.EnsureSafe(configuration.GetSection(PaymentsOptions.SectionName).Get<PaymentsOptions>() ?? new PaymentsOptions());
         AddOtpDelivery(services, configuration, environment);
         AddPaymentGateway(services, configuration);
+        AddPushSender(services, configuration);
         AddTripPlannerProvider(services, configuration);
         return services;
     }
@@ -122,6 +125,23 @@ public static class DependencyInjection
         }
 
         services.AddSingleton<IOtpSender, LoggingOtpSender>();
+    }
+
+    /// <summary>
+    /// Expo's push service when notifications are switched on (<c>Notifications:Enabled</c>), otherwise a sender that reports itself
+    /// unavailable so the Worker leaves the outbox alone. The same fall-back the other providers use.
+    /// </summary>
+    private static void AddPushSender(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddOptions<NotificationOptions>().Bind(configuration.GetSection(NotificationOptions.SectionName));
+
+        if (!configuration.GetValue<bool>($"{NotificationOptions.SectionName}:Enabled"))
+        {
+            services.AddSingleton<IPushSender, UnavailablePushSender>();
+            return;
+        }
+
+        services.AddHttpClient<IPushSender, ExpoPushSender>(client => client.Timeout = TimeSpan.FromSeconds(15));
     }
 
     /// <summary>

@@ -308,3 +308,38 @@ attempt in any state except already captured, because a customer can still pay a
   those log lines is the monitoring hook.
 - **Not done, deliberately.** Comparing Razorpay's *settlement* report (fees, bank reference) needs payouts, which stay unbuilt
   until legal review (Route or manual settlement, D21); this step compares the payments themselves. Days are UTC, not India time.
+
+**7.7 (push notifications through the outbox, Expo).**
+
+- **The outbox.** A booking change and the notification it causes are saved together (same transaction), so either both happen or neither
+  does: a new request tells the business's owner; accepting tells the customer to pay (or that it is confirmed, for free bookings);
+  rejecting, cancelling, a hold expiring, a verified payment (customer: confirmed, partner: paid) and a processed refund each tell the
+  right person. The person who made the change is not told about it. Completing a booking sends nothing. A reminder is queued about
+  a day before each confirmed booking starts, once (a unique key stops a repeat).
+- **The Worker sends them** (`OutboxDispatchJob`, every 20 seconds; `BookingReminderJob`, every 30 minutes). A message is taken
+  with a short lease and a row version, so two dispatchers can never send the same one. A failure is retried after 1 min, 5 min, 30
+  min, then 2 h, and given up on after five attempts (logged as an error). A message older than 24 hours is dropped, not delivered
+  late. If nothing is registered for the person it is simply finished.
+- **Privacy, enforced at sending time, not only at queueing.** Before each send the recipient is checked again: a customer message
+  goes only to that booking's customer, a partner message only to the business's owner, never to a closed account. A phone is used only
+  while the session that registered it is still signed in (sign-out, expiry, reuse detection, account deletion and a role change all
+  end it), with nothing for the app to remember to do. A phone registered by someone else later belongs to them, not the previous user.
+  The words are generic ("Your booking is confirmed."): no name, amount, listing, date or place, and the only data sent with a
+  notification is its type and the booking id; the app opens the booking and loads details through the normal sign-in-protected API.
+  Reminders and "pay now" messages are dropped if they are no longer true of the booking.
+- **Delivery receipts.** Expo accepting a message is not the phone showing it, so about 15 minutes later its receipt is read: delivered, or
+  failed. A phone Expo says no longer has the app (`DeviceNotRegistered`) is deleted straight away, at the ticket or at the receipt. With
+  no receipt after a day the message is recorded as failed.
+- **Tables** (migration `AddPushNotifications`): `device_tokens` (one row per phone, unique token, removed with its session or its
+  user; max 10 phones per account), `notification_log` (type, status and Expo's ticket, never the message text), and two columns on
+  `outbox_messages` (`next_attempt_at`, `dedupe_key`). Instead of a "revoked" flag, a dead or signed-out phone is deleted.
+- **API:** `POST /api/v1/devices` (token and platform, tied to the caller's session; returns the device id) and
+  `DELETE /api/v1/devices/{id}`. The app side (asking permission after the first booking, registering the token, opening the booking
+  when a notification is tapped) is part of 7.8.
+- **Off by default.** `Notifications:Enabled` is `false`: messages are still queued, but nothing is sent. Turn it on once the Expo
+  project is ready (below).
+- **English only for now.** The app has no other language yet; the templates fall back to English and take another language when it exists.
+- **Retention.** The Worker removes notification log rows and finished outbox messages after 30 days (docs/data-retention.md).
+- **Needs before real delivery:** an Expo account and project (and, if its enhanced push security is on, an access token set as the
+  secret `Notifications:Expo:AccessToken`), a Firebase project with the Android credentials uploaded to Expo, the app built with
+  push enabled, and a real phone. Verified here against Expo's real API with a made-up token (nothing delivered) and with a stub.

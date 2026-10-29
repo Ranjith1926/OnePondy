@@ -56,6 +56,17 @@ The public page never reveals whether an account exists for a phone number or em
 | Saved listings | Until the customer removes them or deletes their account | Removed with the account. |
 | Held inventory | Until the hold's `expires_at`, 30 minutes after the request | A booking nobody acts on is expired by the Worker every minute and its places go back on sale. **The Worker must be running** for this: without it, a pending booking holds its places indefinitely. |
 
+## Payments and notifications (Phase 7)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| Payment attempts, refunds, ledger entries, settlements | No end date decided | Financial records, linked to the anonymised customer row like bookings. The ledger is append-only (a trigger rejects `UPDATE`, `DELETE` and `TRUNCATE`). The retention period needs the §21 tax review. |
+| Gateway webhook events | No end date decided | Stored with only ids, amounts and statuses: never the payer's email, phone number, card or UPI details. |
+| Reconciliation exceptions | No end date decided | Differences between our records and the gateway's, with the administrator's resolution note. Never deleted by the application. |
+| Device tokens (push) | Until the session ends, the phone signs out, the phone loses the app, or the account is deleted | Deleted with their session or user (database cascade), by the sender when Expo says the phone is gone, and explicitly on account deletion. |
+| Notification log | 30 days | Type, status and Expo's ticket id. Never the message text. Removed by the Worker. |
+| Outbox messages | 30 days after they are finished | Holds only who the notification is for and which booking; removed by the Worker once no log row still refers to it. A message not sent within 24 hours is dropped, not delivered late. |
+
 ## Logs
 
 Production never writes one-time codes to logs. Only a test or development server may do so

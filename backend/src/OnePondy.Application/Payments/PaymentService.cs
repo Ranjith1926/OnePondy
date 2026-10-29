@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OnePondy.Application.Bookings;
 using OnePondy.Application.Common;
+using OnePondy.Application.Notifications;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Payments;
 
@@ -59,6 +60,7 @@ public sealed class PaymentService(
     IOptions<PaymentsOptions> options,
     LedgerService ledger,
     RefundService refunds,
+    NotificationOutbox notifications,
     ILogger<PaymentService> logger)
 {
     private readonly PaymentsOptions _options = options.Value;
@@ -172,6 +174,7 @@ public sealed class PaymentService(
             booking.ConfirmPayment(now);
             db.MarkAdded(booking.History[^1]);
             await ledger.PostCaptureAsync(booking, attempt, cancellationToken);
+            await notifications.EnqueuePaymentConfirmedAsync(booking, cancellationToken);
         }
         else
         {
@@ -289,6 +292,7 @@ public sealed class PaymentService(
         var booking = await db.Bookings.SingleAsync(b => b.Id == refund.BookingId, cancellationToken);
         var paidAttempt = await db.PaymentAttempts.AsNoTracking().SingleAsync(a => a.Id == refund.PaymentAttemptId, cancellationToken);
         await ledger.PostRefundAsync(refund, booking, paidAttempt, cancellationToken);
+        notifications.EnqueueRefundProcessed(booking);
         if (booking.Status == BookingStatus.RefundPending)
         {
             var othersOutstanding = await db.Refunds.AnyAsync(

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
 using OnePondy.Application.Listings;
+using OnePondy.Application.Notifications;
 using OnePondy.Application.Payments;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
@@ -16,7 +17,7 @@ namespace OnePondy.Application.Bookings;
 /// full status history. Phase 6 treats every booking as free or pay-at-venue, since the payment
 /// gateway is Phase 7 — a partner confirms a request directly, with no <c>awaiting_payment</c> step.
 /// </summary>
-public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOptions<PaymentsOptions> payments, RefundService refunds)
+public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOptions<PaymentsOptions> payments, RefundService refunds, NotificationOutbox notifications)
 {
     public const int MaxGuestCount = 50;
     public const int MaxReasonLength = 500;
@@ -98,6 +99,9 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         {
             db.BookingSlots.Add(BookingSlot.Create(booking.Id, slot.Id, input.GuestCount));
         }
+
+        // Saved with the booking, so the owner is told about a request exactly when it exists.
+        await notifications.EnqueueRequestedAsync(booking, cancellationToken);
 
         try
         {
@@ -312,6 +316,10 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
             db.MarkAdded(booking.History[i]);
         }
 
+        // The first new step is the person's own move; a refund_pending that follows a cancellation is the system's bookkeeping.
+        var firstStep = booking.History[historyBefore];
+        await notifications.EnqueueTransitionAsync(booking, firstStep.PreviousStatus, firstStep.NewStatus, firstStep.ActorType, cancellationToken);
+
         // Pending, awaiting-payment and confirmed bookings all keep their seats reserved, so any move to one of these
         // end states gives them back, including cancelling an already confirmed booking, which may already have moved
         // on to wait for its refund.
@@ -364,6 +372,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         }
 
         db.MarkAdded(booking.History[^1]);
+        await notifications.EnqueueTransitionAsync(booking, booking.History[^1].PreviousStatus, BookingStatus.Expired, BookingActorType.System, cancellationToken);
         await ReleaseHoldAsync(booking.Id, cancellationToken);
 
         try

@@ -10,6 +10,7 @@ using OnePondy.Domain.Identity;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
@@ -69,6 +70,10 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+
+    public DbSet<NotificationLogEntry> NotificationLog => Set<NotificationLogEntry>();
 
     public DbSet<ReconciliationException> ReconciliationExceptions => Set<ReconciliationException>();
 

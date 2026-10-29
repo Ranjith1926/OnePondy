@@ -10,6 +10,7 @@ using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 using OnePondy.Application.Bookings;
 using OnePondy.Application.Identity;
+using OnePondy.Application.Notifications;
 using OnePondy.Application.Payments;
 using OnePondy.Domain.Identity;
 using OnePondy.Infrastructure.Persistence;
@@ -539,9 +540,10 @@ public sealed class BookingApiTests : IAsyncLifetime
     {
         var ledger = new LedgerService(db, time, options);
         var refunds = new RefundService(db, gateway, time, options, Microsoft.Extensions.Logging.Abstractions.NullLogger<RefundService>.Instance);
-        var payments = new PaymentService(db, gateway, time, options, ledger, refunds, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
+        var notifications = new OnePondy.Application.Notifications.NotificationOutbox(db, time);
+        var payments = new PaymentService(db, gateway, time, options, ledger, refunds, notifications, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
         var reconciliation = new ReconciliationService(db, gateway, payments, time, Microsoft.Extensions.Logging.Abstractions.NullLogger<ReconciliationService>.Instance);
-        return (new BookingService(db, time, options, refunds), payments, refunds, ledger, reconciliation);
+        return (new BookingService(db, time, options, refunds, notifications), payments, refunds, ledger, reconciliation);
     }
 
     private static OnePondyDbContext DbOf(AsyncServiceScope scope) => scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
@@ -1744,6 +1746,298 @@ public sealed class BookingApiTests : IAsyncLifetime
         var setting = await DbOf(check).AppSettings.AsNoTracking().SingleAsync(s => s.Key == "payments_reconciled_through");
         Assert.Equal(DateTime.UtcNow.Date.AddDays(-1).ToString("yyyy-MM-dd"), setting.Value);
         Assert.Null(setting.UpdatedByUserId);
+    }
+
+    // --- Phase 7 step 7.7: push notifications, over HTTP and real PostgreSQL ---
+
+    private static string NewToken() => "ExponentPushToken[" + Guid.NewGuid().ToString("N") + "]";
+
+    private static async Task<HttpResponseMessage> RegisterDeviceAsync(HttpClient client, string accessToken, string token, string platform = "android") =>
+        await SendAsync(client, HttpMethod.Post, "/api/v1/devices", accessToken, new { token, platform });
+
+    private OutboxDispatcher DispatcherFor(AsyncServiceScope scope, FakePushSender push, TimeProvider? clock = null) =>
+        new(
+            DbOf(scope),
+            push,
+            scope.ServiceProvider.GetRequiredService<OnePondy.Application.Identity.IUserAccountStore>(),
+            clock ?? TimeProvider.System,
+            Microsoft.Extensions.Options.Options.Create(new NotificationOptions { Enabled = true }),
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<OutboxDispatcher>.Instance);
+
+    /// <summary>Sends everything due. The test database holds other tests' messages too, so keep going until nothing is left to do.</summary>
+    private async Task DrainAsync(FakePushSender push, TimeProvider? clock = null)
+    {
+        for (var pass = 0; pass < 40; pass++)
+        {
+            await using var scope = Factory.Services.CreateAsyncScope();
+            var done = await DispatcherFor(scope, push, clock).DispatchAsync(100, default);
+            if (done.Sent + done.Discarded + done.Retrying == 0)
+            {
+                return;
+            }
+        }
+    }
+
+    [DatabaseFact]
+    public async Task The_notification_tables_refuse_duplicates_and_inconsistent_rows()
+    {
+        using var client = Factory.CreateClient();
+        var (customer, _) = await SignInWithPhoneAsync(client);
+        var token = NewToken();
+        Assert.Equal(HttpStatusCode.OK, (await RegisterDeviceAsync(client, customer, token)).StatusCode);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var device = await db.DeviceTokens.AsNoTracking().SingleAsync(d => d.Token == token);
+
+        // One row per phone, and only known platforms.
+        var duplicate = OnePondy.Domain.Notifications.DeviceToken.Register(device.UserId, device.SessionId, token, OnePondy.Domain.Notifications.DevicePlatform.Ios, DateTimeOffset.UtcNow);
+        db.DeviceTokens.Add(duplicate);
+        var twice = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)twice.InnerException!).SqlState);
+        db.ChangeTracker.Clear();
+        var badPlatform = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync($"UPDATE device_tokens SET platform = 'windows' WHERE id = {device.Id}"));
+        Assert.Equal(PostgresErrorCodes.CheckViolation, badPlatform.SqlState);
+
+        // A reminder is stored once.
+        var key = "it:dedupe:" + Guid.NewGuid().ToString("N");
+        db.OutboxMessages.Add(OnePondy.Domain.Payments.OutboxMessage.Create("booking.reminder", "{}", DateTimeOffset.UtcNow, key));
+        await db.SaveChangesAsync();
+        db.OutboxMessages.Add(OnePondy.Domain.Payments.OutboxMessage.Create("booking.reminder", "{}", DateTimeOffset.UtcNow, key));
+        var again = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)again.InnerException!).SqlState);
+    }
+
+    [DatabaseFact]
+    public async Task A_phone_is_registered_by_a_signed_in_user_and_the_same_phone_moves_to_whoever_signs_in_on_it_next()
+    {
+        using var client = Factory.CreateClient();
+        var (first, _) = await SignInWithPhoneAsync(client);
+        var (second, _) = await SignInWithPhoneAsync(client);
+        var token = NewToken();
+
+        var anonymous = await client.PostAsJsonAsync("/api/v1/devices", new { token, platform = "android" });
+        var registered = await ReadAsync(await RegisterDeviceAsync(client, first, token));
+        var again = await ReadAsync(await RegisterDeviceAsync(client, first, token));
+        var bad = await RegisterDeviceAsync(client, first, "not-a-token");
+        var badPlatform = await RegisterDeviceAsync(client, first, NewToken(), "windows");
+
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Equal(registered.GetProperty("id").GetString(), again.GetProperty("id").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, badPlatform.StatusCode);
+
+        // The same phone, now signed in as someone else: it belongs to them, not the previous user.
+        await RegisterDeviceAsync(client, second, token);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var stored = await DbOf(scope).DeviceTokens.AsNoTracking().SingleAsync(d => d.Token == token);
+        Assert.Equal(CustomerIdOf(second), stored.UserId);
+    }
+
+    [DatabaseFact]
+    public async Task A_user_forgets_their_own_phone_and_cannot_forget_someone_elses()
+    {
+        using var client = Factory.CreateClient();
+        var (owner, _) = await SignInWithPhoneAsync(client);
+        var (stranger, _) = await SignInWithPhoneAsync(client);
+        var id = (await ReadAsync(await RegisterDeviceAsync(client, owner, NewToken()))).GetProperty("id").GetString();
+
+        var byStranger = await SendAsync(client, HttpMethod.Delete, $"/api/v1/devices/{id}", stranger);
+        var byOwner = await SendAsync(client, HttpMethod.Delete, $"/api/v1/devices/{id}", owner);
+        var twice = await SendAsync(client, HttpMethod.Delete, $"/api/v1/devices/{id}", owner);
+
+        Assert.Equal(HttpStatusCode.NotFound, byStranger.StatusCode);
+        Assert.Equal("device_not_found", await ErrorCodeAsync(byStranger));
+        Assert.Equal(HttpStatusCode.NoContent, byOwner.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, twice.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task A_booking_that_is_requested_and_then_paid_notifies_each_side_once_on_their_own_phone()
+    {
+        var push = new FakePushSender();
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var customerPhone = NewToken();
+        await RegisterDeviceAsync(client, customer, customerPhone);
+        var partnerId = await PartnerOfAsync(bookingId);
+        var partnerPhone = NewToken();
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            // The partner's phone, signed in on a session of their own.
+            var session = OnePondy.Domain.Identity.UserSession.Start(partnerId, "phone", DateTimeOffset.UtcNow, TimeSpan.FromDays(1));
+            var db = DbOf(scope);
+            db.UserSessions.Add(session);
+            await db.SaveChangesAsync();
+            Assert.True((await new DeviceService(db, TimeProvider.System).RegisterAsync(partnerId, session.Id, partnerPhone, "android", default)).IsSuccess);
+        }
+
+        // Razorpay reports the payment; the webhook confirms the booking and queues the notifications in the same save.
+        Assert.Equal(HttpStatusCode.OK, (await PostWebhookAsync(client, PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000), NewEventId())).StatusCode);
+        await DrainAsync(push);
+
+        var toCustomer = push.Sent.Where(m => m.To == customerPhone && m.BookingId == bookingId).ToList();
+        var toPartner = push.Sent.Where(m => m.To == partnerPhone && m.BookingId == bookingId).ToList();
+        Assert.Equal(OnePondy.Domain.Notifications.NotificationTypes.BookingConfirmed, Assert.Single(toCustomer).Type);
+        Assert.Contains(toPartner, m => m.Type == OnePondy.Domain.Notifications.NotificationTypes.BookingPaid);
+        Assert.DoesNotContain(toCustomer, m => m.Type == OnePondy.Domain.Notifications.NotificationTypes.BookingPaid);
+        Assert.All(push.Sent.Where(m => m.BookingId == bookingId), m => Assert.DoesNotContain("customer@example.com", m.Body));
+
+        // Sending the same queue again sends nothing more.
+        var before = push.Sent.Count;
+        await DrainAsync(push);
+        Assert.Equal(before, push.Sent.Count);
+    }
+
+    [DatabaseFact]
+    public async Task Signing_out_stops_notifications_to_that_phone_with_nothing_for_the_app_to_do()
+    {
+        var push = new FakePushSender();
+        using var client = Factory.CreateClient();
+        var (customer, bookingId) = await NewBookingAsync(); // a request: the partner is told, then the customer is told when it is rejected
+        var phone = NewToken();
+        Assert.Equal(HttpStatusCode.OK, (await RegisterDeviceAsync(client, customer, phone)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(client, HttpMethod.Post, "/api/v1/auth/logout", customer)).StatusCode);
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var partner = await PartnerOfAsync(bookingId);
+            var booking = await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId);
+            var wired = Wire(db, new FakePaymentGateway(), TimeProvider.System, Microsoft.Extensions.Options.Options.Create(new PaymentsOptions()));
+            Assert.True((await wired.Bookings.RejectAsync(booking.BusinessId, bookingId, booking.Version, partner, "Full", default)).IsSuccess);
+        }
+
+        await DrainAsync(push);
+
+        Assert.DoesNotContain(push.Sent, m => m.To == phone);
+    }
+
+    [DatabaseFact]
+    public async Task Deleting_an_account_removes_its_phones()
+    {
+        using var client = Factory.CreateClient();
+        var (customer, phone) = await SignInWithPhoneAsync(client);
+        var userId = CustomerIdOf(customer);
+        Assert.Equal(HttpStatusCode.OK, (await RegisterDeviceAsync(client, customer, NewToken())).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await RegisterDeviceAsync(client, customer, NewToken(), "ios")).StatusCode);
+
+        Assert.Equal(HttpStatusCode.NoContent, (await TryDeleteAccountAsync(client, customer, phone)).StatusCode);
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.False(await DbOf(scope).DeviceTokens.AnyAsync(d => d.UserId == userId));
+    }
+
+    [DatabaseFact]
+    public async Task Ending_a_session_in_the_database_takes_its_phones_with_it()
+    {
+        using var client = Factory.CreateClient();
+        var (customer, _) = await SignInWithPhoneAsync(client);
+        var token = NewToken();
+        await RegisterDeviceAsync(client, customer, token);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var sessionId = (await db.DeviceTokens.AsNoTracking().SingleAsync(d => d.Token == token)).SessionId;
+
+        // The retention job deletes old sessions; their phones go with them.
+        await db.Database.ExecuteSqlAsync($"DELETE FROM user_sessions WHERE id = {sessionId}");
+
+        Assert.False(await db.DeviceTokens.AsNoTracking().AnyAsync(d => d.Token == token));
+    }
+
+    [DatabaseFact]
+    public async Task Two_dispatchers_at_the_same_moment_send_a_message_exactly_once()
+    {
+        for (var round = 0; round < 5; round++)
+        {
+            var push = new FakePushSender();
+            using var client = Factory.CreateClient();
+            var (customer, bookingId) = await NewBookingAsync();
+            var partner = await PartnerOfAsync(bookingId);
+            var phone = NewToken();
+            await using (var setup = Factory.Services.CreateAsyncScope())
+            {
+                var db = DbOf(setup);
+                var session = OnePondy.Domain.Identity.UserSession.Start(partner, "phone", DateTimeOffset.UtcNow, TimeSpan.FromDays(1));
+                db.UserSessions.Add(session);
+                await db.SaveChangesAsync();
+                await new DeviceService(db, TimeProvider.System).RegisterAsync(partner, session.Id, phone, "android", default);
+            }
+
+            async Task RunAsync()
+            {
+                for (var pass = 0; pass < 10; pass++)
+                {
+                    await using var scope = Factory.Services.CreateAsyncScope();
+                    var done = await DispatcherFor(scope, push).DispatchAsync(100, default);
+                    if (done.Sent + done.Discarded + done.Retrying == 0)
+                    {
+                        return;
+                    }
+                }
+            }
+
+            await Task.WhenAll(RunAsync(), RunAsync());
+
+            Assert.Equal(1, push.Sent.Count(m => m.To == phone && m.BookingId == bookingId));
+        }
+    }
+
+    [DatabaseFact]
+    public async Task Two_reminder_runs_at_the_same_moment_queue_one_reminder()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        await PostWebhookAsync(client, PaymentCapturedJson(orderId, "pay_" + Guid.NewGuid().ToString("N"), 50_000), NewEventId());
+        // The slot starts a day from when the listing was made, so this booking is due its reminder.
+        async Task RunAsync()
+        {
+            await using var scope = Factory.Services.CreateAsyncScope();
+            var db = DbOf(scope);
+            await new BookingReminders(db, new NotificationOutbox(db, TimeProvider.System), TimeProvider.System).EnqueueDueAsync(default);
+        }
+
+        await Task.WhenAll(RunAsync(), RunAsync());
+        await RunAsync();
+
+        await using var check = Factory.Services.CreateAsyncScope();
+        var count = await DbOf(check).OutboxMessages.AsNoTracking().CountAsync(m => m.DedupeKey == "booking.reminder:" + bookingId);
+        Assert.Equal(1, count);
+    }
+
+    [DatabaseFact]
+    public async Task Old_notification_records_are_purged_but_a_message_a_recent_log_still_points_at_is_kept()
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        using var client = Factory.CreateClient();
+        var (customer, _) = await SignInWithPhoneAsync(client);
+        var userId = CustomerIdOf(customer);
+        var deviceId = Guid.Parse((await ReadAsync(await RegisterDeviceAsync(client, customer, NewToken()))).GetProperty("id").GetString()!);
+        var old = DateTimeOffset.UtcNow.AddDays(-40);
+        var recent = DateTimeOffset.UtcNow.AddDays(-1);
+
+        var plain = OnePondy.Domain.Payments.OutboxMessage.Create("booking.confirmed", "{}", old);
+        plain.MarkDispatched(old);
+        var pointedAt = OnePondy.Domain.Payments.OutboxMessage.Create("booking.confirmed", "{}", old);
+        pointedAt.MarkDispatched(old);
+        db.OutboxMessages.AddRange(plain, pointedAt);
+        await db.SaveChangesAsync();
+        db.NotificationLog.AddRange(
+            OnePondy.Domain.Notifications.NotificationLogEntry.Refused(plain.Id, userId, deviceId, "booking.confirmed", "x", old),
+            OnePondy.Domain.Notifications.NotificationLogEntry.Refused(pointedAt.Id, userId, deviceId, "booking.confirmed", "x", recent));
+        await db.SaveChangesAsync();
+
+        await new NotificationRetention(db, TimeProvider.System).PurgeAsync(default);
+
+        await using var check = Factory.Services.CreateAsyncScope();
+        var verify = DbOf(check);
+        Assert.False(await verify.OutboxMessages.AnyAsync(m => m.Id == plain.Id));
+        Assert.True(await verify.OutboxMessages.AnyAsync(m => m.Id == pointedAt.Id));
+        Assert.False(await verify.NotificationLog.AnyAsync(l => l.OutboxMessageId == plain.Id));
+        Assert.True(await verify.NotificationLog.AnyAsync(l => l.OutboxMessageId == pointedAt.Id));
     }
 
     [DatabaseFact]

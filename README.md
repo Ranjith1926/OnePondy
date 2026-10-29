@@ -171,6 +171,20 @@ To run the one test that calls Razorpay's real test API (it creates a ₹1 test 
 nothing), set `ONEPONDY_RAZORPAY_TEST_KEY_ID` and `ONEPONDY_RAZORPAY_TEST_KEY_SECRET` to a test key
 pair before `dotnet test`; without them it is skipped.
 
+**Push notifications (Expo).** Booking changes are queued as notifications in the same save as the change; the Worker sends them
+(see "7.7" in docs/phase-7-plan.md). Nothing is sent until you set `Notifications:Enabled` to `true` on the Worker; until then
+messages only queue (and any older than 24 hours are dropped when sending starts). It needs an Expo project; if Expo's enhanced push
+security is on for it, set the access token as a secret, never in a committed file:
+
+```powershell
+dotnet user-secrets set "Notifications:Enabled" "true" --project src/OnePondy.Worker
+dotnet user-secrets set "Notifications:Expo:AccessToken" "<expo access token>" --project src/OnePondy.Worker
+```
+
+The phone registers its Expo push token with `POST /api/v1/devices`; it stops receiving notifications the moment its session ends.
+Notification text is generic by design and carries only the booking id. To try Expo's real service with a made-up token (nothing is
+delivered to anyone), set `ONEPONDY_EXPO_LIVE_CHECK=1` before `dotnet test`.
+
 **Reconciliation.** The Worker also checks every five minutes, and once a day, that our payment records agree with
 Razorpay's (see "7.6" in docs/phase-7-plan.md). A payment or refund whose webhook was lost is applied from Razorpay's own record
 and noted; anything else that differs is listed for an administrator at

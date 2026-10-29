@@ -14,6 +14,7 @@ using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
@@ -76,6 +77,12 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
 
     public DbSet<ReconciliationException> ReconciliationExceptions => Set<ReconciliationException>();
+
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<DeviceToken> DeviceTokens => Set<DeviceToken>();
+
+    public DbSet<NotificationLogEntry> NotificationLog => Set<NotificationLogEntry>();
 
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
@@ -174,6 +181,9 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<GatewayEvent>().HasKey(e => e.Id);
         modelBuilder.Entity<LedgerEntry>().HasKey(e => e.Id);
         modelBuilder.Entity<ReconciliationException>().HasKey(e => e.Id);
+        modelBuilder.Entity<OutboxMessage>().HasKey(m => m.Id);
+        modelBuilder.Entity<DeviceToken>().HasKey(d => d.Id);
+        modelBuilder.Entity<NotificationLogEntry>().HasKey(l => l.Id);
     }
 }
 

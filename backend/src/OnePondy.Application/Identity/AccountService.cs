@@ -166,6 +166,8 @@ public sealed class AccountService(
         // this works the same against every provider, including the in-memory one tests use.
         db.SavedPlaces.RemoveRange(await db.SavedPlaces.Where(s => s.UserId == userId).ToListAsync(cancellationToken));
         db.SavedListings.RemoveRange(await db.SavedListings.Where(s => s.UserId == userId).ToListAsync(cancellationToken));
+        // Their phones stop receiving notifications the moment the account is deleted.
+        db.DeviceTokens.RemoveRange(await db.DeviceTokens.Where(d => d.UserId == userId).ToListAsync(cancellationToken));
         db.Itineraries.RemoveRange(await db.Itineraries.Where(i => i.UserId == userId).ToListAsync(cancellationToken));
 
         await db.SaveChangesAsync(cancellationToken);

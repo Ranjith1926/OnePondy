@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
+using OnePondy.Domain.Identity;
+using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Infrastructure.Identity;
 
@@ -191,8 +193,66 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(m => m.Type).HasMaxLength(64).IsRequired();
         builder.Property(m => m.Payload).HasColumnType("jsonb").IsRequired();
         builder.Property(m => m.LastError).HasMaxLength(500);
+        builder.Property(m => m.DedupeKey).HasMaxLength(100);
+        builder.Property(m => m.Version).IsRowVersion();
 
         builder.HasIndex(m => m.CreatedAt).HasDatabaseName("ix_outbox_pending").HasFilter("dispatched_at IS NULL");
+
+        // A message that could be raised twice (a reminder) is stored once.
+        builder.HasIndex(m => m.DedupeKey).IsUnique().HasDatabaseName("ux_outbox_dedupe").HasFilter("dedupe_key IS NOT NULL");
+    }
+}
+
+public sealed class DeviceTokenConfiguration : IEntityTypeConfiguration<DeviceToken>
+{
+    public void Configure(EntityTypeBuilder<DeviceToken> builder)
+    {
+        builder.ToTable("device_tokens", table =>
+            table.HasCheckConstraint("ck_device_token_platform", $"platform IN ({SnakeCaseEnum<DevicePlatform>.SqlList})"));
+
+        builder.HasKey(d => d.Id);
+        builder.Property(d => d.Id).ValueGeneratedNever();
+        builder.Property(d => d.Token).HasMaxLength(DeviceToken.MaxTokenLength).IsRequired();
+        builder.Property(d => d.Platform).HasConversion(SnakeCaseEnum<DevicePlatform>.Converter).HasMaxLength(16);
+
+        // Personal data of the account, so it goes when the account's data does, like saved places; a session's tokens go with the session.
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(d => d.UserId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<UserSession>().WithMany().HasForeignKey(d => d.SessionId).OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasIndex(d => d.Token).IsUnique().HasDatabaseName("ux_device_tokens_token");
+        builder.HasIndex(d => new { d.UserId, d.LastSeenAt }).IsDescending(false, true).HasDatabaseName("ix_device_tokens_user");
+        builder.HasIndex(d => d.SessionId).HasDatabaseName("ix_device_tokens_session");
+    }
+}
+
+public sealed class NotificationLogEntryConfiguration : IEntityTypeConfiguration<NotificationLogEntry>
+{
+    public void Configure(EntityTypeBuilder<NotificationLogEntry> builder)
+    {
+        builder.ToTable("notification_log", table =>
+        {
+            table.HasCheckConstraint("ck_notification_log_status", $"status IN ({SnakeCaseEnum<NotificationStatus>.SqlList})");
+            table.HasCheckConstraint(
+                "ck_notification_log_sent_has_ticket",
+                $"status <> '{SnakeCaseEnum<NotificationStatus>.ToDatabase(NotificationStatus.Sent)}' OR provider_ticket_id IS NOT NULL");
+        });
+
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.Property(l => l.Type).HasMaxLength(64).IsRequired();
+        builder.Property(l => l.Status).HasConversion(SnakeCaseEnum<NotificationStatus>.Converter).HasMaxLength(16);
+        builder.Property(l => l.ProviderTicketId).HasMaxLength(100);
+        builder.Property(l => l.Error).HasMaxLength(200);
+
+        builder.HasOne<OutboxMessage>().WithMany().HasForeignKey(l => l.OutboxMessageId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(l => l.UserId).OnDelete(DeleteBehavior.Restrict);
+        // The log outlives a phone that signs out or loses the app; it just stops pointing at it.
+        builder.HasOne<DeviceToken>().WithMany().HasForeignKey(l => l.DeviceTokenId).OnDelete(DeleteBehavior.SetNull);
+
+        builder.HasIndex(l => l.CreatedAt).HasDatabaseName("ix_notification_log_created");
+        builder.HasIndex(l => l.OutboxMessageId).HasDatabaseName("ix_notification_log_message");
+        builder.HasIndex(l => l.CreatedAt).HasDatabaseName("ix_notification_log_awaiting_receipt")
+            .HasFilter($"status = '{SnakeCaseEnum<NotificationStatus>.ToDatabase(NotificationStatus.Sent)}' AND receipt_checked_at IS NULL");
     }
 }
 

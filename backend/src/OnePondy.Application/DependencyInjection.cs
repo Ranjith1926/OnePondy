@@ -9,6 +9,7 @@ using OnePondy.Application.Identity;
 using OnePondy.Application.Itineraries;
 using OnePondy.Application.Listings;
 using OnePondy.Application.Media;
+using OnePondy.Application.Notifications;
 using OnePondy.Application.Payments;
 using OnePondy.Application.Places;
 using OnePondy.Application.Staff;
@@ -27,6 +28,7 @@ public static class DependencyInjection
         services.Configure<ConsoleOptions>(configuration.GetSection(ConsoleOptions.SectionName));
         services.Configure<TripPlannerOptions>(configuration.GetSection(TripPlannerOptions.SectionName));
         services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
+        services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IAccountDeletionGuard, BookingsDeletionGuard>();
@@ -56,6 +58,11 @@ public static class DependencyInjection
         services.AddScoped<RefundService>();
         services.AddScoped<ReconciliationService>();
         services.AddScoped<ReconciliationExceptionService>();
+        services.AddScoped<NotificationOutbox>();
+        services.AddScoped<DeviceService>();
+        services.AddScoped<OutboxDispatcher>();
+        services.AddScoped<BookingReminders>();
+        services.AddScoped<NotificationRetention>();
         services.AddScoped<PaymentService>();
         services.AddScoped<PaymentWebhookService>();
 

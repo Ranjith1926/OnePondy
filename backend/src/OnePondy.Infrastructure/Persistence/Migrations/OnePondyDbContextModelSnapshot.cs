@@ -1066,6 +1066,132 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.ToTable("saved_listings", (string)null);
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Notifications.DeviceToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<string>("Platform")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("platform");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("session_id");
+
+                    b.Property<string>("Token")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("token");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_device_tokens");
+
+                    b.HasIndex("SessionId")
+                        .HasDatabaseName("ix_device_tokens_session");
+
+                    b.HasIndex("Token")
+                        .IsUnique()
+                        .HasDatabaseName("ux_device_tokens_token");
+
+                    b.HasIndex("UserId", "LastSeenAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_device_tokens_user");
+
+                    b.ToTable("device_tokens", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_device_token_platform", "platform IN ('android', 'ios')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Notifications.NotificationLogEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("DeviceTokenId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("device_token_id");
+
+                    b.Property<string>("Error")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("error");
+
+                    b.Property<Guid>("OutboxMessageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("outbox_message_id");
+
+                    b.Property<string>("ProviderTicketId")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("provider_ticket_id");
+
+                    b.Property<DateTimeOffset?>("ReceiptCheckedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("receipt_checked_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notification_log");
+
+                    b.HasIndex("CreatedAt")
+                        .HasDatabaseName("ix_notification_log_awaiting_receipt")
+                        .HasFilter("status = 'sent' AND receipt_checked_at IS NULL");
+
+                    b.HasIndex("DeviceTokenId")
+                        .HasDatabaseName("ix_notification_log_device_token_id");
+
+                    b.HasIndex("OutboxMessageId")
+                        .HasDatabaseName("ix_notification_log_message");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_notification_log_user_id");
+
+                    b.ToTable("notification_log", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_notification_log_sent_has_ticket", "status <> 'sent' OR provider_ticket_id IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_notification_log_status", "status IN ('sent', 'delivered', 'failed')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Payments.GatewayEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1199,6 +1325,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("DedupeKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("dedupe_key");
+
                     b.Property<DateTimeOffset?>("DispatchedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("dispatched_at");
@@ -1207,6 +1338,10 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
                         .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
 
                     b.Property<string>("Payload")
                         .IsRequired()
@@ -1219,12 +1354,23 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("type");
 
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
                     b.HasKey("Id")
                         .HasName("pk_outbox_messages");
 
                     b.HasIndex("CreatedAt")
                         .HasDatabaseName("ix_outbox_pending")
                         .HasFilter("dispatched_at IS NULL");
+
+                    b.HasIndex("DedupeKey")
+                        .IsUnique()
+                        .HasDatabaseName("ux_outbox_dedupe")
+                        .HasFilter("dedupe_key IS NOT NULL");
 
                     b.ToTable("outbox_messages", null, t =>
                         {
@@ -2530,6 +2676,46 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_saved_listings_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Notifications.DeviceToken", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Identity.UserSession", null)
+                        .WithMany()
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_device_tokens_user_sessions_session_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_device_tokens_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Notifications.NotificationLogEntry", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Notifications.DeviceToken", null)
+                        .WithMany()
+                        .HasForeignKey("DeviceTokenId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_notification_log_device_tokens_device_token_id");
+
+                    b.HasOne("OnePondy.Domain.Payments.OutboxMessage", null)
+                        .WithMany()
+                        .HasForeignKey("OutboxMessageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_log_outbox_messages_outbox_message_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_notification_log_app_users_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Payments.LedgerEntry", b =>

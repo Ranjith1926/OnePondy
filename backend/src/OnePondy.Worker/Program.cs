@@ -15,6 +15,8 @@ builder.Services.AddHostedService<AuthDataRetentionJob>();
 builder.Services.AddHostedService<BookingHoldExpiryJob>();
 builder.Services.AddHostedService<PendingRefundJob>();
 builder.Services.AddHostedService<PaymentReconciliationJob>();
+builder.Services.AddHostedService<OutboxDispatchJob>();
+builder.Services.AddHostedService<BookingReminderJob>();
 
 var host = builder.Build();
 host.Run();
