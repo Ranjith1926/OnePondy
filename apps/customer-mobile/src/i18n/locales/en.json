@@ -206,10 +206,11 @@
   "saved": {
     "title": "Saved",
     "placesTitle": "Saved places",
+    "listingsTitle": "Saved to book",
     "tripsTitle": "Your trips",
     "empty": {
       "title": "Nothing saved yet",
-      "message": "Places and plans you save will appear here.",
+      "message": "Places, activities, stays and plans you save will appear here.",
       "action": "Explore places"
     },
     "guest": {
@@ -347,6 +348,8 @@
         "message": "Check your connection and try again."
       },
       "about": "About",
+      "save": "Save for later",
+      "saved": "Saved",
       "address": "Address",
       "cancellationPolicy": "Cancellation policy",
       "freeUntil": "Free cancellation up to {{hours}}h before, then {{percent}}% refund.",
@@ -458,7 +461,7 @@
     "title": "Delete account",
     "intro": "Deleting your account is permanent. Here's what happens:",
     "points": {
-      "data": "Your name, mobile number and email are removed, along with your saved places and plans.",
+      "data": "Your name, mobile number and email are removed, along with your saved places, saved activities and stays, and plans.",
       "sessions": "You're signed out on every device.",
       "records": "Invoices and payment records that tax law requires us to keep are retained, without your contact details."
     },

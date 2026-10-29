@@ -17,6 +17,7 @@ import {
 import { useAppState } from '../../../state';
 import { BookSlotSheet } from '../components/BookSlotSheet';
 import { useListing } from '../hooks/useListings';
+import { useIsListingSaved, useToggleSavedListing } from '../hooks/useSavedListings';
 
 type Props = StaticScreenProps<{ id: string }>;
 
@@ -26,6 +27,8 @@ export function ListingDetailScreen({ route }: Props) {
   const styles = useThemedStyles(createStyles);
   const { auth } = useAppState();
   const listing = useListing(route.params.id);
+  const isSaved = useIsListingSaved(listing.data?.id);
+  const toggleSaved = useToggleSavedListing();
   const [bookVisible, setBookVisible] = useState(false);
   const [bookAttempt, setBookAttempt] = useState(0);
   const [confirmation, setConfirmation] = useState<string | null>(null);
@@ -37,6 +40,22 @@ export function ListingDetailScreen({ route }: Props) {
         accessibilityLabel={t('common.back')}
         onPress={() => navigation.goBack()}
       />
+      <View style={styles.headerSpacer} />
+      {listing.data ? (
+        <OPIconButton
+          icon="heart"
+          variant={isSaved ? 'tonal' : 'plain'}
+          accessibilityLabel={isSaved ? t('listings.detail.saved') : t('listings.detail.save')}
+          disabled={toggleSaved.isPending}
+          onPress={() => {
+            if (auth.status !== 'authenticated') {
+              navigation.navigate('SignIn');
+              return;
+            }
+            toggleSaved.mutate({ listingId: listing.data!.id, save: !isSaved });
+          }}
+        />
+      ) : null}
     </View>
   );
 
@@ -163,6 +182,9 @@ const createStyles = (theme: Theme) =>
       alignItems: 'center',
       paddingHorizontal: theme.spacing.xxs,
       paddingVertical: theme.spacing.xs,
+    },
+    headerSpacer: {
+      flex: 1,
     },
     centered: {
       flex: 1,

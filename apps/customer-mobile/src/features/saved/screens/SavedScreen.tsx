@@ -14,6 +14,8 @@ import {
 import { useAppState } from '../../../state';
 import { SignInPrompt } from '../../auth/components/SignInPrompt';
 import { useItineraries } from '../../itineraries/hooks/useItineraries';
+import { useSavedListings } from '../../listings/hooks/useSavedListings';
+import { listingTypeIcons } from '../../listings/listingTypes';
 import { PlaceSummaryCard } from '../../tourism/components/PlaceSummaryCard';
 import { useSavedPlaces } from '../hooks/useSavedPlaces';
 
@@ -26,6 +28,7 @@ export function SavedScreen() {
   const { auth } = useAppState();
   const savedPlaces = useSavedPlaces();
   const itineraries = useItineraries(false);
+  const savedListings = useSavedListings();
 
   if (auth.status !== 'authenticated') {
     return (
@@ -41,8 +44,10 @@ export function SavedScreen() {
 
   const places = savedPlaces.data ?? [];
   const trips = itineraries.data ?? [];
-  const stillLoading = savedPlaces.isPending || itineraries.isPending;
-  const nothingSaved = !stillLoading && places.length === 0 && trips.length === 0;
+  const listings = savedListings.data ?? [];
+  const stillLoading = savedPlaces.isPending || itineraries.isPending || savedListings.isPending;
+  const nothingSaved =
+    !stillLoading && places.length === 0 && trips.length === 0 && listings.length === 0;
 
   return (
     <MainTabTemplate title={t('saved.title')}>
@@ -67,6 +72,23 @@ export function SavedScreen() {
                 subtitle={t('itineraries.stopCount', { count: trip.stopCount })}
                 trailing={{ kind: 'chevron' }}
                 onPress={() => navigation.navigate('ItineraryDetail', { id: trip.id })}
+              />
+            ))}
+          </ListSection>
+        </SectionWithHeader>
+      ) : null}
+
+      {listings.length > 0 ? (
+        <SectionWithHeader title={t('saved.listingsTitle')}>
+          <ListSection>
+            {listings.map((saved) => (
+              <ListItem
+                key={saved.listing.id}
+                leadingIcon={listingTypeIcons[saved.listing.listingType]}
+                title={saved.listing.title}
+                subtitle={saved.listing.businessName}
+                trailing={{ kind: 'chevron' }}
+                onPress={() => navigation.navigate('ListingDetail', { id: saved.listing.id })}
               />
             ))}
           </ListSection>
