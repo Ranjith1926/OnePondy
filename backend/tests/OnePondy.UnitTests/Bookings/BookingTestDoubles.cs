@@ -32,6 +32,8 @@ public sealed class BookingHarness
         Expiry = new BookingHoldExpiry(Db, Bookings, PaymentService, Time, paymentOptions);
         Reconciliation = new OnePondy.Application.Payments.ReconciliationService(Db, Gateway, PaymentService, Time, Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.ReconciliationService>.Instance);
         ReconciliationExceptions = new OnePondy.Application.Payments.ReconciliationExceptionService(Db, audit, Time);
+        Settlements = new OnePondy.Application.Payments.SettlementService(Db, Ledger, audit, Time);
+        PaymentAdmin = new OnePondy.Application.Payments.PaymentAdminService(Db);
 
         Owner = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919876543210", CancellationToken.None).Result.Id;
         Customer = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919988776655", CancellationToken.None).Result.Id;
@@ -80,6 +82,10 @@ public sealed class BookingHarness
     public OnePondy.Application.Notifications.NotificationOptions NotificationSettings { get; } = new() { Enabled = true };
 
     public OnePondy.Application.Payments.LedgerService Ledger { get; }
+
+    public OnePondy.Application.Payments.SettlementService Settlements { get; }
+
+    public OnePondy.Application.Payments.PaymentAdminService PaymentAdmin { get; }
 
     public OnePondy.Application.Payments.RefundService Refunds { get; }
 

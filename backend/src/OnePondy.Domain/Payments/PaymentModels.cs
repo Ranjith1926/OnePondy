@@ -330,6 +330,37 @@ public sealed class Settlement
 
     public DateTimeOffset? PaidAt { get; private set; }
 
+    /// <summary>Row version (PostgreSQL <c>xmin</c>): two administrators acting on a statement at once cannot both succeed.</summary>
+    public uint Version { get; private set; }
+
+    public const int MaxPayoutReferenceLength = 100;
+
+    /// <summary>An administrator has checked the statement and agrees to pay it.</summary>
+    public void Approve(DateTimeOffset now)
+    {
+        if (Status != SettlementStatus.Draft)
+        {
+            throw new InvalidOperationException("Only a draft statement can be approved.");
+        }
+
+        Status = SettlementStatus.Approved;
+        ApprovedAt = now;
+    }
+
+    /// <summary>The money has been sent to the partner; the bank's reference proves it.</summary>
+    public void MarkPaid(string payoutReference, DateTimeOffset now)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(payoutReference);
+        if (Status != SettlementStatus.Approved)
+        {
+            throw new InvalidOperationException("Only an approved statement can be marked paid.");
+        }
+
+        Status = SettlementStatus.Paid;
+        PayoutReference = payoutReference.Trim();
+        PaidAt = now;
+    }
+
     public static Settlement Draft(
         Guid businessId,
         DateOnly periodStart,

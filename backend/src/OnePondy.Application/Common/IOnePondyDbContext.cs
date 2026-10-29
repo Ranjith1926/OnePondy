@@ -61,6 +61,10 @@ public interface IOnePondyDbContext
 
     DbSet<LedgerEntry> LedgerEntries { get; }
 
+    DbSet<Settlement> Settlements { get; }
+
+    DbSet<SettlementItem> SettlementItems { get; }
+
     DbSet<ReconciliationException> ReconciliationExceptions { get; }
 
     DbSet<OutboxMessage> OutboxMessages { get; }

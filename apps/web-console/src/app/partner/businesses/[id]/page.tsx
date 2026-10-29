@@ -64,6 +64,9 @@ export default async function PartnerBusinessPage({ params }: { params: Promise<
           <Link className={linkButton} href={`/partner/businesses/${business.id}/bookings`}>
             Bookings
           </Link>
+          <Link className={linkButton} href={`/partner/businesses/${business.id}/statements`}>
+            Statements
+          </Link>
         </div>
       ) : null}
 

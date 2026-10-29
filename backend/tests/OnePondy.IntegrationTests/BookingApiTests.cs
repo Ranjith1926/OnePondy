@@ -2146,6 +2146,204 @@ public sealed class BookingApiTests : IAsyncLifetime
         Assert.Equal("refundPending", detail.GetProperty("status").GetString());
     }
 
+    // --- Phase 7 step 7.9: payments lists, partner statements and payouts ---
+
+    private static string TodayUtc => DateTime.UtcNow.ToString("yyyy-MM-dd");
+
+    private static string DaysAgoUtc(int days) => DateTime.UtcNow.AddDays(-days).ToString("yyyy-MM-dd");
+
+    /// <summary>A new business with one booking that was paid (through the refresh endpoint) and then completed by the partner.</summary>
+    private async Task<(string Admin, string Owner, string BusinessId, Guid BookingId)> CompletedPaidBookingAsync(HttpClient client, FakePaymentGateway gateway)
+    {
+        var admin = await AdministratorTokenAsync();
+        var (owner, businessId, listingId, slotId) = await PublishedListingAsync(client, admin);
+        var customer = await SignInCustomerAsync(client);
+        var created = await ReadAsync(await SendAsync(
+            client, HttpMethod.Post, "/api/v1/bookings", customer, new { listingId, slotIds = new[] { slotId }, guestCount = 1, idempotencyKey = Guid.NewGuid().ToString() }));
+        var bookingId = Guid.Parse(created.GetProperty("id").GetString()!);
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            var booking = await db.Bookings.SingleAsync(b => b.Id == bookingId);
+            booking.AcceptForPayment(await PartnerOfAsync(bookingId), DateTimeOffset.UtcNow, TimeSpan.FromMinutes(30));
+            db.MarkAdded(booking.History[^1]);
+            await db.SaveChangesAsync();
+        }
+
+        var started = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment", customer));
+        gateway.CustomerPaid(started.GetProperty("orderId").GetString()!, "pay_it_" + Guid.NewGuid().ToString("N"), 50_000);
+        var paid = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment/refresh", customer));
+        Assert.Equal("confirmed", paid.GetProperty("status").GetString());
+
+        var complete = await SendAsync(
+            client, HttpMethod.Post, $"/api/v1/partner/businesses/{businessId}/bookings/{bookingId}/complete", owner, new { version = paid.GetProperty("version").GetUInt32() });
+        Assert.Equal(HttpStatusCode.OK, complete.StatusCode);
+        return (admin, owner, businessId, bookingId);
+    }
+
+    private async Task<decimal> LedgerBalanceAsync(string account)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        return await DbOf(scope).LedgerEntries.AsNoTracking().Where(e => e.Account == account).SumAsync(e => e.Amount);
+    }
+
+    [DatabaseFact]
+    public async Task A_statement_is_drafted_approved_and_paid_and_the_partner_sees_it_once_approved()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (admin, owner, businessId, bookingId) = await CompletedPaidBookingAsync(client, gateway);
+
+        var drafted = await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, new { businessId, periodStart = DaysAgoUtc(7), periodEnd = TodayUtc });
+        Assert.Equal(HttpStatusCode.Created, drafted.StatusCode);
+        var draft = await ReadAsync(drafted);
+        var settlement = draft.GetProperty("settlement");
+        var id = settlement.GetProperty("id").GetString()!;
+        Assert.Equal((500m, 50m, 0m, 450m, "draft"), (
+            settlement.GetProperty("grossAmount").GetDecimal(),
+            settlement.GetProperty("commissionAmount").GetDecimal(),
+            settlement.GetProperty("refundAmount").GetDecimal(),
+            settlement.GetProperty("netAmount").GetDecimal(),
+            settlement.GetProperty("status").GetString()));
+        var line = Assert.Single(draft.GetProperty("items").EnumerateArray());
+        Assert.Equal(bookingId.ToString(), line.GetProperty("bookingId").GetString());
+        Assert.Equal("sale", line.GetProperty("kind").GetString());
+        Assert.Equal(450m, await OwedToAsync(businessId));
+
+        // A draft is the administrators' working copy: the partner cannot see it yet.
+        Assert.Empty((await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/statements", owner))).EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/statements/{id}", owner)).StatusCode);
+
+        var approved = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/settlements/{id}/approve", admin, new { version = settlement.GetProperty("version").GetUInt32() }));
+        var approvedVersion = approved.GetProperty("settlement").GetProperty("version").GetUInt32();
+        Assert.Equal("approved", approved.GetProperty("settlement").GetProperty("status").GetString());
+
+        var visible = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/statements", owner));
+        Assert.Equal(id, Assert.Single(visible.EnumerateArray()).GetProperty("id").GetString());
+
+        var csv = await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/statements/{id}/csv", owner);
+        Assert.Equal(HttpStatusCode.OK, csv.StatusCode);
+        Assert.Equal("text/csv", csv.Content.Headers.ContentType?.MediaType);
+        var text = await csv.Content.ReadAsStringAsync();
+        Assert.Contains("Net payable,450.00", text);
+        Assert.Contains(bookingId.ToString(), text);
+
+        var paid = await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/settlements/{id}/paid", admin, new { version = approvedVersion, payoutReference = "UTR-IT-1" }));
+        Assert.Equal(("paid", "UTR-IT-1"), (paid.GetProperty("settlement").GetProperty("status").GetString(), paid.GetProperty("settlement").GetProperty("payoutReference").GetString()));
+        Assert.Equal(0m, await OwedToAsync(businessId));
+        Assert.Equal(-450m, await LedgerBalanceAsync(OnePondy.Domain.Payments.LedgerAccounts.PartnerPaid(Guid.Parse(businessId))));
+    }
+
+    private async Task<decimal> OwedToAsync(string businessId) =>
+        -await LedgerBalanceAsync(OnePondy.Domain.Payments.LedgerAccounts.PartnerPayable(Guid.Parse(businessId)));
+
+    [DatabaseFact]
+    public async Task Only_administrators_can_draft_statements_and_only_the_owner_can_read_them()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (admin, owner, businessId, _) = await CompletedPaidBookingAsync(client, gateway);
+        var customer = await SignInCustomerAsync(client);
+        var body = new { businessId, periodStart = DaysAgoUtc(7), periodEnd = TodayUtc };
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.PostAsJsonAsync("/api/v1/admin/settlements", body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", customer, body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", owner, body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments", customer)).StatusCode);
+
+        var draft = await ReadAsync(await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, body));
+        var settlement = draft.GetProperty("settlement");
+        await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/settlements/{settlement.GetProperty("id").GetString()}/approve", admin, new { version = settlement.GetProperty("version").GetUInt32() });
+
+        // Another partner (here, any other signed-in user) sees a 404, never someone else's statement.
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/statements", customer)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/statements/{settlement.GetProperty("id").GetString()}/csv", customer)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync($"/api/v1/partner/businesses/{businessId}/statements")).StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task Two_administrators_paying_the_same_statement_at_once_pay_it_only_once()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (admin, _, businessId, _) = await CompletedPaidBookingAsync(client, gateway);
+        var draft = (await ReadAsync(await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, new { businessId, periodStart = DaysAgoUtc(7), periodEnd = TodayUtc }))).GetProperty("settlement");
+        var id = draft.GetProperty("id").GetString();
+        var approved = (await ReadAsync(await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/settlements/{id}/approve", admin, new { version = draft.GetProperty("version").GetUInt32() }))).GetProperty("settlement");
+        var version = approved.GetProperty("version").GetUInt32();
+
+        var results = await Task.WhenAll(Enumerable.Range(0, 8).Select(n =>
+            SendAsync(client, HttpMethod.Post, $"/api/v1/admin/settlements/{id}/paid", admin, new { version, payoutReference = $"UTR-RACE-{n}" })));
+
+        var bodies = string.Join(" || ", await Task.WhenAll(results.Where(r => r.StatusCode != HttpStatusCode.OK).Select(r => r.Content.ReadAsStringAsync())));
+        Assert.True(results.Count(r => r.StatusCode == HttpStatusCode.OK) == 1 && results.All(r => r.StatusCode is HttpStatusCode.OK or HttpStatusCode.Conflict), bodies);
+        Assert.Equal(-450m, await LedgerBalanceAsync(OnePondy.Domain.Payments.LedgerAccounts.PartnerPaid(Guid.Parse(businessId))));
+        Assert.Equal(0m, await OwedToAsync(businessId));
+    }
+
+    [DatabaseFact]
+    public async Task A_booking_cannot_land_on_two_statements_even_when_two_are_drafted_at_once()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (admin, _, businessId, _) = await CompletedPaidBookingAsync(client, gateway);
+
+        // Two different periods that both reach the booking, drafted together.
+        var results = await Task.WhenAll(new[] { 7, 14 }.Select(days =>
+            SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, new { businessId, periodStart = DaysAgoUtc(days), periodEnd = TodayUtc })));
+
+        Assert.Equal(1, results.Count(r => r.StatusCode == HttpStatusCode.Created));
+        Assert.All(results.Where(r => r.StatusCode != HttpStatusCode.Created), r => Assert.Equal(HttpStatusCode.Conflict, r.StatusCode));
+        var listed = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/admin/settlements?businessId={businessId}", admin));
+        Assert.Equal(1, listed.GetProperty("totalCount").GetInt32());
+    }
+
+    [DatabaseFact]
+    public async Task A_draft_can_be_discarded_and_nothing_is_payable_for_a_period_with_nothing_finished()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (admin, _, businessId, _) = await CompletedPaidBookingAsync(client, gateway);
+
+        var early = await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, new { businessId, periodStart = DaysAgoUtc(30), periodEnd = DaysAgoUtc(20) });
+        Assert.Equal(HttpStatusCode.Conflict, early.StatusCode);
+        Assert.Equal("settlement_nothing_due", await ErrorCodeAsync(early));
+
+        var draft = (await ReadAsync(await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, new { businessId, periodStart = DaysAgoUtc(7), periodEnd = TodayUtc }))).GetProperty("settlement");
+        var discarded = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/settlements/{draft.GetProperty("id").GetString()}/discard", admin, new { version = draft.GetProperty("version").GetUInt32() });
+        Assert.Equal(HttpStatusCode.NoContent, discarded.StatusCode);
+
+        var again = await SendAsync(client, HttpMethod.Post, "/api/v1/admin/settlements", admin, new { businessId, periodStart = DaysAgoUtc(7), periodEnd = TodayUtc });
+        Assert.Equal(HttpStatusCode.Created, again.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task The_payments_and_refunds_lists_show_the_money_and_reject_unknown_filters()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (admin, _, businessId, bookingId) = await CompletedPaidBookingAsync(client, gateway);
+
+        var payments = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/admin/payments?status=captured&businessId={businessId}", admin));
+        var row = Assert.Single(payments.GetProperty("items").EnumerateArray());
+        Assert.Equal(bookingId.ToString(), row.GetProperty("bookingId").GetString());
+        Assert.Equal(500m, row.GetProperty("amount").GetDecimal());
+        Assert.Equal("captured", row.GetProperty("status").GetString());
+        Assert.Equal("Sunset Kayak Tour", row.GetProperty("listingTitle").GetString());
+
+        var refunds = await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/admin/refunds?status=pending", admin));
+        Assert.Equal(JsonValueKind.Array, refunds.GetProperty("items").ValueKind);
+        Assert.Equal(HttpStatusCode.BadRequest, (await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments?status=bogus", admin)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await SendAsync(client, HttpMethod.Get, "/api/v1/admin/settlements?status=bogus", admin)).StatusCode);
+    }
+
     private static HttpRequestMessage Authorized(HttpMethod method, string path, string token)
     {
         var request = new HttpRequestMessage(method, path);

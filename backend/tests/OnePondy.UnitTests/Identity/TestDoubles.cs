@@ -76,6 +76,10 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
 
+    public DbSet<Settlement> Settlements => Set<Settlement>();
+
+    public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();
+
     public DbSet<ReconciliationException> ReconciliationExceptions => Set<ReconciliationException>();
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
@@ -180,6 +184,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<Refund>().HasKey(r => r.Id);
         modelBuilder.Entity<GatewayEvent>().HasKey(e => e.Id);
         modelBuilder.Entity<LedgerEntry>().HasKey(e => e.Id);
+        modelBuilder.Entity<Settlement>().HasKey(s => s.Id);
+        modelBuilder.Entity<SettlementItem>().HasKey(i => i.Id);
         modelBuilder.Entity<ReconciliationException>().HasKey(e => e.Id);
         modelBuilder.Entity<OutboxMessage>().HasKey(m => m.Id);
         modelBuilder.Entity<DeviceToken>().HasKey(d => d.Id);

@@ -396,3 +396,108 @@ export interface BookingDetail {
   createdAt: string;
   updatedAt: string;
 }
+
+// --- Payments, refunds, statements and reconciliation (spec Phase 7). Enums arrive in camelCase. ---
+
+export type PaymentAttemptStatus = 'created' | 'captured' | 'failed' | 'expired';
+
+export type RefundStatus = 'pending' | 'processed' | 'failed';
+
+export type RefundReason = 'rejected' | 'partnerCancelled' | 'customerCancelled' | 'latePayment';
+
+export type SettlementStatus = 'draft' | 'approved' | 'paid';
+
+export type SettlementItemKind = 'sale' | 'refund';
+
+export interface PaymentRow {
+  id: string;
+  bookingId: string;
+  listingTitle: string;
+  businessId: string;
+  businessName: string;
+  amount: number;
+  currency: string;
+  status: PaymentAttemptStatus;
+  providerOrderId: string;
+  providerPaymentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RefundRow {
+  id: string;
+  bookingId: string;
+  listingTitle: string;
+  businessName: string;
+  amount: number;
+  reason: RefundReason;
+  status: RefundStatus;
+  providerRefundId: string | null;
+  requestedAt: string;
+  processedAt: string | null;
+}
+
+export interface SettlementSummary {
+  id: string;
+  businessId: string;
+  businessName: string;
+  periodStart: string;
+  periodEnd: string;
+  grossAmount: number;
+  commissionAmount: number;
+  refundAmount: number;
+  netAmount: number;
+  status: SettlementStatus;
+  payoutReference: string | null;
+  createdAt: string;
+  approvedAt: string | null;
+  paidAt: string | null;
+  version: number;
+}
+
+export interface SettlementItem {
+  bookingId: string;
+  listingTitle: string;
+  serviceStartAt: string | null;
+  kind: SettlementItemKind;
+  grossAmount: number;
+  commissionAmount: number;
+  partnerAmount: number;
+}
+
+export interface SettlementDetail {
+  settlement: SettlementSummary;
+  items: SettlementItem[];
+}
+
+export type ReconciliationStatus = 'open' | 'resolved' | 'autoResolved';
+
+export type ReconciliationKind =
+  | 'webhookNeedsAttention'
+  | 'webhookUnprocessed'
+  | 'paymentAppliedWithoutWebhook'
+  | 'gatewayPaymentUnknown'
+  | 'paymentMissingAtGateway'
+  | 'paymentMismatch'
+  | 'refundAppliedWithoutWebhook'
+  | 'refundNotSent'
+  | 'refundStuck'
+  | 'refundFailed'
+  | 'refundTotalMismatch'
+  | 'ledgerProblem';
+
+export interface ReconciliationExceptionView {
+  id: string;
+  kind: ReconciliationKind;
+  status: ReconciliationStatus;
+  bookingId: string | null;
+  providerReference: string | null;
+  expectedAmount: number | null;
+  actualAmount: number | null;
+  detail: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
+  occurrences: number;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+}

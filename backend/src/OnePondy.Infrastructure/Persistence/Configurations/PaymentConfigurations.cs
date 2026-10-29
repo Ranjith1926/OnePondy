@@ -150,7 +150,8 @@ public sealed class SettlementConfiguration : IEntityTypeConfiguration<Settlemen
         builder.Property(s => s.RefundAmount).HasPrecision(12, 2);
         builder.Property(s => s.NetAmount).HasPrecision(12, 2);
         builder.Property(s => s.Status).HasConversion(SnakeCaseEnum<SettlementStatus>.Converter).HasMaxLength(16);
-        builder.Property(s => s.PayoutReference).HasMaxLength(100);
+        builder.Property(s => s.PayoutReference).HasMaxLength(Settlement.MaxPayoutReferenceLength);
+        builder.Property(s => s.Version).IsRowVersion();
 
         builder.HasOne<Business>().WithMany().HasForeignKey(s => s.BusinessId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(s => new { s.BusinessId, s.PeriodStart, s.PeriodEnd }).IsUnique().HasDatabaseName("ux_settlements_period");

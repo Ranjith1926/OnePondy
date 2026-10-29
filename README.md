@@ -193,6 +193,12 @@ Push tokens also need an Expo (EAS) project id in the app config (see "7.8" in d
 simply does not register for notifications. In Razorpay test mode, pay with a test card such as `4111 1111 1111 1111`, any future
 expiry and any CVV.
 
+**Statements and payouts.** In the console, an administrator drafts a statement for a partner and period (Statements), checks it,
+approves it, transfers the money themselves, then records the bank reference, which books the payout in the ledger. Partners see
+approved and paid statements under their business, and can download them as CSV. Payments, refunds and reconciliation
+differences are under Payments. See "7.9" in docs/phase-7-plan.md. The new migration `AddSettlementRowVersion` must be applied
+like the others.
+
 **Reconciliation.** The Worker also checks every five minutes, and once a day, that our payment records agree with
 Razorpay's (see "7.6" in docs/phase-7-plan.md). A payment or refund whose webhook was lost is applied from Razorpay's own record
 and noted; anything else that differs is listed for an administrator at

@@ -58,6 +58,8 @@ public static class DependencyInjection
         services.AddScoped<RefundService>();
         services.AddScoped<ReconciliationService>();
         services.AddScoped<ReconciliationExceptionService>();
+        services.AddScoped<SettlementService>();
+        services.AddScoped<PaymentAdminService>();
         services.AddScoped<NotificationOutbox>();
         services.AddScoped<DeviceService>();
         services.AddScoped<OutboxDispatcher>();

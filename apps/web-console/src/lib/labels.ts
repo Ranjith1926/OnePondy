@@ -8,6 +8,12 @@ import type {
   ListingType,
   MediaLicence,
   ModuleStatus,
+  PaymentAttemptStatus,
+  ReconciliationKind,
+  ReconciliationStatus,
+  RefundReason,
+  RefundStatus,
+  SettlementStatus,
   VerificationStatus,
   VisitorCategory,
 } from './apiTypes';
@@ -176,3 +182,58 @@ export const formatDateTime = (iso: string | null): string =>
   iso ? dateTime.format(new Date(iso)) : '—';
 
 export const formatDate = (iso: string | null): string => (iso ? date.format(new Date(iso)) : '—');
+
+// --- Payments (Phase 7) ---
+
+export const paymentStatusLabels: Record<PaymentAttemptStatus, string> = {
+  created: 'Started',
+  captured: 'Paid',
+  failed: 'Failed',
+  expired: 'Expired',
+};
+
+export const refundStatusLabels: Record<RefundStatus, string> = {
+  pending: 'In progress',
+  processed: 'Sent',
+  failed: 'Failed',
+};
+
+export const refundReasonLabels: Record<RefundReason, string> = {
+  rejected: 'Partner rejected',
+  partnerCancelled: 'Partner cancelled',
+  customerCancelled: 'Customer cancelled',
+  latePayment: 'Paid after time ran out',
+};
+
+export const settlementStatusLabels: Record<SettlementStatus, string> = {
+  draft: 'Draft',
+  approved: 'Approved',
+  paid: 'Paid',
+};
+
+export const reconciliationKindLabels: Record<ReconciliationKind, string> = {
+  webhookNeedsAttention: 'Webhook could not be applied',
+  webhookUnprocessed: 'Webhook never finished',
+  paymentAppliedWithoutWebhook: 'Payment found without a webhook',
+  gatewayPaymentUnknown: 'Gateway payment we do not know',
+  paymentMissingAtGateway: 'Payment missing at the gateway',
+  paymentMismatch: 'Payment differs from the gateway',
+  refundAppliedWithoutWebhook: 'Refund found without a webhook',
+  refundNotSent: 'Refund never reached the gateway',
+  refundStuck: 'Refund waiting too long',
+  refundFailed: 'Refund failed',
+  refundTotalMismatch: 'Refund totals differ',
+  ledgerProblem: 'Ledger problem',
+};
+
+export const reconciliationStatusLabels: Record<ReconciliationStatus, string> = {
+  open: 'Needs attention',
+  resolved: 'Resolved',
+  autoResolved: 'Fixed automatically',
+};
+
+const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' });
+
+/** Money in rupees, for example "₹1,250.00". Everything in the console is INR for now. */
+export const formatMoney = (amount: number, currency = 'INR'): string =>
+  currency === 'INR' ? rupees.format(amount) : `${currency} ${amount.toFixed(2)}`;

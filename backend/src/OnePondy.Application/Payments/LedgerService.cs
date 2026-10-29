@@ -100,11 +100,31 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
         Add(transaction, LedgerAccounts.PartnerPayable(booking.BusinessId), partnerBack, booking.Id, "Partner share returned", now);
     }
 
+    public static string PayoutKey(Guid settlementId) => $"payout:{settlementId}";
+
+    /// <summary>
+    /// A statement has been paid to the partner: what OnePondy owes them goes down and what it has paid them goes up. Not tied to
+    /// a booking, since it settles a whole statement. The transaction id comes from the statement, so a payout cannot be posted
+    /// twice (the database refuses a second one).
+    /// </summary>
+    public void PostPayout(Settlement settlement)
+    {
+        if (settlement.NetAmount <= 0m)
+        {
+            return;
+        }
+
+        var transaction = TransactionId(PayoutKey(settlement.Id));
+        var now = time.GetUtcNow();
+        Add(transaction, LedgerAccounts.PartnerPayable(settlement.BusinessId), settlement.NetAmount, null, "Statement paid out", now);
+        Add(transaction, LedgerAccounts.PartnerPaid(settlement.BusinessId), -settlement.NetAmount, null, "Paid to partner", now);
+    }
+
     private Task<bool> AlreadyPostedAsync(Guid transaction, CancellationToken cancellationToken) =>
         db.LedgerEntries.AsNoTracking().AnyAsync(e => e.TransactionId == transaction, cancellationToken);
 
     /// <summary>Adds a line unless it is zero (a 0% commission, say), which a balanced transaction does not need.</summary>
-    private void Add(Guid transaction, string account, decimal amount, Guid bookingId, string description, DateTimeOffset now)
+    private void Add(Guid transaction, string account, decimal amount, Guid? bookingId, string description, DateTimeOffset now)
     {
         if (amount != 0m)
         {

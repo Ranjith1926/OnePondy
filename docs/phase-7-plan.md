@@ -375,3 +375,42 @@ attempt in any state except already captured, because a customer can still pay a
   and anonymous are refused, a booking not awaiting payment is returned untouched, a late payment after cancelling shows its refund).
   App: the pay flow (every outcome, polling, server over checkout), the Checkout error mapping, push registration (every branch),
   link validation, the pay card, receipt and booking detail, error messages and the refetch rule.
+
+**7.9 (console payments, statements and partner statements).**
+
+- **A statement is a view of the ledger.** `SettlementService` builds one per business and period (UTC days; a period must have
+  finished). Every amount comes from the ledger: gross sales, the commission kept, refunds to customers, and the net payable, which
+  equals what the ledger says the partner is owed. For each booking the statement arithmetic is checked against the ledger's
+  `partner_payable` balance for it, and if they disagree nothing is drafted (`settlement_ledger_mismatch`).
+- **Which bookings.** A booking is on a statement once it is `completed`, or `refunded` after a partial refund (the partner keeps the
+  part the customer was not given back, for example after a late cancellation). A booking refunded in full, or never paid online,
+  owes the partner nothing and never appears. A booking is a sale once and a refund at most once (a database rule), so no statement
+  counts it twice; a refund that arrives after its sale was already settled is carried on a later statement as an adjustment. A
+  statement needs a positive net: otherwise `settlement_nothing_due` and the bookings wait for a later one. At most 500 bookings
+  per statement; the rest wait.
+- **Draft, approve, pay.** Draft is the administrators' working copy (the partner cannot see it) and can be discarded, which
+  returns its bookings to the pool. Approving makes it visible to the partner. **Marking paid** needs the bank reference (UTR),
+  and posts the payout to the ledger (`partner_payable` down, `partner_paid` up) in the same save. Nothing approved or paid can be
+  undone. Payouts themselves are still made outside the system; the system only records them.
+- **Concurrency.** Statements carry a row version (migration `AddSettlementRowVersion`; `xmin`, so no new column), the payout
+  ledger transaction id comes from the statement, and the ledger refuses a second one. Eight administrators paying the same
+  statement at once pay it once; the rest get 409. A save that loses such a race can surface from EF as a `DbUpdateException` or,
+  when PostgreSQL picks it as a deadlock victim, as an `InvalidOperationException` wrapping one: `WriteConflicts.Is` recognises both.
+  **The payment services of 7.3-7.7 still catch only `DbUpdateException`**, so the same rare deadlock there would answer 500
+  instead of 409 (nothing is lost; the webhook is retried). That is a known follow-up.
+- **API.** Administrators: `GET /api/v1/admin/payments`, `/refunds` (status filter, paging; no customer details, only the booking
+  id), `GET/POST /admin/settlements`, `GET /admin/settlements/{id}`, `POST .../{id}/approve`, `.../paid`, `.../discard` (each with the
+  row `version`). Partners: `GET /api/v1/partner/businesses/{id}/statements`, `/{statementId}` and `/{statementId}/csv`, for
+  approved and paid statements of their own business only (anyone else gets 404). Every step is in the audit log.
+- **CSV.** UTF-8 with a byte-order mark (so Excel reads it); text typed by partners that begins with `=`, `+`, `-`, `@` is defused
+  against spreadsheet formula injection, while amounts keep their minus sign.
+- **Console.** Administrators get **Payments** (with Refunds and Reconciliation tabs; the reconciliation list opens on what needs
+  attention and each item is closed with a note) and **Statements** (list, draft form, detail with approve, mark paid and discard).
+  Partners get **Statements** on their business page, a statement detail and a CSV download that goes through the console, so the
+  browser never holds the access token.
+- **Not done.** Razorpay Route payouts (D21), GST/TCS on commission (waits for the §21 tax review), and per-listing commission.
+  The console screens are covered by build, type-check and component tests, and were not browsed against a running API.
+- **Tests.** Backend: 26 unit tests (amounts tie to the ledger for a full sale and for a late cancellation, eligibility, periods,
+  discard, approve and pay, partner visibility, CSV), 3 for `WriteConflicts` and 6 integration tests against PostgreSQL (the full HTTP
+  flow with the ledger checked, access control, simultaneous payouts and simultaneous drafts). Console: label coverage, query string,
+  statement table and badge.

@@ -70,6 +70,7 @@ app.MapSavedListingEndpoints();
 app.MapBookingEndpoints();
 app.MapPaymentEndpoints();
 app.MapPaymentAdminEndpoints();
+app.MapSettlementEndpoints();
 app.MapDeviceEndpoints();
 
 app.Run();
