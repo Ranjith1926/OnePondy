@@ -57,6 +57,9 @@ public static class AuditEntityTypes
     public const string Listing = "listing";
     public const string ReconciliationException = "reconciliation_exception";
     public const string Settlement = "settlement";
+    public const string Restaurant = "restaurant";
+    public const string MenuCategory = "menu_category";
+    public const string MenuItem = "menu_item";
 }
 
 public static class AuditActions
@@ -74,6 +77,13 @@ public static class AuditActions
     public const string SettlementApproved = "settlement.approved";
     public const string SettlementPaid = "settlement.paid";
     public const string SettlementDiscarded = "settlement.discarded";
+    public const string RestaurantUpdated = "restaurant.updated";
+    public const string MenuCategoryCreated = "menu_category.created";
+    public const string MenuCategoryUpdated = "menu_category.updated";
+    public const string MenuCategoryDeleted = "menu_category.deleted";
+    public const string MenuItemCreated = "menu_item.created";
+    public const string MenuItemUpdated = "menu_item.updated";
+    public const string MenuItemArchived = "menu_item.archived";
     public const string MediaAdded = "media.added";
     public const string MediaUpdated = "media.updated";
     public const string MediaRemoved = "media.removed";

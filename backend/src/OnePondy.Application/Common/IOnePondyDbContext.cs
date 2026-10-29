@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Storage;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
@@ -60,6 +61,14 @@ public interface IOnePondyDbContext
     DbSet<GatewayEvent> GatewayEvents { get; }
 
     DbSet<LedgerEntry> LedgerEntries { get; }
+
+    DbSet<RestaurantProfile> RestaurantProfiles { get; }
+
+    DbSet<RestaurantDeliveryArea> RestaurantDeliveryAreas { get; }
+
+    DbSet<MenuCategory> MenuCategories { get; }
+
+    DbSet<MenuItem> MenuItems { get; }
 
     DbSet<Settlement> Settlements { get; }
 

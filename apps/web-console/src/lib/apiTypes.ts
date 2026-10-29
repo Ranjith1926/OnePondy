@@ -501,3 +501,53 @@ export interface ReconciliationExceptionView {
   resolvedAt: string | null;
   resolutionNote: string | null;
 }
+
+// --- Restaurants and menus (Phase 8) ---
+
+export type FoodAreaCode =
+  | 'puducherry'
+  | 'whiteTown'
+  | 'tamilQuarter'
+  | 'auroville'
+  | 'lawspet'
+  | 'muthialpet'
+  | 'reddiarpalayam'
+  | 'ariyankuppam'
+  | 'villianur';
+
+export interface RestaurantProfile {
+  configured: boolean;
+  businessId: string;
+  prepTimeMinutes: number;
+  minOrderAmount: number;
+  isAcceptingOrders: boolean;
+  deliveryAreas: FoodAreaCode[];
+  version: number;
+}
+
+export interface MenuItem {
+  id: string;
+  categoryId: string;
+  name: string;
+  description: string | null;
+  price: number;
+  currency: string;
+  isVeg: boolean;
+  taxRatePercent: number;
+  isAvailable: boolean;
+  isArchived: boolean;
+  position: number;
+  version: number;
+}
+
+export interface MenuCategory {
+  id: string;
+  name: string;
+  position: number;
+  version: number;
+  items: MenuItem[];
+}
+
+export interface MenuView {
+  categories: MenuCategory[];
+}

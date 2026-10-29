@@ -11,6 +11,7 @@ using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
 using OnePondy.Domain.Notifications;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.TripPlanner;
@@ -64,6 +65,14 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<Refund> Refunds => Set<Refund>();
 
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+
+    public DbSet<RestaurantProfile> RestaurantProfiles => Set<RestaurantProfile>();
+
+    public DbSet<RestaurantDeliveryArea> RestaurantDeliveryAreas => Set<RestaurantDeliveryArea>();
+
+    public DbSet<MenuCategory> MenuCategories => Set<MenuCategory>();
+
+    public DbSet<MenuItem> MenuItems => Set<MenuItem>();
 
     public DbSet<Settlement> Settlements => Set<Settlement>();
 

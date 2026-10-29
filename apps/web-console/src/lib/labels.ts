@@ -4,6 +4,7 @@ import type {
   BusinessDocumentKind,
   BusinessType,
   DayOfWeek,
+  FoodAreaCode,
   ListingStatus,
   ListingType,
   MediaLicence,
@@ -237,3 +238,17 @@ const rupees = new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'IN
 /** Money in rupees, for example "₹1,250.00". Everything in the console is INR for now. */
 export const formatMoney = (amount: number, currency = 'INR'): string =>
   currency === 'INR' ? rupees.format(amount) : `${currency} ${amount.toFixed(2)}`;
+
+// --- Food (Phase 8): the same areas the customer app's picker offers ---
+
+export const foodAreaLabels: Record<FoodAreaCode, string> = {
+  puducherry: 'Whole city (every area)',
+  whiteTown: 'White Town',
+  tamilQuarter: 'Tamil Quarter',
+  auroville: 'Auroville',
+  lawspet: 'Lawspet',
+  muthialpet: 'Muthialpet',
+  reddiarpalayam: 'Reddiarpalayam',
+  ariyankuppam: 'Ariyankuppam',
+  villianur: 'Villianur',
+};

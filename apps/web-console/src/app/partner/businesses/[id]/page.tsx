@@ -70,6 +70,17 @@ export default async function PartnerBusinessPage({ params }: { params: Promise<
         </div>
       ) : null}
 
+      {business.businessType === 'restaurant' ? (
+        <div className="mb-6 flex flex-wrap gap-3">
+          <Link className={linkButton} href={`/partner/businesses/${business.id}/restaurant`}>
+            Restaurant
+          </Link>
+          <Link className={linkButton} href={`/partner/businesses/${business.id}/menu`}>
+            Menu
+          </Link>
+        </div>
+      ) : null}
+
       <div className="flex flex-col gap-6">
         {canEdit ? (
           <Card title="Details">

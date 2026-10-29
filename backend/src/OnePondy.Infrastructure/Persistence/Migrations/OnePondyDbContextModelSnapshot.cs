@@ -671,6 +671,202 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Food.MenuCategory", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_categories");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ux_menu_categories_id_business");
+
+                    b.HasIndex("BusinessId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ux_menu_categories_name");
+
+                    b.ToTable("menu_categories", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_menu_category_position", "position >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.MenuItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<bool>("IsAvailable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_available");
+
+                    b.Property<bool>("IsVeg")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_veg");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("price");
+
+                    b.Property<decimal>("TaxRatePercent")
+                        .HasPrecision(5, 2)
+                        .HasColumnType("numeric(5,2)")
+                        .HasColumnName("tax_rate_percent");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_menu_items");
+
+                    b.HasIndex("BusinessId", "CategoryId")
+                        .HasDatabaseName("ix_menu_items_business_category");
+
+                    b.HasIndex("CategoryId", "BusinessId")
+                        .HasDatabaseName("ix_menu_items_category_id_business_id");
+
+                    b.ToTable("menu_items", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_menu_item_archived_unavailable", "NOT is_archived OR NOT is_available");
+
+                            t.HasCheckConstraint("ck_menu_item_position", "position >= 0");
+
+                            t.HasCheckConstraint("ck_menu_item_price", "price > 0 AND price <= 100000");
+
+                            t.HasCheckConstraint("ck_menu_item_tax", "tax_rate_percent BETWEEN 0 AND 28");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.RestaurantDeliveryArea", b =>
+                {
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("AreaCode")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("area_code");
+
+                    b.HasKey("BusinessId", "AreaCode")
+                        .HasName("pk_restaurant_delivery_areas");
+
+                    b.ToTable("restaurant_delivery_areas", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_delivery_area_code", "area_code IN ('puducherry', 'whiteTown', 'tamilQuarter', 'auroville', 'lawspet', 'muthialpet', 'reddiarpalayam', 'ariyankuppam', 'villianur')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.RestaurantProfile", b =>
+                {
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsAcceptingOrders")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_accepting_orders");
+
+                    b.Property<decimal>("MinOrderAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("min_order_amount");
+
+                    b.Property<int>("PrepTimeMinutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("prep_time_minutes");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("BusinessId")
+                        .HasName("pk_restaurant_profiles");
+
+                    b.ToTable("restaurant_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_restaurant_min_order", "min_order_amount BETWEEN 0 AND 100000");
+
+                            t.HasCheckConstraint("ck_restaurant_prep_time", "prep_time_minutes BETWEEN 5 AND 180");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Identity.OtpChallenge", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2550,6 +2746,54 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_module_flags_app_users_updated_by_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.MenuCategory", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_categories_businesses_business_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.MenuItem", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_items_businesses_business_id");
+
+                    b.HasOne("OnePondy.Domain.Food.MenuCategory", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_menu_items_menu_categories_category_id_business_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.RestaurantDeliveryArea", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Food.RestaurantProfile", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_restaurant_delivery_areas_restaurant_profiles_business_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Food.RestaurantProfile", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithOne()
+                        .HasForeignKey("OnePondy.Domain.Food.RestaurantProfile", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_restaurant_profiles_businesses_business_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Identity.RefreshToken", b =>

@@ -11,6 +11,7 @@ using OnePondy.Domain.Audit;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
@@ -75,6 +76,14 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<GatewayEvent> GatewayEvents => Set<GatewayEvent>();
 
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
+
+    public DbSet<RestaurantProfile> RestaurantProfiles => Set<RestaurantProfile>();
+
+    public DbSet<RestaurantDeliveryArea> RestaurantDeliveryAreas => Set<RestaurantDeliveryArea>();
+
+    public DbSet<MenuCategory> MenuCategories => Set<MenuCategory>();
+
+    public DbSet<MenuItem> MenuItems => Set<MenuItem>();
 
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
@@ -198,6 +207,10 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<Refund>().HasKey(r => r.Id);
         modelBuilder.Entity<GatewayEvent>().HasKey(e => e.Id);
         modelBuilder.Entity<LedgerEntry>().HasKey(e => e.Id);
+        modelBuilder.Entity<RestaurantProfile>().HasKey(p => p.BusinessId);
+        modelBuilder.Entity<RestaurantDeliveryArea>().HasKey(a => new { a.BusinessId, a.AreaCode });
+        modelBuilder.Entity<MenuCategory>().HasKey(c => c.Id);
+        modelBuilder.Entity<MenuItem>().HasKey(i => i.Id);
         modelBuilder.Entity<Settlement>().HasKey(s => s.Id);
         modelBuilder.Entity<SettlementItem>().HasKey(i => i.Id);
         modelBuilder.Entity<ReconciliationException>().HasKey(e => e.Id);
