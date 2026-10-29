@@ -219,7 +219,6 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
         }
 
         db.ExpectVersion(booking, expectedVersion);
-        var wasHolding = booking.IsHolding;
         try
         {
             apply(booking);
@@ -231,7 +230,9 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time)
 
         db.MarkAdded(booking.History[^1]);
 
-        if (wasHolding && !booking.IsHolding && booking.Status != BookingStatus.Confirmed)
+        // Pending, awaiting-payment and confirmed bookings all keep their seats reserved, so any move
+        // to one of these ends states gives them back, including cancelling an already confirmed booking.
+        if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Expired or BookingStatus.Failed)
         {
             await ReleaseSlotsAsync(booking.Id, cancellationToken);
         }

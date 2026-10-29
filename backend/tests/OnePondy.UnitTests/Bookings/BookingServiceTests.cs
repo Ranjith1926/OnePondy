@@ -100,6 +100,25 @@ public class BookingServiceTests
     }
 
     [Fact]
+    public async Task Cancelling_a_confirmed_booking_releases_its_slot_for_either_side()
+    {
+        var byCustomer = (await _harness.Bookings.CreateAsync(_harness.Customer, _harness.Input(), default)).Value!;
+        var accepted = (await _harness.Bookings.AcceptAsync(_harness.BusinessId, byCustomer.Id, byCustomer.Version, _harness.Owner, default)).Value!;
+        var cancelled = await _harness.Bookings.CancelMineAsync(accepted.Id, _harness.Customer, "Change of plans", accepted.Version, default);
+
+        Assert.Equal(BookingStatus.Cancelled, cancelled.Value!.Status);
+        var slot = await _harness.Listings.ListPublicSlotsAsync(_harness.ListingId, null, default);
+        Assert.Equal(0, slot.Value!.Single().ReservedCount);
+
+        var byPartner = (await _harness.Bookings.CreateAsync(_harness.Customer, _harness.Input(idempotencyKey: "idem-2"), default)).Value!;
+        var confirmed = (await _harness.Bookings.AcceptAsync(_harness.BusinessId, byPartner.Id, byPartner.Version, _harness.Owner, default)).Value!;
+        await _harness.Bookings.CancelForBusinessAsync(_harness.BusinessId, confirmed.Id, confirmed.Version, _harness.Owner, "Closed that day", default);
+
+        slot = await _harness.Listings.ListPublicSlotsAsync(_harness.ListingId, null, default);
+        Assert.Equal(0, slot.Value!.Single().ReservedCount);
+    }
+
+    [Fact]
     public async Task A_different_business_cannot_see_or_act_on_another_partners_bookings()
     {
         var created = (await _harness.Bookings.CreateAsync(_harness.Customer, _harness.Input(), default)).Value!;
