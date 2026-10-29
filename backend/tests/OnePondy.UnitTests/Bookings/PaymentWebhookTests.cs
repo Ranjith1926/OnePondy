@@ -348,7 +348,7 @@ public class PaymentWebhookTests
     {
         var (booking, orderId) = await OpenPaymentAsync();
         _h.Bookings.Time.Advance(TimeSpan.FromMinutes(31));
-        await new Application.Bookings.BookingHoldExpiry(_h.Bookings.Db, _h.Bookings.Bookings, _h.Bookings.Time).ExpireDueHoldsAsync(None);
+        await _h.Bookings.Expiry.ExpireDueHoldsAsync(None);
         await SendAsync(Captured(orderId, "pay_1", 100_000), NextEventId());
         var refund = await _h.Bookings.Db.Refunds.SingleAsync();
 

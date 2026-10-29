@@ -21,6 +21,8 @@ public sealed class BookingHarness
         var businesses = new BusinessService(Db, new InMemoryBusinessDocumentStorage(), audit, Time);
         Listings = new ListingService(Db, audit, Time);
         Bookings = new BookingService(Db, Time, Microsoft.Extensions.Options.Options.Create(Payments));
+        PaymentService = new OnePondy.Application.Payments.PaymentService(Db, Gateway, Time, Microsoft.Extensions.Options.Options.Create(Payments), Microsoft.Extensions.Logging.Abstractions.NullLogger<OnePondy.Application.Payments.PaymentService>.Instance);
+        Expiry = new BookingHoldExpiry(Db, Bookings, PaymentService, Time, Microsoft.Extensions.Options.Options.Create(Payments));
 
         Owner = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919876543210", CancellationToken.None).Result.Id;
         Customer = Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919988776655", CancellationToken.None).Result.Id;
@@ -52,6 +54,13 @@ public sealed class BookingHarness
     public ListingService Listings { get; }
 
     public BookingService Bookings { get; }
+
+    public FakePaymentGateway Gateway { get; } = new();
+
+    public OnePondy.Application.Payments.PaymentService PaymentService { get; }
+
+    /// <summary>The Worker hold-expiry step, wired to the fake gateway.</summary>
+    public BookingHoldExpiry Expiry { get; }
 
     public Guid Administrator { get; }
 

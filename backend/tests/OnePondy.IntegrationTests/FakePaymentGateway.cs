@@ -24,6 +24,39 @@ public sealed class FakePaymentGateway(TimeSpan? orderDelay = null) : IPaymentGa
             new GatewayOrder($"order_it_{Guid.NewGuid():N}_{Interlocked.Increment(ref _orders)}", request.AmountPaise, request.Currency));
     }
 
+    /// <summary>What the gateway says it holds for an order. Add a payment to simulate a customer paying.</summary>
+    public System.Collections.Concurrent.ConcurrentDictionary<string, List<GatewayPayment>> OrderPayments { get; } = new();
+
+    public bool LookupsFail { get; set; }
+
+    public void CustomerPaid(string orderId, string paymentId, long paise)
+    {
+        var payments = OrderPayments.GetOrAdd(orderId, _ => []);
+        lock (payments)
+        {
+            payments.Add(new GatewayPayment(paymentId, paise, "INR", "captured"));
+        }
+    }
+
+    public Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken)
+    {
+        if (LookupsFail)
+        {
+            return Task.FromResult(Result<IReadOnlyList<GatewayPayment>>.Failure(PaymentErrors.Unavailable));
+        }
+
+        IReadOnlyList<GatewayPayment> found = [];
+        if (OrderPayments.TryGetValue(orderId, out var payments))
+        {
+            lock (payments)
+            {
+                found = [.. payments];
+            }
+        }
+
+        return Task.FromResult(Result<IReadOnlyList<GatewayPayment>>.Success(found));
+    }
+
     public Task<Result<GatewayRefund>> RefundAsync(GatewayRefundRequest request, CancellationToken cancellationToken)
     {
         lock (RefundRequests)

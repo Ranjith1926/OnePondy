@@ -7,6 +7,7 @@ using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Listings;
+using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Bookings;
 
@@ -280,7 +281,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         // to one of these ends states gives them back, including cancelling an already confirmed booking.
         if (booking.Status is BookingStatus.Cancelled or BookingStatus.Rejected or BookingStatus.Expired or BookingStatus.Failed)
         {
-            await ReleaseSlotsAsync(booking.Id, cancellationToken);
+            await ReleaseHoldAsync(booking.Id, cancellationToken);
         }
 
         try
@@ -314,7 +315,7 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         }
 
         db.MarkAdded(booking.History[^1]);
-        await ReleaseSlotsAsync(booking.Id, cancellationToken);
+        await ReleaseHoldAsync(booking.Id, cancellationToken);
 
         try
         {
@@ -328,7 +329,12 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         }
     }
 
-    private async Task ReleaseSlotsAsync(Guid bookingId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Gives the seats back and closes any payment order still open for the booking, in the caller's save. A payment
+    /// that still arrives on a closed order is accepted and refunded (see <c>PaymentService.RecordCaptureAsync</c>).
+    /// If a payment lands in the same instant, the two saves collide and one retries, so neither is lost.
+    /// </summary>
+    private async Task ReleaseHoldAsync(Guid bookingId, CancellationToken cancellationToken)
     {
         var bookingSlots = await db.BookingSlots.AsNoTracking().Where(bs => bs.BookingId == bookingId).ToListAsync(cancellationToken);
         var slotIds = bookingSlots.Select(bs => bs.SlotId).ToList();
@@ -337,6 +343,14 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         foreach (var bookingSlot in bookingSlots)
         {
             slots.Single(s => s.Id == bookingSlot.SlotId).Release(bookingSlot.Quantity, now);
+        }
+
+        var open = await db.PaymentAttempts
+            .Where(a => a.BookingId == bookingId && a.Status == PaymentAttemptStatus.Created)
+            .ToListAsync(cancellationToken);
+        foreach (var attempt in open)
+        {
+            attempt.MarkExpired(now);
         }
     }
 

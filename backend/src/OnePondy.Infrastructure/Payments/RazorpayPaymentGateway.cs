@@ -76,15 +76,57 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
         }
     }
 
+    public async Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_options.BaseUrl.TrimEnd('/')}/orders/{Uri.EscapeDataString(orderId)}/payments");
+        request.Headers.Authorization = BasicAuthorization();
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await httpClient.SendAsync(request, cancellationToken);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning(exception, "Could not reach Razorpay");
+            return PaymentErrors.Unavailable;
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                LogRejection("payment lookup", response);
+                return PaymentErrors.Unavailable;
+            }
+
+            var page = await ReadAsync<PaymentsResponse>(response, cancellationToken);
+            if (page?.Items is null)
+            {
+                return PaymentErrors.Unavailable;
+            }
+
+            IReadOnlyList<GatewayPayment> payments =
+            [
+                .. page.Items
+                    .Where(item => item.Id is { Length: > 0 })
+                    .Select(item => new GatewayPayment(item.Id!, item.Amount, item.Currency ?? "INR", item.Status ?? string.Empty)),
+            ];
+            return Result<IReadOnlyList<GatewayPayment>>.Success(payments);
+        }
+    }
+
+    private AuthenticationHeaderValue BasicAuthorization() => new(
+        "Basic",
+        Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.KeyId}:{_options.KeySecret}")));
+
     private async Task<HttpResponseMessage?> PostAsync(string path, object body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Post, $"{_options.BaseUrl.TrimEnd('/')}/{path}")
         {
             Content = JsonContent.Create(body),
         };
-        request.Headers.Authorization = new AuthenticationHeaderValue(
-            "Basic",
-            Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.KeyId}:{_options.KeySecret}")));
+        request.Headers.Authorization = BasicAuthorization();
 
         try
         {
@@ -127,6 +169,14 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
         [property: JsonPropertyName("amount")] long Amount,
         [property: JsonPropertyName("currency")] string? Currency);
 
+    private sealed record PaymentsResponse([property: JsonPropertyName("items")] List<PaymentItem>? Items);
+
+    private sealed record PaymentItem(
+        [property: JsonPropertyName("id")] string? Id,
+        [property: JsonPropertyName("amount")] long Amount,
+        [property: JsonPropertyName("currency")] string? Currency,
+        [property: JsonPropertyName("status")] string? Status);
+
     private sealed record RefundResponse(
         [property: JsonPropertyName("id")] string? Id,
         [property: JsonPropertyName("status")] string? Status);
@@ -140,4 +190,7 @@ public sealed class UnavailablePaymentGateway : IPaymentGateway
 
     public Task<Result<GatewayRefund>> RefundAsync(GatewayRefundRequest request, CancellationToken cancellationToken) =>
         Task.FromResult(Result<GatewayRefund>.Failure(PaymentErrors.Unavailable));
+
+    public Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken) =>
+        Task.FromResult(Result<IReadOnlyList<GatewayPayment>>.Failure(PaymentErrors.Unavailable));
 }

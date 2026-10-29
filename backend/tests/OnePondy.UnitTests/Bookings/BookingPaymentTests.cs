@@ -77,16 +77,16 @@ public class BookingPaymentTests
         var created = await CreateAsync();
         _harness.Time.Advance(TimeSpan.FromMinutes(20));
         await AcceptAsync(created);
-        var expiry = new BookingHoldExpiry(_harness.Db, _harness.Bookings, _harness.Time);
+        var expiry = _harness.Expiry;
 
         // 35 minutes after the request: past the original hold, still inside the new payment window.
         _harness.Time.Advance(TimeSpan.FromMinutes(15));
-        Assert.Equal(0, await expiry.ExpireDueHoldsAsync(None));
+        Assert.Equal(0, (await expiry.ExpireDueHoldsAsync(None)).Expired);
         Assert.Equal(2, await ReservedAsync());
 
         // 51 minutes after the request: the 30 minutes to pay (from acceptance at minute 20) have run out.
         _harness.Time.Advance(TimeSpan.FromMinutes(16));
-        Assert.Equal(1, await expiry.ExpireDueHoldsAsync(None));
+        Assert.Equal(1, (await expiry.ExpireDueHoldsAsync(None)).Expired);
     }
 
     [Fact]
@@ -97,7 +97,7 @@ public class BookingPaymentTests
         await AcceptAsync(created);
         _harness.Time.Advance(TimeSpan.FromMinutes(31));
 
-        var expired = await new BookingHoldExpiry(_harness.Db, _harness.Bookings, _harness.Time).ExpireDueHoldsAsync(None);
+        var expired = (await _harness.Expiry.ExpireDueHoldsAsync(None)).Expired;
 
         Assert.Equal(1, expired);
         var detail = (await _harness.Bookings.GetMineAsync(created.Id, _harness.Customer, None)).Value!;

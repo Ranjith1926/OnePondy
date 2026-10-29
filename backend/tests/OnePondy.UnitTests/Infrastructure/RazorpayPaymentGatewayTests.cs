@@ -27,7 +27,7 @@ public class RazorpayPaymentGatewayTests
             }
 
             Request = request;
-            Body = await request.Content!.ReadAsStringAsync(cancellationToken);
+            Body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
             return new HttpResponseMessage(status) { Content = new StringContent(json, Encoding.UTF8, "application/json") };
         }
     }
@@ -119,12 +119,57 @@ public class RazorpayPaymentGatewayTests
     }
 
     [Fact]
+    public async Task Lists_the_payments_made_against_an_order_with_a_signed_get()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"entity":"collection","count":2,"items":[{"id":"pay_1","amount":100000,"currency":"INR","status":"failed","email":"x@example.com"},{"id":"pay_2","amount":100000,"currency":"INR","status":"captured"}]}""");
+
+        var result = await Gateway(handler).GetOrderPaymentsAsync("order_abc", default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Equal(
+            [new GatewayPayment("pay_1", 100_000, "INR", "failed"), new GatewayPayment("pay_2", 100_000, "INR", "captured")],
+            result.Value);
+        Assert.Equal(HttpMethod.Get, handler.Request!.Method);
+        Assert.Equal("https://api.razorpay.com/v1/orders/order_abc/payments", handler.Request.RequestUri!.ToString());
+        Assert.Equal("Basic", handler.Request.Headers.Authorization!.Scheme);
+    }
+
+    [Fact]
+    public async Task An_order_with_no_payments_gives_an_empty_list_not_an_error()
+    {
+        var result = await Gateway(new StubHandler(HttpStatusCode.OK, """{"entity":"collection","count":0,"items":[]}""")).GetOrderPaymentsAsync("order_abc", default);
+
+        Assert.True(result.IsSuccess);
+        Assert.Empty(result.Value);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task A_refused_lookup_is_could_not_find_out_never_nothing_was_paid(HttpStatusCode status)
+    {
+        var result = await Gateway(new StubHandler(status)).GetOrderPaymentsAsync("order_abc", default);
+
+        Assert.Equal("payments_unavailable", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task A_network_failure_or_garbled_reply_on_a_lookup_is_could_not_find_out()
+    {
+        Assert.Equal("payments_unavailable", (await Gateway(new StubHandler(HttpStatusCode.OK, throws: true)).GetOrderPaymentsAsync("order_abc", default)).Error!.Code);
+        Assert.Equal("payments_unavailable", (await Gateway(new StubHandler(HttpStatusCode.OK, "<html>")).GetOrderPaymentsAsync("order_abc", default)).Error!.Code);
+        Assert.Equal("payments_unavailable", (await Gateway(new StubHandler(HttpStatusCode.OK, "{}")).GetOrderPaymentsAsync("order_abc", default)).Error!.Code);
+    }
+
+    [Fact]
     public async Task Without_credentials_every_call_reports_online_payment_as_unavailable()
     {
         var gateway = new UnavailablePaymentGateway();
 
         Assert.Equal("payments_unavailable", (await gateway.CreateOrderAsync(Order(), default)).Error!.Code);
         Assert.Equal("payments_unavailable", (await gateway.RefundAsync(new GatewayRefundRequest("pay_1", 100, "r"), default)).Error!.Code);
+        Assert.Equal("payments_unavailable", (await gateway.GetOrderPaymentsAsync("order_1", default)).Error!.Code);
     }
 }
 

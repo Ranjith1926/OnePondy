@@ -245,7 +245,7 @@ public class PaymentServiceTests
         var booking = await _h.AwaitingPaymentAsync();
         var started = (await _h.Payments.StartPaymentAsync(booking.Id, _h.Bookings.Customer, None)).Value!;
         _h.Bookings.Time.Advance(TimeSpan.FromMinutes(31));
-        await new BookingHoldExpiry(_h.Bookings.Db, _h.Bookings.Bookings, _h.Bookings.Time).ExpireDueHoldsAsync(None);
+        await _h.Bookings.Expiry.ExpireDueHoldsAsync(None);
 
         var captured = await _h.Payments.RecordCaptureAsync(started.OrderId, "pay_1", 1000m, None);
 

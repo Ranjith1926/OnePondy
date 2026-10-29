@@ -443,7 +443,7 @@ public sealed class BookingApiTests : IAsyncLifetime
         {
             var db = scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
             var later = new FakeTimeProvider(DateTimeOffset.UtcNow + OnePondy.Domain.Bookings.Booking.HoldDuration + TimeSpan.FromMinutes(5));
-            var expiredCount = await new BookingHoldExpiry(db, new BookingService(db, later, Microsoft.Extensions.Options.Options.Create(new OnePondy.Application.Payments.PaymentsOptions())), later).ExpireDueHoldsAsync(default);
+            var expiredCount = (await ExpiryFor(scope, new FakePaymentGateway(), later).ExpireDueHoldsAsync(default)).Expired;
             Assert.True(expiredCount >= 1);
         }
 
@@ -494,6 +494,33 @@ public sealed class BookingApiTests : IAsyncLifetime
             builder.UseSetting("Payments:Razorpay:WebhookSecret", WebhookSecret);
             builder.ConfigureTestServices(services => services.AddSingleton<IPaymentGateway>(gateway));
         });
+
+    /// <summary>The Worker hold-expiry step on a real database, with a fake gateway and an optional controllable clock.</summary>
+    private BookingHoldExpiry ExpiryFor(AsyncServiceScope scope, FakePaymentGateway gateway, TimeProvider? clock = null)
+    {
+        var db = DbOf(scope);
+        var time = clock ?? TimeProvider.System;
+        var options = Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } });
+        var payments = new PaymentService(db, gateway, time, options, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
+        return new BookingHoldExpiry(db, new BookingService(db, time, options), payments, time, options);
+    }
+
+    /// <summary>Pushes a booking hold into the past, the way waiting out the payment window would.</summary>
+    private async Task MakeOverdueAsync(Guid bookingId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        await DbOf(scope).Database.ExecuteSqlAsync($"UPDATE bookings SET expires_at = now() - interval '1 minute' WHERE id = {bookingId}");
+    }
+
+    private async Task<int> ReservedForAsync(Guid bookingId)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        return await db.BookingSlots.AsNoTracking()
+            .Where(bs => bs.BookingId == bookingId)
+            .Join(db.AvailabilitySlots.AsNoTracking(), bs => bs.SlotId, s => s.Id, (_, s) => s.ReservedCount)
+            .SingleAsync();
+    }
 
     private PaymentService PaymentServiceFor(AsyncServiceScope scope, FakePaymentGateway gateway) => new(
         DbOf(scope),
@@ -897,7 +924,8 @@ public sealed class BookingApiTests : IAsyncLifetime
             var db = DbOf(scope);
             Assert.Equal(OnePondy.Domain.Bookings.BookingStatus.Cancelled, (await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId)).Status);
             Assert.Equal(0, await db.Refunds.AsNoTracking().CountAsync(r => r.BookingId == bookingId));
-            Assert.Equal(OnePondy.Domain.Payments.PaymentAttemptStatus.Created, (await db.PaymentAttempts.AsNoTracking().SingleAsync(a => a.ProviderOrderId == orderId)).Status);
+            // The cancellation closed the order; the refused payment left it uncaptured.
+            Assert.Equal(OnePondy.Domain.Payments.PaymentAttemptStatus.Expired, (await db.PaymentAttempts.AsNoTracking().SingleAsync(a => a.ProviderOrderId == orderId)).Status);
         }
 
         // The gateway retries the webhook; this time the cancellation is seen and the money goes back.
@@ -1137,6 +1165,138 @@ public sealed class BookingApiTests : IAsyncLifetime
         Assert.Equal(1, await db.Bookings.AsNoTracking().Where(b => b.Id == bookingId).SelectMany(b => b.History).CountAsync(h => h.NewStatus == OnePondy.Domain.Bookings.BookingStatus.Confirmed));
         Assert.Equal(1, await db.PaymentAttempts.AsNoTracking().CountAsync(a => a.BookingId == bookingId && a.Status == OnePondy.Domain.Payments.PaymentAttemptStatus.Captured));
         Assert.Empty(gateway.RefundRequests);
+    }
+
+    // --- Phase 7 step 7.4: the Worker asks the gateway before it expires a booking waiting for payment ---
+
+    [DatabaseFact]
+    public async Task A_payment_the_webhook_never_reported_is_found_by_the_worker_and_the_booking_is_kept()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+        gateway.CustomerPaid(orderId, paymentId, 50_000);
+        await MakeOverdueAsync(bookingId);
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var result = await ExpiryFor(scope, gateway).ExpireDueHoldsAsync(default);
+            Assert.True(result.Resolved >= 1);
+        }
+
+        Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+        Assert.Equal(1, await ReservedForAsync(bookingId));
+        await using var check = Factory.Services.CreateAsyncScope();
+        var attempt = await DbOf(check).PaymentAttempts.AsNoTracking().SingleAsync(a => a.BookingId == bookingId);
+        Assert.Equal(OnePondy.Domain.Payments.PaymentAttemptStatus.Captured, attempt.Status);
+        Assert.Equal(paymentId, attempt.ProviderPaymentId);
+        Assert.Empty(gateway.RefundRequests);
+    }
+
+    [DatabaseFact]
+    public async Task An_unpaid_booking_is_expired_by_the_worker_its_order_closed_and_a_new_payment_refused()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (customer, bookingId, _) = await BookingWithOpenOrderAsync(client);
+        await MakeOverdueAsync(bookingId);
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            Assert.True((await ExpiryFor(scope, gateway).ExpireDueHoldsAsync(default)).Expired >= 1);
+        }
+
+        Assert.Equal("expired", await BookingStatusAsync(bookingId));
+        Assert.Equal(0, await ReservedForAsync(bookingId));
+        await using (var check = Factory.Services.CreateAsyncScope())
+        {
+            var attempt = await DbOf(check).PaymentAttempts.AsNoTracking().SingleAsync(a => a.BookingId == bookingId);
+            Assert.Equal(OnePondy.Domain.Payments.PaymentAttemptStatus.Expired, attempt.Status);
+        }
+
+        var retry = await SendAsync(client, HttpMethod.Post, $"/api/v1/bookings/{bookingId}/payment", customer);
+        Assert.Equal(HttpStatusCode.Conflict, retry.StatusCode);
+        Assert.Equal("payment_not_due", await ErrorCodeAsync(retry));
+    }
+
+    [DatabaseFact]
+    public async Task When_the_gateway_cannot_be_asked_the_worker_keeps_the_booking_for_now()
+    {
+        var gateway = new FakePaymentGateway { LookupsFail = true };
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var (_, bookingId, _) = await BookingWithOpenOrderAsync(client);
+        await MakeOverdueAsync(bookingId);
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var result = await ExpiryFor(scope, gateway).ExpireDueHoldsAsync(default);
+            Assert.True(result.Deferred >= 1);
+        }
+
+        Assert.Equal("awaiting_payment", await BookingStatusAsync(bookingId));
+        Assert.Equal(1, await ReservedForAsync(bookingId));
+    }
+
+    [DatabaseFact]
+    public async Task A_payment_arriving_just_as_the_worker_expires_the_booking_ends_one_consistent_way_every_time()
+    {
+        // Run the worker and the webhook at the same instant, repeatedly. The booking must end either paid and kept,
+        // or expired with the money refunded in full: never confirmed and refunded, never expired and unrefunded.
+        for (var round = 0; round < 6; round++)
+        {
+            var gateway = new FakePaymentGateway();
+            await using var factory = WithFakeGateway(gateway);
+            using var client = factory.CreateClient();
+            var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+            var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+            var json = PaymentCapturedJson(orderId, paymentId, 50_000);
+            var eventId = NewEventId();
+            await MakeOverdueAsync(bookingId);
+
+            // The payment is still in flight at the gateway when the worker looks, so the worker sees nothing paid.
+            var worker = Task.Run(async () =>
+            {
+                await using var scope = Factory.Services.CreateAsyncScope();
+                await ExpiryFor(scope, gateway).ExpireDueHoldsAsync(default);
+            });
+            var webhook = PostWebhookAsync(client, json, eventId);
+            await Task.WhenAll(worker, webhook);
+
+            var answer = (await webhook).StatusCode;
+            Assert.True(answer is HttpStatusCode.OK or HttpStatusCode.Conflict, $"round {round}: webhook answered {(int)answer}");
+
+            // Razorpay redelivers anything that was not a 2xx.
+            for (var retry = 0; retry < 5 && answer != HttpStatusCode.OK; retry++)
+            {
+                answer = (await PostWebhookAsync(client, json, eventId)).StatusCode;
+            }
+
+            Assert.Equal(HttpStatusCode.OK, answer);
+
+            await using var scope2 = Factory.Services.CreateAsyncScope();
+            var db = DbOf(scope2);
+            var status = (await db.Bookings.AsNoTracking().SingleAsync(b => b.Id == bookingId)).Status;
+            var refunds = await db.Refunds.AsNoTracking().Where(r => r.BookingId == bookingId).ToListAsync();
+            var attempt = await db.PaymentAttempts.AsNoTracking().SingleAsync(a => a.BookingId == bookingId);
+
+            Assert.Equal(OnePondy.Domain.Payments.PaymentAttemptStatus.Captured, attempt.Status);
+            if (status == OnePondy.Domain.Bookings.BookingStatus.Confirmed)
+            {
+                Assert.Empty(refunds);
+                Assert.Equal(1, await ReservedForAsync(bookingId));
+            }
+            else
+            {
+                Assert.Equal(OnePondy.Domain.Bookings.BookingStatus.Expired, status);
+                Assert.Equal(500m, Assert.Single(refunds).Amount);
+                Assert.Single(gateway.RefundRequests);
+                Assert.Equal(0, await ReservedForAsync(bookingId));
+            }
+        }
     }
 
     [DatabaseFact]

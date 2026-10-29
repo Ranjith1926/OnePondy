@@ -35,6 +35,19 @@ public enum CaptureOutcome
 
 public sealed record CaptureResult(CaptureOutcome Outcome, Guid? RefundId);
 
+/// <summary>What asking the gateway about a booking that is about to expire found.</summary>
+public enum ExpiryCheck
+{
+    /// <summary>Nothing was paid, as far as the gateway says. The hold can be released.</summary>
+    NotPaid,
+
+    /// <summary>The gateway had a payment and it was applied, so the booking is no longer waiting. Do not expire it.</summary>
+    Resolved,
+
+    /// <summary>The gateway could not be asked, or what it said could not be applied. Do not guess: try again shortly.</summary>
+    Unknown,
+}
+
 /// <summary>
 /// Paying for a booking (spec Phase 7). A customer starts a payment once a partner has accepted; the result
 /// comes back from the gateway, and only that result confirms the booking (<see cref="RecordCaptureAsync"/>).
@@ -189,6 +202,56 @@ public sealed class PaymentService(
 
         await InitiateRefundAsync(refund, attempt, cancellationToken);
         return new CaptureResult(CaptureOutcome.RefundRaised, refund.Id);
+    }
+
+    /// <summary>
+    /// Before a hold that was waiting for payment is released, asks the gateway whether it was paid after all (a
+    /// webhook can be late or lost). A payment found is applied exactly as a webhook would, so the customer who paid
+    /// at the last moment keeps their booking instead of being refunded. If the gateway cannot answer, the answer is
+    /// <see cref="ExpiryCheck.Unknown"/> and the caller waits rather than releasing seats someone may have paid for.
+    /// </summary>
+    public async Task<ExpiryCheck> CheckBeforeExpiryAsync(Guid bookingId, CancellationToken cancellationToken)
+    {
+        var attempts = await db.PaymentAttempts.AsNoTracking()
+            .Where(a => a.BookingId == bookingId && a.Status != PaymentAttemptStatus.Captured)
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        var unsure = false;
+        foreach (var attempt in attempts)
+        {
+            var found = await gateway.GetOrderPaymentsAsync(attempt.ProviderOrderId, cancellationToken);
+            if (!found.IsSuccess)
+            {
+                unsure = true;
+                continue;
+            }
+
+            var paid = found.Value.FirstOrDefault(p => string.Equals(p.Status, "captured", StringComparison.OrdinalIgnoreCase));
+            if (paid is null)
+            {
+                continue;
+            }
+
+            if (!string.Equals(paid.Currency, attempt.Currency, StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogError("Order {AttemptId} was paid in {Currency}, not {Expected}; it needs a manual check", attempt.Id, paid.Currency, attempt.Currency);
+                unsure = true;
+                continue;
+            }
+
+            var applied = await RecordCaptureAsync(attempt.ProviderOrderId, paid.PaymentId, paid.AmountPaise / 100m, cancellationToken);
+            if (applied.IsSuccess)
+            {
+                return ExpiryCheck.Resolved;
+            }
+
+            // Wrong amount, or the booking changed at that instant. Neither is safe to settle by expiring.
+            logger.LogWarning("A payment found at the gateway for attempt {AttemptId} could not be applied: {Code}", attempt.Id, applied.Error.Code);
+            unsure = true;
+        }
+
+        return unsure ? ExpiryCheck.Unknown : ExpiryCheck.NotPaid;
     }
 
     /// <summary>

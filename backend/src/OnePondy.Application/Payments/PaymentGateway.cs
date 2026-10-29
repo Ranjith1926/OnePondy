@@ -12,6 +12,9 @@ public sealed record GatewayRefundRequest(string PaymentId, long AmountPaise, st
 
 public sealed record GatewayRefund(string RefundId, string Status);
 
+/// <summary>A payment the gateway holds against one of our orders. <c>Status</c> is the gateway's own word, such as <c>captured</c>.</summary>
+public sealed record GatewayPayment(string PaymentId, long AmountPaise, string Currency, string Status);
+
 /// <summary>
 /// The payment gateway (spec D3: Razorpay). Only the calls Phase 7 makes. Verifying payment results is done
 /// from signed webhooks, never from what the app reports. Implementations never log secrets or card data.
@@ -21,6 +24,12 @@ public interface IPaymentGateway
     Task<Result<GatewayOrder>> CreateOrderAsync(GatewayOrderRequest request, CancellationToken cancellationToken);
 
     Task<Result<GatewayRefund>> RefundAsync(GatewayRefundRequest request, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The payments made against an order, straight from the gateway. Used before a hold is expired, so a payment
+    /// whose webhook is late or lost is not thrown away. A failure means "could not find out", not "nothing was paid".
+    /// </summary>
+    Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken);
 }
 
 public static class Money

@@ -54,6 +54,25 @@ public class RazorpaySandboxTests
     }
 
     [RazorpaySandboxFact]
+    public async Task The_real_client_sees_no_payments_on_a_fresh_order_and_cannot_find_an_unknown_one()
+    {
+        var gateway = Gateway(
+            Environment.GetEnvironmentVariable(RazorpaySandboxFactAttribute.KeyIdVariable)!,
+            Environment.GetEnvironmentVariable(RazorpaySandboxFactAttribute.KeySecretVariable)!);
+        var order = await gateway.CreateOrderAsync(
+            new GatewayOrderRequest(Money.ToPaise(1m), "INR", "it" + Guid.NewGuid().ToString("N")[..20], Guid.NewGuid()),
+            default);
+
+        var none = await gateway.GetOrderPaymentsAsync(order.Value!.OrderId, default);
+        var unknown = await gateway.GetOrderPaymentsAsync("order_doesnotexist000", default);
+
+        Assert.True(none.IsSuccess, none.Error?.Code);
+        Assert.Empty(none.Value);
+        // "Could not find out", never "nothing was paid": the Worker keeps the hold when it cannot tell.
+        Assert.Equal("payments_unavailable", unknown.Error!.Code);
+    }
+
+    [RazorpaySandboxFact]
     public async Task The_real_client_reports_a_wrong_secret_as_payment_unavailable()
     {
         var gateway = Gateway(Environment.GetEnvironmentVariable(RazorpaySandboxFactAttribute.KeyIdVariable)!, "not-the-secret");

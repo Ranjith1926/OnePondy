@@ -150,7 +150,9 @@ Key id and key secret must be set together, or the API refuses to start. The API
 with a live key (`rzp_live_...`) unless `Payments:Mode` is `Live` and `Payments:AllowLive` is `true`;
 leave both alone until legal review and a settlement test are complete (docs/phase-7-plan.md). The
 webhook secret is used from step 7.3. Other settings, all optional: `Payments:PaymentWindow` (default
-30 minutes after a partner accepts), `Payments:CommissionPercent` (provisional 10, not used yet).
+30 minutes after a partner accepts), `Payments:GatewayCheckGrace` (default 15 minutes: how long the Worker
+keeps an unpaid booking while Razorpay cannot be asked whether it was paid), and
+`Payments:CommissionPercent` (provisional 10, not used yet).
 
 **Webhook (so a payment can confirm a booking).** Razorpay reports every payment result to
 `POST /api/v1/webhooks/payments`; the app's own word is never trusted. In the Razorpay Dashboard

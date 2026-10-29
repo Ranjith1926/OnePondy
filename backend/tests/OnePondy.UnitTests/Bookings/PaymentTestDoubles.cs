@@ -20,6 +20,36 @@ public sealed class FakePaymentGateway : IPaymentGateway
 
     public bool RefundsFail { get; set; }
 
+    /// <summary>What the gateway says it holds for each order: tests add a payment to simulate a customer paying.</summary>
+    public Dictionary<string, List<GatewayPayment>> OrderPayments { get; } = [];
+
+    /// <summary>Makes every lookup of the payments for an order fail, as if the gateway were unreachable.</summary>
+    public bool LookupsFail { get; set; }
+
+    public int Lookups { get; private set; }
+
+    public void CustomerPaid(string orderId, string paymentId, long paise, string status = "captured")
+    {
+        if (!OrderPayments.TryGetValue(orderId, out var payments))
+        {
+            OrderPayments[orderId] = payments = [];
+        }
+
+        payments.Add(new GatewayPayment(paymentId, paise, "INR", status));
+    }
+
+    public Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken)
+    {
+        Lookups++;
+        if (LookupsFail)
+        {
+            return Task.FromResult(Result<IReadOnlyList<GatewayPayment>>.Failure(PaymentErrors.Unavailable));
+        }
+
+        IReadOnlyList<GatewayPayment> found = OrderPayments.TryGetValue(orderId, out var payments) ? [.. payments] : [];
+        return Task.FromResult(Result<IReadOnlyList<GatewayPayment>>.Success(found));
+    }
+
     public Task<Result<GatewayOrder>> CreateOrderAsync(GatewayOrderRequest request, CancellationToken cancellationToken)
     {
         if (Unavailable)
@@ -54,19 +84,13 @@ public sealed class PaymentHarness
     {
         Bookings = new BookingHarness();
         Bookings.Payments.Razorpay.KeyId = KeyId;
-        Payments = new PaymentService(
-            Bookings.Db,
-            Gateway,
-            Bookings.Time,
-            Options.Create(Bookings.Payments),
-            NullLogger<PaymentService>.Instance);
     }
 
     public BookingHarness Bookings { get; }
 
-    public FakePaymentGateway Gateway { get; } = new();
+    public FakePaymentGateway Gateway => Bookings.Gateway;
 
-    public PaymentService Payments { get; }
+    public PaymentService Payments => Bookings.PaymentService;
 
     /// <summary>A priced booking that the partner has accepted, so it now waits for payment.</summary>
     public async Task<BookingDetail> AwaitingPaymentAsync(string idempotencyKey = "idem-pay")

@@ -231,3 +231,24 @@ attempt in any state except already captured, because a customer can still pay a
   `refunded`), `refund.failed` (mark failed, booking keeps waiting). Others are stored and ignored. Only `captured` payments in
   INR for exactly the amount due are applied.
 - The webhook works whether or not the `payments` module flag is on: a payment already made must always be recorded.
+
+**7.4 (expiry with a gateway check).**
+
+- **The Worker asks before it expires.** For a booking that was waiting for payment, `BookingHoldExpiry` first asks Razorpay
+  for the payments on each of the booking's orders (`GET /orders/{id}/payments`). A captured payment is applied exactly as a
+  webhook would apply it, so a customer who paid at the last moment keeps the booking. Bookings the partner never answered, and
+  bookings nobody started paying for, expire without calling the gateway.
+- **"Could not ask" is not "not paid".** If Razorpay cannot be reached, or the answer cannot be applied (wrong amount, another
+  currency), the booking is left alone for now and retried every minute, up to `Payments:GatewayCheckGrace` (default 15
+  minutes) past its deadline. After that the hold is released anyway, so a long outage cannot hold seats forever, and a payment
+  that still turns up is refunded in full by the 7.2 logic. The job logs a warning while bookings are waiting, so an operator
+  sees the gateway problem.
+- **Orders are closed with the booking.** Cancelling, rejecting or expiring a booking now marks its open payment attempts
+  `expired` in the same save, so a finished booking never keeps an open order (and a new payment is refused). A payment that
+  still lands on a closed order is accepted and refunded. If that payment arrives in the same instant, the two saves collide on
+  the attempt's row version and one retries, so neither is lost.
+- **Late payment is refunded, not re-confirmed.** Spec §17 allows "refunded, or re-confirmed if the inventory is still
+  available". Expired is a final state in the spec's table, and re-confirming would reopen it and could oversell a slot that
+  was released and rebooked, so the refund option is the one built. Re-confirmation can be added later if the business wants it.
+- **Checked end to end.** An integration test runs the Worker and the webhook at the same instant, six rounds, and requires one
+  consistent ending every time: paid and kept with no refund, or expired with the full amount refunded.

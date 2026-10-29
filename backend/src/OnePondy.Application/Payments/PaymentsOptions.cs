@@ -18,6 +18,12 @@ public sealed class PaymentsOptions
     public TimeSpan PaymentWindow { get; set; } = TimeSpan.FromMinutes(30);
 
     /// <summary>
+    /// If the gateway cannot be asked whether a booking was paid, its hold is kept for this long past its deadline
+    /// before it is released anyway. A payment that turns up after that is refunded in full.
+    /// </summary>
+    public TimeSpan GatewayCheckGrace { get; set; } = TimeSpan.FromMinutes(15);
+
+    /// <summary>
     /// Provisional commission, for development and sandbox testing only. The real rate is a business
     /// decision still open (spec D21); settlement and statements are not built yet, so nothing uses this.
     /// </summary>
@@ -65,6 +71,11 @@ public static class PaymentsGuard
         {
             throw new InvalidOperationException(
                 $"Payments:PaymentWindow must be between {MinimumPaymentWindow.TotalMinutes} and {MaximumPaymentWindow.TotalMinutes} minutes.");
+        }
+
+        if (options.GatewayCheckGrace < TimeSpan.FromMinutes(1) || options.GatewayCheckGrace > MaximumPaymentWindow)
+        {
+            throw new InvalidOperationException("Payments:GatewayCheckGrace must be between 1 minute and 2 hours.");
         }
 
         if (options.CommissionPercent is < 0m or > 100m)

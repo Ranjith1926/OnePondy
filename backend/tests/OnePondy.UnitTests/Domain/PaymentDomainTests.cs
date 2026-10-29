@@ -188,6 +188,22 @@ public class PaymentsGuardTests
         Assert.Throws<InvalidOperationException>(() => PaymentsGuard.EnsureSafe(options));
     }
 
+    [Fact]
+    public void The_default_wait_for_the_gateway_is_fifteen_minutes()
+    {
+        Assert.Equal(TimeSpan.FromMinutes(15), new PaymentsOptions().GatewayCheckGrace);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(121)]
+    public void A_gateway_check_grace_outside_one_minute_to_two_hours_is_refused(int minutes)
+    {
+        var options = new PaymentsOptions { GatewayCheckGrace = TimeSpan.FromMinutes(minutes) };
+
+        Assert.Throws<InvalidOperationException>(() => PaymentsGuard.EnsureSafe(options));
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(101)]

@@ -25,10 +25,20 @@ public sealed class BookingHoldExpiryJob(
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var expired = await scope.ServiceProvider.GetRequiredService<BookingHoldExpiry>().ExpireDueHoldsAsync(cancellationToken);
-            if (expired > 0)
+            var result = await scope.ServiceProvider.GetRequiredService<BookingHoldExpiry>().ExpireDueHoldsAsync(cancellationToken);
+            if (result.Expired > 0 || result.Resolved > 0 || result.Deferred > 0)
             {
-                logger.LogInformation("Expired {Count} booking holds", expired);
+                logger.LogInformation(
+                    "Booking holds: {Expired} expired, {Resolved} found paid at the gateway and confirmed, {Deferred} waiting for the gateway to answer",
+                    result.Expired,
+                    result.Resolved,
+                    result.Deferred);
+            }
+
+            if (result.Deferred > 0)
+            {
+                // Held seats are not being released because Razorpay cannot be asked: worth an operator's attention.
+                logger.LogWarning("{Count} booking holds are waiting because the payment gateway could not be asked", result.Deferred);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
