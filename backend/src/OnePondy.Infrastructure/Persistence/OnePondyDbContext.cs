@@ -70,6 +70,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
+    public DbSet<ReconciliationException> ReconciliationExceptions => Set<ReconciliationException>();
+
     /// <summary>Provider settings shared by the app and the design-time factory used for migrations.</summary>
     public static void Configure(DbContextOptionsBuilder options, string connectionString) =>
         options.UseNpgsql(connectionString).UseSnakeCaseNamingConvention();
@@ -81,6 +83,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public void MarkAdded<TEntity>(TEntity entity)
         where TEntity : class =>
         Entry(entity).State = EntityState.Added;
+
+    public void ClearTracked() => ChangeTracker.Clear();
 
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         Database.BeginTransactionAsync(cancellationToken);

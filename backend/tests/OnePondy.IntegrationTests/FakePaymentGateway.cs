@@ -29,6 +29,31 @@ public sealed class FakePaymentGateway(TimeSpan? orderDelay = null) : IPaymentGa
 
     public bool LookupsFail { get; set; }
 
+    /// <summary>The payments the gateway lists for the daily comparison.</summary>
+    public List<GatewayPaymentRecord> ListedPayments { get; } = [];
+
+    public bool ListFails { get; set; }
+
+    public System.Collections.Concurrent.ConcurrentDictionary<string, GatewayRefundDetail> RefundDetails { get; } = new();
+
+    public Task<Result<GatewayPaymentPage>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    {
+        if (ListFails)
+        {
+            return Task.FromResult(Result<GatewayPaymentPage>.Failure(PaymentErrors.Unavailable));
+        }
+
+        lock (ListedPayments)
+        {
+            return Task.FromResult(Result<GatewayPaymentPage>.Success(new GatewayPaymentPage([.. ListedPayments], true)));
+        }
+    }
+
+    public Task<Result<GatewayRefundDetail>> GetRefundAsync(string refundId, CancellationToken cancellationToken) =>
+        Task.FromResult(RefundDetails.TryGetValue(refundId, out var detail)
+            ? Result<GatewayRefundDetail>.Success(detail)
+            : Result<GatewayRefundDetail>.Failure(PaymentErrors.Unavailable));
+
     public void CustomerPaid(string orderId, string paymentId, long paise)
     {
         var payments = OrderPayments.GetOrAdd(orderId, _ => []);

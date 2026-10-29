@@ -531,7 +531,7 @@ public sealed class BookingApiTests : IAsyncLifetime
             Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } })).Payments;
 
     /// <summary>The booking, payment, refund and ledger services built by hand on one database, with a fake gateway.</summary>
-    private static (BookingService Bookings, PaymentService Payments, RefundService Refunds, LedgerService Ledger) Wire(
+    private static (BookingService Bookings, PaymentService Payments, RefundService Refunds, LedgerService Ledger, ReconciliationService Reconciliation) Wire(
         OnePondyDbContext db,
         FakePaymentGateway gateway,
         TimeProvider time,
@@ -540,7 +540,8 @@ public sealed class BookingApiTests : IAsyncLifetime
         var ledger = new LedgerService(db, time, options);
         var refunds = new RefundService(db, gateway, time, options, Microsoft.Extensions.Logging.Abstractions.NullLogger<RefundService>.Instance);
         var payments = new PaymentService(db, gateway, time, options, ledger, refunds, Microsoft.Extensions.Logging.Abstractions.NullLogger<PaymentService>.Instance);
-        return (new BookingService(db, time, options, refunds), payments, refunds, ledger);
+        var reconciliation = new ReconciliationService(db, gateway, payments, time, Microsoft.Extensions.Logging.Abstractions.NullLogger<ReconciliationService>.Instance);
+        return (new BookingService(db, time, options, refunds), payments, refunds, ledger, reconciliation);
     }
 
     private static OnePondyDbContext DbOf(AsyncServiceScope scope) => scope.ServiceProvider.GetRequiredService<OnePondyDbContext>();
@@ -1544,6 +1545,205 @@ public sealed class BookingApiTests : IAsyncLifetime
 
         var postgres = failure as PostgresException ?? failure.InnerException as PostgresException;
         Assert.Equal(PostgresErrorCodes.UniqueViolation, postgres!.SqlState);
+    }
+
+    // --- Phase 7 step 7.6: reconciliation, over HTTP and real PostgreSQL ---
+
+    private async Task<Guid> SeedExceptionAsync(OnePondy.Domain.Payments.ReconciliationKind kind, string reference)
+    {
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+        var exception = OnePondy.Domain.Payments.ReconciliationException.Detect(
+            kind, $"it:{reference}", "Seeded by a test", DateTimeOffset.UtcNow, providerReference: reference, actualAmount: 12.5m);
+        db.ReconciliationExceptions.Add(exception);
+        await db.SaveChangesAsync();
+        return exception.Id;
+    }
+
+    private static async Task<JsonElement> ListExceptionsAsync(HttpClient client, string admin, string query = "") =>
+        await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments/exceptions?pageSize=100" + query, admin));
+
+    [DatabaseFact]
+    public async Task The_exceptions_table_refuses_duplicates_and_inconsistent_rows()
+    {
+        var reference = Guid.NewGuid().ToString("N");
+        var id = await SeedExceptionAsync(OnePondy.Domain.Payments.ReconciliationKind.RefundStuck, reference);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        var db = DbOf(scope);
+
+        // The same problem is recorded once, whatever its status.
+        db.ReconciliationExceptions.Add(OnePondy.Domain.Payments.ReconciliationException.Detect(
+            OnePondy.Domain.Payments.ReconciliationKind.RefundStuck, $"it:{reference}", "again", DateTimeOffset.UtcNow));
+        var duplicate = await Assert.ThrowsAsync<DbUpdateException>(() => db.SaveChangesAsync());
+        Assert.Equal(PostgresErrorCodes.UniqueViolation, ((PostgresException)duplicate.InnerException!).SqlState);
+        db.ChangeTracker.Clear();
+
+        // Closed means it has a closing time; a person's resolution means a person and a note.
+        var noTime = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync($"UPDATE reconciliation_exceptions SET status = 'auto_resolved' WHERE id = {id}"));
+        var noPerson = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync($"UPDATE reconciliation_exceptions SET status = 'resolved', resolved_at = now() WHERE id = {id}"));
+        var badKind = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync($"UPDATE reconciliation_exceptions SET kind = 'made_up' WHERE id = {id}"));
+        var badCount = await Assert.ThrowsAsync<PostgresException>(() => db.Database.ExecuteSqlAsync($"UPDATE reconciliation_exceptions SET occurrences = 0 WHERE id = {id}"));
+        Assert.All(new[] { noTime, noPerson, badKind, badCount }, e => Assert.Equal(PostgresErrorCodes.CheckViolation, e.SqlState));
+    }
+
+    [DatabaseFact]
+    public async Task Only_an_administrator_can_see_or_resolve_reconciliation_problems()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var customer = await SignInCustomerAsync(client);
+        var id = await SeedExceptionAsync(OnePondy.Domain.Payments.ReconciliationKind.RefundFailed, Guid.NewGuid().ToString("N"));
+
+        var anonymous = await client.GetAsync("/api/v1/admin/payments/exceptions");
+        var asCustomer = await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments/exceptions", customer);
+        var resolveAsCustomer = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/payments/exceptions/{id}/resolve", customer, new { note = "mine" });
+        var asAdmin = await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments/exceptions", admin);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, asCustomer.StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, resolveAsCustomer.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, asAdmin.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task The_list_can_be_filtered_and_an_administrator_resolves_a_problem_with_a_note()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var reference = "pay_" + Guid.NewGuid().ToString("N");
+        var id = await SeedExceptionAsync(OnePondy.Domain.Payments.ReconciliationKind.RefundTotalMismatch, reference);
+
+        var open = await ListExceptionsAsync(client, admin, "&status=open&kind=refundTotalMismatch");
+        var ours = open.GetProperty("items").EnumerateArray().Single(e => e.GetProperty("providerReference").GetString() == reference);
+        Assert.Equal("open", ours.GetProperty("status").GetString());
+        Assert.Equal("refundTotalMismatch", ours.GetProperty("kind").GetString());
+        Assert.Equal(12.5m, ours.GetProperty("actualAmount").GetDecimal());
+        Assert.All(open.GetProperty("items").EnumerateArray(), e => Assert.Equal("refundTotalMismatch", e.GetProperty("kind").GetString()));
+
+        var noNote = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/payments/exceptions/{id}/resolve", admin, new { note = " " });
+        Assert.Equal(HttpStatusCode.BadRequest, noNote.StatusCode);
+
+        var resolved = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/payments/exceptions/{id}/resolve", admin, new { note = "Refunded by bank transfer" });
+        var body = await ReadAsync(resolved);
+        Assert.Equal("resolved", body.GetProperty("status").GetString());
+        Assert.Equal("Refunded by bank transfer", body.GetProperty("resolutionNote").GetString());
+
+        var again = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/payments/exceptions/{id}/resolve", admin, new { note = "Again" });
+        Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
+        Assert.Equal("reconciliation_exception_closed", await ErrorCodeAsync(again));
+        var unknown = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/payments/exceptions/{Guid.NewGuid()}/resolve", admin, new { note = "x" });
+        Assert.Equal(HttpStatusCode.NotFound, unknown.StatusCode);
+
+        var stillOpen = await ListExceptionsAsync(client, admin, "&status=open&kind=refundTotalMismatch");
+        Assert.DoesNotContain(stillOpen.GetProperty("items").EnumerateArray(), e => e.GetProperty("providerReference").GetString() == reference);
+        var count = await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments/exceptions/open-count", admin));
+        Assert.True(count.GetProperty("open").GetInt32() >= 0);
+        var bad = await SendAsync(client, HttpMethod.Get, "/api/v1/admin/payments/exceptions?status=nonsense", admin);
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+    }
+
+    [DatabaseFact]
+    public async Task A_payment_whose_webhook_was_lost_is_found_by_reconciliation_and_shows_in_the_console()
+    {
+        var gateway = new FakePaymentGateway();
+        await using var factory = WithFakeGateway(gateway);
+        using var client = factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+        var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+        gateway.CustomerPaid(orderId, paymentId, 50_000);
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var options = Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } });
+            var summary = await Wire(DbOf(scope), gateway, TimeProvider.System, options).Reconciliation.RunFrequentChecksAsync(default);
+            Assert.True(summary.AutoResolved >= 1);
+        }
+
+        Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+        Assert.Equal(500m, await LedgerBalanceAsync(bookingId, "gateway_clearing"));
+        var listed = await ListExceptionsAsync(client, admin, "&kind=paymentAppliedWithoutWebhook");
+        var ours = listed.GetProperty("items").EnumerateArray().Single(e => e.GetProperty("providerReference").GetString() == paymentId);
+        Assert.Equal("autoResolved", ours.GetProperty("status").GetString());
+        Assert.Equal(bookingId.ToString(), ours.GetProperty("bookingId").GetString());
+    }
+
+    [DatabaseFact]
+    public async Task Two_reconciliation_runs_at_the_same_moment_apply_a_lost_payment_once_and_record_it_once()
+    {
+        for (var round = 0; round < 5; round++)
+        {
+            var gateway = new FakePaymentGateway();
+            await using var factory = WithFakeGateway(gateway);
+            using var client = factory.CreateClient();
+            var (_, bookingId, orderId) = await BookingWithOpenOrderAsync(client);
+            var paymentId = "pay_" + Guid.NewGuid().ToString("N");
+            gateway.CustomerPaid(orderId, paymentId, 50_000);
+
+            async Task RunAsync()
+            {
+                await using var scope = Factory.Services.CreateAsyncScope();
+                var options = Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } });
+                await Wire(DbOf(scope), gateway, TimeProvider.System, options).Reconciliation.RunFrequentChecksAsync(default);
+            }
+
+            await Task.WhenAll(RunAsync(), RunAsync());
+            await RunAsync(); // a third pass settles anything the first two left because they collided
+
+            Assert.Equal("confirmed", await BookingStatusAsync(bookingId));
+            await using var check = Factory.Services.CreateAsyncScope();
+            var db = DbOf(check);
+            Assert.Equal(3, await db.LedgerEntries.AsNoTracking().CountAsync(e => e.BookingId == bookingId));
+            Assert.Equal(0, await db.Refunds.AsNoTracking().CountAsync(r => r.BookingId == bookingId));
+            Assert.Equal(1, await db.ReconciliationExceptions.AsNoTracking().CountAsync(e => e.ProviderReference == paymentId));
+            Assert.Equal(1, await db.PaymentAttempts.AsNoTracking().CountAsync(a => a.BookingId == bookingId && a.Status == OnePondy.Domain.Payments.PaymentAttemptStatus.Captured));
+        }
+    }
+
+    [DatabaseFact]
+    public async Task The_daily_check_lists_money_at_the_gateway_that_is_not_ours_and_remembers_how_far_it_got()
+    {
+        var gateway = new FakePaymentGateway();
+        var stranger = "pay_" + Guid.NewGuid().ToString("N");
+        gateway.ListedPayments.Add(new GatewayPaymentRecord(stranger, "order_" + Guid.NewGuid().ToString("N"), 123_400, 0, "INR", "captured"));
+        var day = DateOnly.FromDateTime(DateTime.UtcNow);
+        var options = Microsoft.Extensions.Options.Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_integration" } });
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var summary = await Wire(DbOf(scope), gateway, TimeProvider.System, options).Reconciliation.RunDailyAsync(day, default);
+            Assert.True(summary.GatewayReachable);
+            Assert.True(summary.Raised >= 1);
+        }
+
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var problem = await DbOf(scope).ReconciliationExceptions.AsNoTracking().SingleAsync(e => e.ProviderReference == stranger);
+            Assert.Equal(OnePondy.Domain.Payments.ReconciliationKind.GatewayPaymentUnknown, problem.Kind);
+            Assert.Equal(1234m, problem.ActualAmount);
+        }
+
+        // Running the day again records nothing new, only counts the sighting.
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            await Wire(DbOf(scope), gateway, TimeProvider.System, options).Reconciliation.RunDailyAsync(day, default);
+            var problem = await DbOf(scope).ReconciliationExceptions.AsNoTracking().SingleAsync(e => e.ProviderReference == stranger);
+            Assert.Equal(2, problem.Occurrences);
+        }
+
+        // The system records how far the daily check has got, as itself rather than as a user.
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            var db = DbOf(scope);
+            await db.Database.ExecuteSqlAsync($"DELETE FROM app_settings WHERE key = 'payments_reconciled_through'");
+            var days = await Wire(db, gateway, TimeProvider.System, options).Reconciliation.RunDueDailyChecksAsync(default);
+            Assert.Equal(1, days);
+        }
+
+        await using var check = Factory.Services.CreateAsyncScope();
+        var setting = await DbOf(check).AppSettings.AsNoTracking().SingleAsync(s => s.Key == "payments_reconciled_through");
+        Assert.Equal(DateTime.UtcNow.Date.AddDays(-1).ToString("yyyy-MM-dd"), setting.Value);
+        Assert.Null(setting.UpdatedByUserId);
     }
 
     [DatabaseFact]

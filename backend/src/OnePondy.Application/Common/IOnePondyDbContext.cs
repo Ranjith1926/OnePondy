@@ -60,6 +60,8 @@ public interface IOnePondyDbContext
 
     DbSet<LedgerEntry> LedgerEntries { get; }
 
+    DbSet<ReconciliationException> ReconciliationExceptions { get; }
+
     /// <summary>
     /// Makes the next save fail with a concurrency error unless the row still has this version, so an
     /// edit based on stale data is rejected instead of overwriting someone else's change. Works for
@@ -75,6 +77,12 @@ public interface IOnePondyDbContext
     /// </summary>
     void MarkAdded<TEntity>(TEntity entity)
         where TEntity : class;
+
+    /// <summary>
+    /// Forgets every tracked change. Used after a save that failed part way, so a half-applied change cannot be saved
+    /// along with the next, unrelated one in a job that handles many items with one context.
+    /// </summary>
+    void ClearTracked();
 
     /// <summary>For changes that span several saves, such as Identity role updates plus their audit entry.</summary>
     Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken);

@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Payments;
+using OnePondy.Infrastructure.Identity;
 
 namespace OnePondy.Infrastructure.Persistence.Configurations;
 
@@ -192,5 +193,46 @@ public sealed class OutboxMessageConfiguration : IEntityTypeConfiguration<Outbox
         builder.Property(m => m.LastError).HasMaxLength(500);
 
         builder.HasIndex(m => m.CreatedAt).HasDatabaseName("ix_outbox_pending").HasFilter("dispatched_at IS NULL");
+    }
+}
+
+public sealed class ReconciliationExceptionConfiguration : IEntityTypeConfiguration<ReconciliationException>
+{
+    public void Configure(EntityTypeBuilder<ReconciliationException> builder)
+    {
+        builder.ToTable("reconciliation_exceptions", table =>
+        {
+            table.HasCheckConstraint("ck_reconciliation_kind", $"kind IN ({SnakeCaseEnum<ReconciliationKind>.SqlList})");
+            table.HasCheckConstraint("ck_reconciliation_status", $"status IN ({SnakeCaseEnum<ReconciliationStatus>.SqlList})");
+            // Open exactly while nobody has dealt with it.
+            table.HasCheckConstraint(
+                "ck_reconciliation_resolved",
+                $"(status = '{SnakeCaseEnum<ReconciliationStatus>.ToDatabase(ReconciliationStatus.Open)}') = (resolved_at IS NULL)");
+            table.HasCheckConstraint(
+                "ck_reconciliation_person_note",
+                $"status <> '{SnakeCaseEnum<ReconciliationStatus>.ToDatabase(ReconciliationStatus.Resolved)}' OR (resolved_by_user_id IS NOT NULL AND resolution_note IS NOT NULL)");
+            table.HasCheckConstraint("ck_reconciliation_occurrences", "occurrences >= 1");
+        });
+
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).ValueGeneratedNever();
+        builder.Property(e => e.Kind).HasConversion(SnakeCaseEnum<ReconciliationKind>.Converter).HasMaxLength(40);
+        builder.Property(e => e.Status).HasConversion(SnakeCaseEnum<ReconciliationStatus>.Converter).HasMaxLength(16);
+        builder.Property(e => e.Fingerprint).HasMaxLength(200).IsRequired();
+        builder.Property(e => e.ProviderReference).HasMaxLength(100);
+        builder.Property(e => e.ExpectedAmount).HasPrecision(12, 2);
+        builder.Property(e => e.ActualAmount).HasPrecision(12, 2);
+        builder.Property(e => e.Detail).HasMaxLength(ReconciliationException.MaxDetailLength).IsRequired();
+        builder.Property(e => e.ResolutionNote).HasMaxLength(ReconciliationException.MaxNoteLength);
+
+        builder.HasOne<Booking>().WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<PaymentAttempt>().WithMany().HasForeignKey(e => e.PaymentAttemptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Refund>().WithMany().HasForeignKey(e => e.RefundId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<GatewayEvent>().WithMany().HasForeignKey(e => e.GatewayEventId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(e => e.ResolvedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        // Each problem is recorded once, whatever its status, so a resolved one is never re-opened and a repeat is only counted.
+        builder.HasIndex(e => e.Fingerprint).IsUnique().HasDatabaseName("ux_reconciliation_fingerprint");
+        builder.HasIndex(e => new { e.Status, e.LastSeenAt }).IsDescending(false, true).HasDatabaseName("ix_reconciliation_status_seen");
     }
 }

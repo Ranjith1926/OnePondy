@@ -75,6 +75,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<LedgerEntry> LedgerEntries => Set<LedgerEntry>();
 
+    public DbSet<ReconciliationException> ReconciliationExceptions => Set<ReconciliationException>();
+
     public static TestDbContext Create() =>
         new(new DbContextOptionsBuilder<TestDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -90,6 +92,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public void MarkAdded<TEntity>(TEntity entity)
         where TEntity : class =>
         Entry(entity).State = EntityState.Added;
+
+    public void ClearTracked() => ChangeTracker.Clear();
 
     public Task<IDbContextTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         Database.BeginTransactionAsync(cancellationToken);
@@ -169,6 +173,7 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<Refund>().HasKey(r => r.Id);
         modelBuilder.Entity<GatewayEvent>().HasKey(e => e.Id);
         modelBuilder.Entity<LedgerEntry>().HasKey(e => e.Id);
+        modelBuilder.Entity<ReconciliationException>().HasKey(e => e.Id);
     }
 }
 

@@ -73,6 +73,22 @@ public class RazorpaySandboxTests
     }
 
     [RazorpaySandboxFact]
+    public async Task The_real_client_lists_the_last_days_payments_and_cannot_find_an_unknown_refund()
+    {
+        var gateway = Gateway(
+            Environment.GetEnvironmentVariable(RazorpaySandboxFactAttribute.KeyIdVariable)!,
+            Environment.GetEnvironmentVariable(RazorpaySandboxFactAttribute.KeySecretVariable)!);
+
+        var listed = await gateway.ListPaymentsAsync(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, default);
+        var refund = await gateway.GetRefundAsync("rfnd_doesnotexist0000", default);
+
+        // A fresh test account may have no payments at all; what matters is that the real call and its reply are understood.
+        Assert.True(listed.IsSuccess, listed.Error?.Code);
+        Assert.True(listed.Value.Complete);
+        Assert.Equal("payments_unavailable", refund.Error!.Code);
+    }
+
+    [RazorpaySandboxFact]
     public async Task The_real_client_reports_a_wrong_secret_as_payment_unavailable()
     {
         var gateway = Gateway(Environment.GetEnvironmentVariable(RazorpaySandboxFactAttribute.KeyIdVariable)!, "not-the-secret");

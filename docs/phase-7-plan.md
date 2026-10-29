@@ -279,3 +279,32 @@ attempt in any state except already captured, because a customer can still pay a
   recognised and impossible to double count.
 - **Not here yet:** statements and settlements to partners (7.9), reconciliation against Razorpay's reports (7.6), refund status in
   the app (7.8). The commission is a provisional 10% for sandbox only.
+
+**7.6 (reconciliation).**
+
+- **What runs.** `PaymentReconciliationJob` in the Worker, every five minutes, plus a daily comparison. The webhook stays the normal
+  path; this is the net under it for webhooks that are late or lost. With no Razorpay keys the gateway checks simply report
+  "could not be reached" and raise nothing.
+- **Every five minutes** (`RunFrequentChecksAsync`): orders created in the last two hours that are not recorded as paid are asked
+  about at the gateway; refunds the gateway accepted ten or more minutes ago are asked about; stored webhooks that could not be
+  applied or never finished (after 15 minutes) are listed; payments and refunds recorded as done must have ledger entries.
+- **Once a day** (`RunDueDailyChecksAsync`, per UTC day, three hours after the day ends so late webhooks have arrived). The
+  gateway's payments for the day (read-only `GET /payments`, with six hours either side) are compared with ours both ways:
+  money at the gateway we do not know or disagree about, our captured payments the gateway does not show, refund totals, and
+  the whole ledger adding up to zero. A day whose check could not run is retried, not skipped; after an outage it catches up in
+  order, at most a week per run; progress is kept in `app_settings` (`payments_reconciled_through`). If the gateway's list is longer than
+  one fetch (5,000 payments), the "missing at the gateway" half is skipped and logged rather than guessed.
+- **What it fixes by itself, and what it only reports.** A payment or refund the gateway says is complete, that no webhook told
+  us about, is applied by exactly the path a webhook takes (same checks, same ledger entries, same refund of a late payment) and
+  recorded as `auto_resolved`, so a lost-webhook problem is still visible. Everything else (wrong amount, unknown payment, missing
+  payment, refund failed or stuck or never sent, ledger gaps) becomes an `open` exception for a person. Nothing is silently changed.
+- **`reconciliation_exceptions`** (migration `AddReconciliationExceptions`). One row per problem, by a fingerprint that is unique
+  whatever the status: seeing it again only counts the sighting, and a problem a person resolved is never re-opened.
+  The database refuses an inconsistent row: open exactly while it has no closing time, and a person's resolution needs a person and a note.
+- **Administrator API** (`Administration` policy only): `GET /api/v1/admin/payments/exceptions` (filters `status`, `kind`, paging),
+  `GET .../exceptions/open-count`, `POST .../exceptions/{id}/resolve` with a note (audited). The console screen for these comes with
+  the other payment screens in 7.9, so for now an administrator uses the API.
+- **Alerting.** The Worker logs a warning every run while problems are open, and whenever the gateway cannot be reached; an alert on
+  those log lines is the monitoring hook.
+- **Not done, deliberately.** Comparing Razorpay's *settlement* report (fees, bank reference) needs payouts, which stay unbuilt
+  until legal review (Route or manual settlement, D21); this step compares the payments themselves. Days are UTC, not India time.

@@ -122,6 +122,95 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
         }
     }
 
+    /// <summary>Razorpay lists at most 100 payments a page; this many pages is far more than a day of sandbox or early live traffic.</summary>
+    private const int PageSize = 100;
+    private const int MaxPages = 50;
+
+    public async Task<Result<GatewayPaymentPage>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    {
+        var payments = new List<GatewayPaymentRecord>();
+        for (var page = 0; page < MaxPages; page++)
+        {
+            var path = $"payments?from={from.ToUnixTimeSeconds()}&to={to.ToUnixTimeSeconds()}&count={PageSize}&skip={page * PageSize}";
+            var response = await GetAsync(path, cancellationToken);
+            if (response is null)
+            {
+                return PaymentErrors.Unavailable;
+            }
+
+            using (response)
+            {
+                if (!response.IsSuccessStatusCode)
+                {
+                    LogRejection("payment list", response);
+                    return PaymentErrors.Unavailable;
+                }
+
+                var body = await ReadAsync<ListedPaymentsResponse>(response, cancellationToken);
+                if (body?.Items is null)
+                {
+                    return PaymentErrors.Unavailable;
+                }
+
+                payments.AddRange(body.Items
+                    .Where(item => item.Id is { Length: > 0 })
+                    .Select(item => new GatewayPaymentRecord(
+                        item.Id!,
+                        item.OrderId,
+                        item.Amount,
+                        item.AmountRefunded,
+                        item.Currency ?? "INR",
+                        item.Status ?? string.Empty)));
+
+                if (body.Items.Count < PageSize)
+                {
+                    return new GatewayPaymentPage(payments, Complete: true);
+                }
+            }
+        }
+
+        // Stopped at the page limit with more still to come: say so rather than let "not listed" look like "missing".
+        return new GatewayPaymentPage(payments, Complete: false);
+    }
+
+    public async Task<Result<GatewayRefundDetail>> GetRefundAsync(string refundId, CancellationToken cancellationToken)
+    {
+        var response = await GetAsync($"refunds/{Uri.EscapeDataString(refundId)}", cancellationToken);
+        if (response is null)
+        {
+            return PaymentErrors.Unavailable;
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+            {
+                LogRejection("refund lookup", response);
+                return PaymentErrors.Unavailable;
+            }
+
+            var refund = await ReadAsync<RefundDetailResponse>(response, cancellationToken);
+            return refund?.Id is { Length: > 0 } id
+                ? new GatewayRefundDetail(id, refund.PaymentId, refund.Amount, refund.Status ?? string.Empty)
+                : PaymentErrors.Unavailable;
+        }
+    }
+
+    private async Task<HttpResponseMessage?> GetAsync(string path, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{_options.BaseUrl.TrimEnd('/')}/{path}");
+        request.Headers.Authorization = BasicAuthorization();
+        try
+        {
+            return await httpClient.SendAsync(request, cancellationToken);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            logger.LogWarning(exception, "Could not reach Razorpay");
+            return null;
+        }
+    }
+
     private AuthenticationHeaderValue BasicAuthorization() => new(
         "Basic",
         Convert.ToBase64String(Encoding.ASCII.GetBytes($"{_options.KeyId}:{_options.KeySecret}")));
@@ -191,6 +280,22 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
         [property: JsonPropertyName("currency")] string? Currency,
         [property: JsonPropertyName("status")] string? Status);
 
+    private sealed record ListedPaymentsResponse([property: JsonPropertyName("items")] List<ListedPayment>? Items);
+
+    private sealed record ListedPayment(
+        [property: JsonPropertyName("id")] string? Id,
+        [property: JsonPropertyName("order_id")] string? OrderId,
+        [property: JsonPropertyName("amount")] long Amount,
+        [property: JsonPropertyName("amount_refunded")] long AmountRefunded,
+        [property: JsonPropertyName("currency")] string? Currency,
+        [property: JsonPropertyName("status")] string? Status);
+
+    private sealed record RefundDetailResponse(
+        [property: JsonPropertyName("id")] string? Id,
+        [property: JsonPropertyName("payment_id")] string? PaymentId,
+        [property: JsonPropertyName("amount")] long Amount,
+        [property: JsonPropertyName("status")] string? Status);
+
     private sealed record RefundResponse(
         [property: JsonPropertyName("id")] string? Id,
         [property: JsonPropertyName("status")] string? Status);
@@ -207,4 +312,10 @@ public sealed class UnavailablePaymentGateway : IPaymentGateway
 
     public Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken) =>
         Task.FromResult(Result<IReadOnlyList<GatewayPayment>>.Failure(PaymentErrors.Unavailable));
+
+    public Task<Result<GatewayPaymentPage>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken) =>
+        Task.FromResult(Result<GatewayPaymentPage>.Failure(PaymentErrors.Unavailable));
+
+    public Task<Result<GatewayRefundDetail>> GetRefundAsync(string refundId, CancellationToken cancellationToken) =>
+        Task.FromResult(Result<GatewayRefundDetail>.Failure(PaymentErrors.Unavailable));
 }

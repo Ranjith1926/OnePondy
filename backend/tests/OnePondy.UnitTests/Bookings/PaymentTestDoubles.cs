@@ -28,6 +28,48 @@ public sealed class FakePaymentGateway : IPaymentGateway
 
     public int Lookups { get; private set; }
 
+    // --- What the gateway would list and report, for reconciliation ---
+
+    public List<GatewayPaymentRecord> ListedPayments { get; } = [];
+
+    /// <summary>The gateway had more payments than one fetch returns.</summary>
+    public bool ListIncomplete { get; set; }
+
+    public bool ListFails { get; set; }
+
+    public int Listings { get; private set; }
+
+    public Dictionary<string, GatewayRefundDetail> RefundDetails { get; } = [];
+
+    public bool RefundLookupsFail { get; set; }
+
+    public int RefundLookups { get; private set; }
+
+    public void ListPayment(string orderId, string paymentId, long paise, string status = "captured", long refundedPaise = 0) =>
+        ListedPayments.Add(new GatewayPaymentRecord(paymentId, orderId, paise, refundedPaise, "INR", status));
+
+    public void SetRefundStatus(string refundId, string status, long paise = 0) =>
+        RefundDetails[refundId] = new GatewayRefundDetail(refundId, null, paise, status);
+
+    public Task<Result<GatewayPaymentPage>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken)
+    {
+        Listings++;
+        return Task.FromResult(ListFails
+            ? Result<GatewayPaymentPage>.Failure(PaymentErrors.Unavailable)
+            : Result<GatewayPaymentPage>.Success(new GatewayPaymentPage([.. ListedPayments], !ListIncomplete)));
+    }
+
+    public Task<Result<GatewayRefundDetail>> GetRefundAsync(string refundId, CancellationToken cancellationToken)
+    {
+        RefundLookups++;
+        if (RefundLookupsFail || !RefundDetails.TryGetValue(refundId, out var detail))
+        {
+            return Task.FromResult(Result<GatewayRefundDetail>.Failure(PaymentErrors.Unavailable));
+        }
+
+        return Task.FromResult(Result<GatewayRefundDetail>.Success(detail));
+    }
+
     public void CustomerPaid(string orderId, string paymentId, long paise, string status = "captured")
     {
         if (!OrderPayments.TryGetValue(orderId, out var payments))

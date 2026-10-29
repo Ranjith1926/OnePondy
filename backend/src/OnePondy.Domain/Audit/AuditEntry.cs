@@ -55,6 +55,7 @@ public static class AuditEntityTypes
     public const string Staff = "staff";
     public const string Business = "business";
     public const string Listing = "listing";
+    public const string ReconciliationException = "reconciliation_exception";
 }
 
 public static class AuditActions
@@ -67,6 +68,7 @@ public static class AuditActions
     public const string PlacePublished = "place.published";
     public const string PlaceUnpublished = "place.unpublished";
     public const string PlaceReviewConfirmed = "place.review_confirmed";
+    public const string ReconciliationExceptionResolved = "reconciliation_exception.resolved";
     public const string MediaAdded = "media.added";
     public const string MediaUpdated = "media.updated";
     public const string MediaRemoved = "media.removed";

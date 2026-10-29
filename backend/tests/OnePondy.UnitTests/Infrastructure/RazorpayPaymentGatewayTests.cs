@@ -182,6 +182,127 @@ public class RazorpayPaymentGatewayTests
         Assert.Equal("payments_unavailable", (await Gateway(new StubHandler(HttpStatusCode.OK, "{}")).GetOrderPaymentsAsync("order_abc", default)).Error!.Code);
     }
 
+    /// <summary>Answers a payments list one page at a time, the way Razorpay does, and remembers what it was asked.</summary>
+    private sealed class PagedHandler(int totalPayments) : HttpMessageHandler
+    {
+        public List<Uri> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Requests.Add(request.RequestUri!);
+            var query = System.Web.HttpUtility.ParseQueryString(request.RequestUri!.Query);
+            var skip = int.Parse(query["skip"]!, System.Globalization.CultureInfo.InvariantCulture);
+            var count = int.Parse(query["count"]!, System.Globalization.CultureInfo.InvariantCulture);
+            var items = Enumerable.Range(skip, Math.Max(0, Math.Min(count, totalPayments - skip)))
+                .Select(i => new { id = "pay_" + i, order_id = "order_" + i, amount = 100_000, amount_refunded = i % 2 == 0 ? 0 : 25_000, currency = "INR", status = "captured" })
+                .ToList();
+            var json = System.Text.Json.JsonSerializer.Serialize(new { entity = "collection", count = items.Count, items });
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json, Encoding.UTF8, "application/json") });
+        }
+    }
+
+    private static RazorpayPaymentGateway Gateway(HttpMessageHandler handler) =>
+        new(
+            new HttpClient(handler),
+            Options.Create(new PaymentsOptions { Razorpay = new RazorpayOptions { KeyId = "rzp_test_key", KeySecret = "secret" } }),
+            NullLogger<RazorpayPaymentGateway>.Instance);
+
+    [Fact]
+    public async Task Lists_a_periods_payments_asking_razorpay_by_unix_time_and_reading_each_field()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"entity":"collection","count":1,"items":[{"id":"pay_1","order_id":"order_1","amount":100000,"amount_refunded":25000,"currency":"INR","status":"captured","email":"x@example.com"}]}""");
+        var from = new DateTimeOffset(2026, 10, 28, 0, 0, 0, TimeSpan.Zero);
+
+        var result = await Gateway(handler).ListPaymentsAsync(from, from.AddDays(1), default);
+
+        Assert.True(result.IsSuccess);
+        Assert.True(result.Value.Complete);
+        Assert.Equal([new GatewayPaymentRecord("pay_1", "order_1", 100_000, 25_000, "INR", "captured")], result.Value.Payments);
+        var query = System.Web.HttpUtility.ParseQueryString(handler.Request!.RequestUri!.Query);
+        Assert.Equal(from.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), query["from"]);
+        Assert.Equal(from.AddDays(1).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), query["to"]);
+        Assert.Equal(HttpMethod.Get, handler.Request.Method);
+        Assert.Equal("Basic", handler.Request.Headers.Authorization!.Scheme);
+    }
+
+    [Fact]
+    public async Task A_busy_day_is_fetched_page_after_page_until_the_last_short_page()
+    {
+        var handler = new PagedHandler(totalPayments: 230);
+
+        var result = await Gateway(handler).ListPaymentsAsync(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, default);
+
+        Assert.True(result.Value!.Complete);
+        Assert.Equal(230, result.Value.Payments.Count);
+        Assert.Equal(230, result.Value.Payments.Select(p => p.PaymentId).Distinct().Count());
+        Assert.Equal(3, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_day_with_exactly_a_full_page_still_asks_for_the_next_one()
+    {
+        var handler = new PagedHandler(totalPayments: 100);
+
+        var result = await Gateway(handler).ListPaymentsAsync(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, default);
+
+        Assert.True(result.Value!.Complete);
+        Assert.Equal(100, result.Value.Payments.Count);
+        Assert.Equal(2, handler.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A_list_longer_than_the_page_limit_says_it_is_incomplete_rather_than_pretending_to_be_whole()
+    {
+        var handler = new PagedHandler(totalPayments: 1_000_000);
+
+        var result = await Gateway(handler).ListPaymentsAsync(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, default);
+
+        Assert.False(result.Value!.Complete);
+        Assert.Equal(5_000, result.Value.Payments.Count);
+        Assert.Equal(50, handler.Requests.Count);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    [InlineData(HttpStatusCode.InternalServerError)]
+    public async Task A_refused_list_is_reported_as_could_not_find_out(HttpStatusCode status)
+    {
+        var result = await Gateway(new StubHandler(status)).ListPaymentsAsync(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, default);
+
+        Assert.Equal("payments_unavailable", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task Fetches_one_refund_with_its_status()
+    {
+        var handler = new StubHandler(HttpStatusCode.OK, """{"id":"rfnd_1","payment_id":"pay_1","amount":25000,"status":"processed"}""");
+
+        var result = await Gateway(handler).GetRefundAsync("rfnd_1", default);
+
+        Assert.Equal(new GatewayRefundDetail("rfnd_1", "pay_1", 25_000, "processed"), result.Value);
+        Assert.Equal("https://api.razorpay.com/v1/refunds/rfnd_1", handler.Request!.RequestUri!.ToString());
+        Assert.Equal(HttpMethod.Get, handler.Request.Method);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.NotFound)]
+    [InlineData(HttpStatusCode.Unauthorized)]
+    public async Task A_refund_the_gateway_cannot_find_is_could_not_find_out(HttpStatusCode status)
+    {
+        var result = await Gateway(new StubHandler(status)).GetRefundAsync("rfnd_1", default);
+
+        Assert.Equal("payments_unavailable", result.Error!.Code);
+    }
+
+    [Fact]
+    public async Task Without_credentials_listing_and_refund_lookups_report_online_payment_as_unavailable()
+    {
+        var gateway = new UnavailablePaymentGateway();
+
+        Assert.Equal("payments_unavailable", (await gateway.ListPaymentsAsync(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow, default)).Error!.Code);
+        Assert.Equal("payments_unavailable", (await gateway.GetRefundAsync("rfnd_1", default)).Error!.Code);
+    }
+
     [Fact]
     public async Task Without_credentials_every_call_reports_online_payment_as_unavailable()
     {

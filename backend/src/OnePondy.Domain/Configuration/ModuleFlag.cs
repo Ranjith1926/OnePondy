@@ -54,6 +54,9 @@ public sealed class AppSetting
 {
     public const string MinSupportedAppVersion = "min_supported_app_version";
 
+    /// <summary>The last day (UTC, as <c>yyyy-MM-dd</c>) the daily payment reconciliation has completed for.</summary>
+    public const string PaymentsReconciledThrough = "payments_reconciled_through";
+
     private AppSetting()
     {
     }
@@ -77,6 +80,14 @@ public sealed class AppSetting
         Value = value;
         UpdatedAt = now;
         UpdatedByUserId = userId;
+    }
+
+    /// <summary>A change made by the system itself, such as a background job recording how far it has got.</summary>
+    public void ChangeBySystem(string value, DateTimeOffset now)
+    {
+        Value = value;
+        UpdatedAt = now;
+        UpdatedByUserId = null;
     }
 }
 

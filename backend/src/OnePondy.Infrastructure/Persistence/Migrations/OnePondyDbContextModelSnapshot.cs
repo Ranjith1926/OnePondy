@@ -1327,6 +1327,132 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Payments.ReconciliationException", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal?>("ActualAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("actual_amount");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<string>("Detail")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("detail");
+
+                    b.Property<decimal?>("ExpectedAmount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("expected_amount");
+
+                    b.Property<string>("Fingerprint")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("fingerprint");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_seen_at");
+
+                    b.Property<Guid?>("GatewayEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("gateway_event_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("kind");
+
+                    b.Property<DateTimeOffset>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at");
+
+                    b.Property<int>("Occurrences")
+                        .HasColumnType("integer")
+                        .HasColumnName("occurrences");
+
+                    b.Property<Guid?>("PaymentAttemptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("payment_attempt_id");
+
+                    b.Property<string>("ProviderReference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("provider_reference");
+
+                    b.Property<Guid?>("RefundId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("refund_id");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_reconciliation_exceptions");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_reconciliation_exceptions_booking_id");
+
+                    b.HasIndex("Fingerprint")
+                        .IsUnique()
+                        .HasDatabaseName("ux_reconciliation_fingerprint");
+
+                    b.HasIndex("GatewayEventId")
+                        .HasDatabaseName("ix_reconciliation_exceptions_gateway_event_id");
+
+                    b.HasIndex("PaymentAttemptId")
+                        .HasDatabaseName("ix_reconciliation_exceptions_payment_attempt_id");
+
+                    b.HasIndex("RefundId")
+                        .HasDatabaseName("ix_reconciliation_exceptions_refund_id");
+
+                    b.HasIndex("ResolvedByUserId")
+                        .HasDatabaseName("ix_reconciliation_exceptions_resolved_by_user_id");
+
+                    b.HasIndex("Status", "LastSeenAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_reconciliation_status_seen");
+
+                    b.ToTable("reconciliation_exceptions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_reconciliation_kind", "kind IN ('webhook_needs_attention', 'webhook_unprocessed', 'payment_applied_without_webhook', 'gateway_payment_unknown', 'payment_missing_at_gateway', 'payment_mismatch', 'refund_applied_without_webhook', 'refund_not_sent', 'refund_stuck', 'refund_failed', 'refund_total_mismatch', 'ledger_problem')");
+
+                            t.HasCheckConstraint("ck_reconciliation_occurrences", "occurrences >= 1");
+
+                            t.HasCheckConstraint("ck_reconciliation_person_note", "status <> 'resolved' OR (resolved_by_user_id IS NOT NULL AND resolution_note IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_reconciliation_resolved", "(status = 'open') = (resolved_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_reconciliation_status", "status IN ('open', 'resolved', 'auto_resolved')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Payments.Refund", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2423,6 +2549,39 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_payment_attempts_bookings_booking_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.ReconciliationException", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reconciliation_exceptions_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Payments.GatewayEvent", null)
+                        .WithMany()
+                        .HasForeignKey("GatewayEventId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reconciliation_exceptions_gateway_events_gateway_event_id");
+
+                    b.HasOne("OnePondy.Domain.Payments.PaymentAttempt", null)
+                        .WithMany()
+                        .HasForeignKey("PaymentAttemptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reconciliation_exceptions_payment_attempts_payment_attempt_");
+
+                    b.HasOne("OnePondy.Domain.Payments.Refund", null)
+                        .WithMany()
+                        .HasForeignKey("RefundId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reconciliation_exceptions_refunds_refund_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reconciliation_exceptions_app_users_resolved_by_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Payments.Refund", b =>

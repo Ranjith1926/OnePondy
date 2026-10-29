@@ -69,5 +69,6 @@ app.MapListingEndpoints();
 app.MapSavedListingEndpoints();
 app.MapBookingEndpoints();
 app.MapPaymentEndpoints();
+app.MapPaymentAdminEndpoints();
 
 app.Run();

@@ -15,6 +15,21 @@ public sealed record GatewayRefund(string RefundId, string Status);
 /// <summary>A payment the gateway holds against one of our orders. <c>Status</c> is the gateway's own word, such as <c>captured</c>.</summary>
 public sealed record GatewayPayment(string PaymentId, long AmountPaise, string Currency, string Status);
 
+/// <summary>One payment as the gateway lists it, for reconciliation. <c>AmountRefundedPaise</c> is what the gateway has refunded so far.</summary>
+public sealed record GatewayPaymentRecord(
+    string PaymentId,
+    string? OrderId,
+    long AmountPaise,
+    long AmountRefundedPaise,
+    string Currency,
+    string Status);
+
+/// <param name="Complete">False when the gateway had more payments than were fetched, so a comparison must not treat "not listed" as "missing".</param>
+public sealed record GatewayPaymentPage(IReadOnlyList<GatewayPaymentRecord> Payments, bool Complete);
+
+/// <summary>A refund as the gateway reports it: <c>pending</c>, <c>processed</c> or <c>failed</c>.</summary>
+public sealed record GatewayRefundDetail(string RefundId, string? PaymentId, long AmountPaise, string Status);
+
 /// <summary>
 /// The payment gateway (spec D3: Razorpay). Only the calls Phase 7 makes. Verifying payment results is done
 /// from signed webhooks, never from what the app reports. Implementations never log secrets or card data.
@@ -30,6 +45,12 @@ public interface IPaymentGateway
     /// whose webhook is late or lost is not thrown away. A failure means "could not find out", not "nothing was paid".
     /// </summary>
     Task<Result<IReadOnlyList<GatewayPayment>>> GetOrderPaymentsAsync(string orderId, CancellationToken cancellationToken);
+
+    /// <summary>Every payment the gateway created in a period, for the daily reconciliation. Read-only.</summary>
+    Task<Result<GatewayPaymentPage>> ListPaymentsAsync(DateTimeOffset from, DateTimeOffset to, CancellationToken cancellationToken);
+
+    /// <summary>The gateway's current view of one refund. Read-only.</summary>
+    Task<Result<GatewayRefundDetail>> GetRefundAsync(string refundId, CancellationToken cancellationToken);
 }
 
 public static class Money

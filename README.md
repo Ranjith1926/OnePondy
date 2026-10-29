@@ -171,6 +171,13 @@ To run the one test that calls Razorpay's real test API (it creates a ₹1 test 
 nothing), set `ONEPONDY_RAZORPAY_TEST_KEY_ID` and `ONEPONDY_RAZORPAY_TEST_KEY_SECRET` to a test key
 pair before `dotnet test`; without them it is skipped.
 
+**Reconciliation.** The Worker also checks every five minutes, and once a day, that our payment records agree with
+Razorpay's (see "7.6" in docs/phase-7-plan.md). A payment or refund whose webhook was lost is applied from Razorpay's own record
+and noted; anything else that differs is listed for an administrator at
+`GET /api/v1/admin/payments/exceptions` and closed with
+`POST /api/v1/admin/payments/exceptions/{id}/resolve` and a note. Keep the Worker running, and alert on its log line
+"payment reconciliation problems are waiting for an administrator".
+
 On a server running under IIS the API does not read user secrets: put the same keys in the server's
 `appsettings.<Environment>.json` and keep that file private. Apply database migrations as the
 `onepondy_app` role, not `postgres`, so the tables are owned by the role the API connects as.
