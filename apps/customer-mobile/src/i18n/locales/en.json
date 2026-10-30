@@ -533,5 +533,167 @@
       "willBeNotified": "We'll let you know when it's sent.",
       "bankDelay": "Your bank may take a few working days to show it."
     }
+  },
+  "food": {
+    "restaurants": {
+      "title": "Restaurants",
+      "deliveringTo": "Delivering to {{area}}",
+      "changeArea": "Change area",
+      "loading": "Loading restaurants",
+      "error": {
+        "title": "Couldn't load restaurants",
+        "message": "Check your connection and try again."
+      },
+      "empty": {
+        "title": "No restaurants open here right now",
+        "message": "Try another area, or check back a little later."
+      },
+      "details": "About {{minutes}} min · Smallest order {{amount}}"
+    },
+    "menu": {
+      "loading": "Loading the menu",
+      "error": {
+        "title": "Couldn't load this menu",
+        "message": "This restaurant may have closed for orders. Check your connection and try again."
+      },
+      "empty": "This menu has no dishes yet.",
+      "about": "About {{minutes}} min · Smallest order {{amount}}",
+      "fssai": "FSSAI licence: {{number}}",
+      "veg": "Veg",
+      "nonVeg": "Non-veg",
+      "soldOut": "Sold out",
+      "addOne": "Add one {{name}}",
+      "removeOne": "Remove one {{name}}",
+      "quantity": "{{count}} in your cart",
+      "estimateNote": "Prices are before GST and fees. You'll see the final price at checkout.",
+      "newCart": {
+        "title": "Start a new cart?",
+        "message": "Your cart has dishes from {{name}}. Adding this one will empty it.",
+        "confirm": "Start a new cart",
+        "keep": "Keep my cart"
+      }
+    },
+    "cart": {
+      "viewCart_one": "View cart · {{count}} item · {{amount}}",
+      "viewCart_other": "View cart · {{count}} items · {{amount}}"
+    },
+    "checkout": {
+      "title": "Checkout",
+      "guest": {
+        "title": "Sign in to place your order",
+        "message": "Your cart is saved. Sign in, then come back to check out."
+      },
+      "empty": {
+        "title": "Your cart is empty",
+        "message": "Add dishes from a restaurant's menu to order.",
+        "action": "Browse restaurants"
+      },
+      "yourOrder": "Your order",
+      "deliverTo": "Deliver to",
+      "address": "Delivery address",
+      "addressHint": "House, street and a landmark the driver can find.",
+      "note": "Note for the driver (optional)",
+      "phone": "Phone number",
+      "phoneHint": "The driver calls this number if they can't find you.",
+      "pricing": "Price",
+      "pricingLoading": "Working out the price",
+      "pricingError": "We couldn't price this cart.",
+      "items": "Items",
+      "gst": "GST",
+      "deliveryFee": "Delivery fee",
+      "packagingFee": "Packaging",
+      "discount": "Discount",
+      "total": "Total",
+      "belowMinimum": "{{name}}'s smallest order is {{minimum}}. Add {{more}} more to order.",
+      "payLater": "You'll pay after {{name}} accepts your order, and only then are you charged.",
+      "place": "Place order",
+      "placing": "Placing your order…",
+      "priceChanged": "The price changed, and the total is now {{amount}}. Check it, then place your order again.",
+      "keepShopping": "Add more dishes"
+    },
+    "order": {
+      "loading": "Loading order",
+      "error": {
+        "title": "Couldn't load this order",
+        "message": "Check your connection and try again."
+      },
+      "deliveringTo": "Delivering to",
+      "readyBy": "Estimated ready by {{time}}",
+      "fssai": "Restaurant FSSAI licence: {{number}}",
+      "items": "Items",
+      "reason": "Reason: {{reason}}",
+      "timeline": "Status history",
+      "cancel": "Cancel order",
+      "cancelling": "Cancelling…",
+      "cancelConfirm": {
+        "title": "Cancel this order?",
+        "message": "This can't be undone.",
+        "paidMessage": "You'll get a full refund. It can take a few days to reach your bank.",
+        "confirm": "Cancel order",
+        "keep": "Keep order"
+      },
+      "status": {
+        "placed": "Waiting for the restaurant",
+        "awaitingPayment": "Awaiting payment",
+        "confirmed": "Confirmed",
+        "preparing": "Being prepared",
+        "readyForPickup": "Ready, waiting for the driver",
+        "outForDelivery": "On its way",
+        "delivered": "Delivered",
+        "rejected": "Declined by the restaurant",
+        "cancelled": "Cancelled",
+        "expired": "Expired",
+        "failed": "Payment failed",
+        "refundPending": "Refund in progress",
+        "refunded": "Refunded"
+      },
+      "hint": {
+        "placed": "The restaurant has a few minutes to accept. You'll pay once it does.",
+        "awaitingPayment": "The restaurant accepted. Pay below to confirm your order.",
+        "confirmed": "Confirmed. The restaurant will start cooking soon.",
+        "confirmedPaid": "Paid and confirmed. The restaurant will start cooking soon.",
+        "preparing": "The restaurant is cooking your order.",
+        "readyForPickup": "Your order is ready and waiting for a driver.",
+        "outForDelivery": "Your order is on its way to you.",
+        "delivered": "Enjoy your meal.",
+        "rejected": "The restaurant couldn't take this order. You haven't been charged.",
+        "cancelled": "This order was cancelled.",
+        "expired": "Nobody answered or paid in time, so this order was closed. You haven't been charged.",
+        "failed": "The payment didn't go through.",
+        "refundPending": "Your money is being returned in full.",
+        "refunded": "Your money was returned in full."
+      }
+    },
+    "orders": {
+      "title": "Food orders",
+      "itemCount_one": "{{count}} item",
+      "itemCount_other": "{{count}} items",
+      "loading": "Loading your food orders",
+      "error": "Couldn't load your food orders."
+    },
+    "pay": {
+      "accepted": "The restaurant accepted your order. Pay now to confirm it.",
+      "timeUp": "The time to pay has run out. You can order again.",
+      "lapsed": "Your payment arrived after the time to pay ran out, so this order wasn't confirmed. Your money is being refunded."
+    },
+    "errors": {
+      "order_changed": "This order just changed. Pull to reload and try again.",
+      "order_invalid_transition": "That isn't possible for this order any more.",
+      "order_not_found": "We couldn't find that order.",
+      "order_item_unavailable": "Some dishes aren't available any more. Go back to the menu to update your cart.",
+      "order_below_minimum": "Your cart is below the restaurant's smallest order.",
+      "order_price_changed": "The price changed. Check the new total and place your order again.",
+      "food_not_available": "Food ordering isn't available yet.",
+      "restaurant_not_found": "We couldn't find that restaurant.",
+      "restaurant_not_taking_orders": "This restaurant isn't taking orders right now.",
+      "restaurant_area_not_served": "This restaurant doesn't deliver to that area.",
+      "refunds_not_enabled": "Cancelling a paid order isn't available yet. Please contact support.",
+      "payment_not_due": "This order isn't waiting for payment.",
+      "payment_window_closed": "The time to pay for this order has run out.",
+      "payments_unavailable": "Payment isn't available right now. Please try again in a little while.",
+      "offline": "You appear to be offline. Check your connection and try again.",
+      "timeout": "That took too long. Check your connection and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
   }
 }

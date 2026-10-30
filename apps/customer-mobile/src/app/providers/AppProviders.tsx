@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { CartProvider } from '../../features/food/cart/CartContext';
 import { AppStateProvider, type AppState } from '../../state';
 import { AppThemeProvider } from './AppThemeProvider';
 import { LanguageSync } from './LanguageSync';
@@ -25,7 +26,7 @@ export function AppProviders({ children, initialState }: AppProvidersProps) {
             <AppThemeProvider>
               <SessionBootstrap>
                 <SessionSync />
-                {children}
+                <CartProvider>{children}</CartProvider>
               </SessionBootstrap>
             </AppThemeProvider>
           </PreferencesBootstrap>

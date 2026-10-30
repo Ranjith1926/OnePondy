@@ -24,6 +24,10 @@ export function HomeScreen() {
   const openExplore = () => navigation.navigate('Main', { screen: 'Explore' });
 
   const onServicePress = (module: ModuleKey) => {
+    if (module === 'food' && modules.food === 'available') {
+      navigation.navigate('Restaurants');
+      return;
+    }
     if (module === 'activities' && modules.activities === 'available') {
       navigation.navigate('Listings', { type: 'activity' });
       return;

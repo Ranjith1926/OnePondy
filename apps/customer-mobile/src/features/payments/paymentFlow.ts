@@ -1,31 +1,44 @@
 import { ApiError } from '../../api/apiErrors';
 import type { BookingDetail } from '../bookings/api/bookingsApi';
-import type { PaymentStart } from './api/paymentsApi';
 import type { CheckoutLauncher } from './checkout/razorpayCheckout';
 
+/** What opening the gateway's checkout needs, whether it is for a booking or a food order. */
+export interface GatewayStart {
+  keyId: string;
+  orderId: string;
+  amountPaise: number;
+  currency: string;
+  paymentExpiresAt: string;
+}
+
+/** Anything that waits for payment and then is confirmed: a booking or a food order. Both use the same status names. */
+export interface Payable {
+  status: string;
+}
+
 /**
- * How paying for a booking ended. Every outcome except `error` comes from asking the server what really happened, never
+ * How paying ended. Every outcome except `error` comes from asking the server what really happened, never
  * from the checkout's own report (spec Phase 7: "a success reported by the app is never trusted").
  */
-export type PayOutcome =
-  /** The server confirms the booking is paid and confirmed. */
-  | { kind: 'confirmed'; booking: BookingDetail }
+export type PayOutcome<T extends Payable = BookingDetail> =
+  /** The server confirms it is paid and confirmed. */
+  | { kind: 'confirmed'; booking: T }
   /** The customer paid but the server has not confirmed it yet; it will, and they are notified. */
-  | { kind: 'processing'; booking: BookingDetail | null }
+  | { kind: 'processing'; booking: T | null }
   /** The customer closed the checkout without paying. They can try again while time remains. */
-  | { kind: 'cancelled'; booking: BookingDetail | null }
+  | { kind: 'cancelled'; booking: T | null }
   /** The payment did not go through. They can try again while time remains. */
-  | { kind: 'failed'; booking: BookingDetail | null }
-  /** A payment was made but the booking had already lapsed: the money is being refunded. */
-  | { kind: 'lapsed'; booking: BookingDetail }
+  | { kind: 'failed'; booking: T | null }
+  /** A payment was made but it had already lapsed: the money is being refunded. */
+  | { kind: 'lapsed'; booking: T }
   /** Paying could not even start (no connection, the time to pay ran out, payments unavailable). */
   | { kind: 'error'; error: unknown };
 
-export interface PayDependencies {
-  start: (bookingId: string) => Promise<PaymentStart>;
+export interface PayDependencies<T extends Payable = BookingDetail> {
+  start: (id: string) => Promise<GatewayStart>;
   checkout: CheckoutLauncher;
-  /** Asks the server to check the gateway and returns the booking as it now stands. */
-  refresh: (bookingId: string) => Promise<BookingDetail>;
+  /** Asks the server to check the gateway and returns the booking or order as it now stands. */
+  refresh: (id: string) => Promise<T>;
   delay: (milliseconds: number) => Promise<void>;
   now: () => number;
 }
@@ -37,7 +50,7 @@ export interface PayOptions {
   maxPolls?: number;
 }
 
-const lapsedStatuses = new Set<BookingDetail['status']>([
+const lapsedStatuses = new Set<string>([
   'expired',
   'cancelled',
   'rejected',
@@ -47,18 +60,18 @@ const lapsedStatuses = new Set<BookingDetail['status']>([
 ]);
 
 /**
- * Pays for a booking the partner has accepted: asks the server for a gateway order, opens the checkout, then asks the server
+ * Pays for something the partner has accepted: asks the server for a gateway order, opens the checkout, then asks the server
  * what happened. After a reported payment it keeps asking for a short while, because the server may need a moment to see it.
  */
-export async function payForBooking(
-  bookingId: string,
+export async function payFor<T extends Payable>(
+  id: string,
   description: string,
-  deps: PayDependencies,
+  deps: PayDependencies<T>,
   { pollIntervalMs = 2_000, maxPolls = 6 }: PayOptions = {},
-): Promise<PayOutcome> {
-  let started: PaymentStart;
+): Promise<PayOutcome<T>> {
+  let started: GatewayStart;
   try {
-    started = await deps.start(bookingId);
+    started = await deps.start(id);
   } catch (error) {
     return { kind: 'error', error };
   }
@@ -78,9 +91,9 @@ export async function payForBooking(
   });
 
   // Whatever the checkout said, ask the server what actually happened.
-  let booking: BookingDetail | null = null;
+  let booking: T | null = null;
   try {
-    booking = await deps.refresh(bookingId);
+    booking = await deps.refresh(id);
   } catch {
     // Offline just now. If a payment was reported, it will still be applied; the customer is told it is being confirmed.
   }
@@ -100,7 +113,7 @@ export async function payForBooking(
 
     await deps.delay(pollIntervalMs);
     try {
-      booking = await deps.refresh(bookingId);
+      booking = await deps.refresh(id);
     } catch {
       continue;
     }
@@ -115,4 +128,14 @@ export async function payForBooking(
   }
 
   return { kind: 'processing', booking };
+}
+
+/** Pays for a booking the partner has accepted. */
+export function payForBooking(
+  bookingId: string,
+  description: string,
+  deps: PayDependencies,
+  options?: PayOptions,
+): Promise<PayOutcome> {
+  return payFor<BookingDetail>(bookingId, description, deps, options);
 }

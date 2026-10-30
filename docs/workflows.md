@@ -33,7 +33,7 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 22. [Reconciliation (Worker)](#22-reconciliation-worker)
 23. [Notifications (Expo push)](#23-notifications-expo-push)
 24. [Partner statements and payouts](#24-partner-statements-and-payouts)
-25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-83)
+25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-84)
 26. [Not built](#26-not-built)
 
 ---
@@ -867,7 +867,7 @@ per-listing commission.
 
 ---
 
-## 25. Food orders (Phase 8, steps 8.1 to 8.3)
+## 25. Food orders (Phase 8, steps 8.1 to 8.4)
 
 ### 25.1 States
 
@@ -937,10 +937,33 @@ The same machinery as bookings (§20 to §24), with a payment, refund, ledger li
 
 The customer's order view shows the payment as a receipt and any refunds with their status.
 
-### 25.7 Not built yet
+### 25.7 In the customer app (step 8.4)
 
-Notifications about orders, an administrator's cancel of a food order, the customer's food screens (8.4), the console inbox (8.5), the driver app and
-delivery (8.6 to 8.7), cash on delivery (8.8, only if approved), administrators' order monitoring (8.9).
+1. **Food** on Home opens the restaurant list, but only when the server's `food` flag is `available` (otherwise it is "Soon" or hidden, as for the other modules).
+   The list shows open restaurants for the area the customer picked (the whole city lists every open one), with preparation time and smallest order. No sign-in
+   is needed to look around.
+2. **The menu** shows each dish with its price, a veg or non-veg label, and "Sold out" where it is; the restaurant's FSSAI number is shown. `+` and `-` fill a
+   **cart** kept in memory (one restaurant at a time: adding from another asks "Start a new cart?"). Each time a menu is read, dishes that have gone or sold out
+   leave the cart. Prices on the menu are an estimate and say so.
+3. **Checkout** needs an account (a guest is taken to sign in; the cart is kept). The customer picks one of the areas the restaurant serves, gives an address and
+   a phone, and sees the **server's** breakdown: dishes, GST, delivery fee, packaging and total. The app sends dishes and quantities, never prices. **Place order**
+   sends the total shown (`expectedTotal`) with an idempotency key that stays the same for the same cart and area, so a retry after a dropped connection can
+   never make a second order. If the menu changed meanwhile, the order is refused, the new total is shown and the cart is priced again. A cart under the
+   restaurant's smallest order says how much more to add. The customer is told they pay only after the restaurant accepts.
+4. **The order screen** (also reached from the Bookings tab, which lists food orders below bookings) updates by itself while anything is awaited (every 5 seconds
+   waiting for the restaurant or for payment, every 15 while cooking, on its way or refunding): status in plain words, the whole price, the delivery address, the
+   restaurant's licence number, the history, and when it should be ready. Once the restaurant accepts, **Pay** opens the same Razorpay checkout as for a
+   booking; whatever the checkout reports, the server decides whether it is paid (the app asks it, as for bookings). A receipt and any refund appear on the
+   order. The customer may cancel until cooking starts; for a paid order the sheet says a full refund follows, and if refunds are off the server's refusal is
+   explained.
+5. A confirmed order is described as paid only when it has a receipt: with online payment off an accepted order is confirmed without any payment, and the app says
+   "Confirmed", never "Paid".
+6. Nothing in the app sends notifications about orders yet, so it does not ask for permission to.
+
+### 25.8 Not built yet
+
+Notifications about orders, an administrator's cancel of a food order, the console inbox (8.5), the driver app and delivery (8.6 to 8.7), cash on delivery
+(8.8, only if approved), administrators' order monitoring (8.9).
 
 ---
 
@@ -952,6 +975,6 @@ delivery (8.6 to 8.7), cash on delivery (8.8, only if approved), administrators'
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus, orders to the kitchen and paying for them (sandbox) are built (section 25); the app screens and delivery are not. |
+| Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus, orders to the kitchen, paying for them (sandbox) and the customer app's screens are built (section 25); delivery is not. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

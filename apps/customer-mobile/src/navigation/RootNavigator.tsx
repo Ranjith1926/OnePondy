@@ -8,6 +8,10 @@ import { SignInScreen } from '../features/auth/screens/SignInScreen';
 import { VerifyCodeScreen } from '../features/auth/screens/VerifyCodeScreen';
 import { BookingDetailScreen } from '../features/bookings/screens/BookingDetailScreen';
 import { ComponentGalleryScreen } from '../features/dev/screens/ComponentGalleryScreen';
+import { CheckoutScreen } from '../features/food/screens/CheckoutScreen';
+import { OrderDetailScreen } from '../features/food/screens/OrderDetailScreen';
+import { RestaurantMenuScreen } from '../features/food/screens/RestaurantMenuScreen';
+import { RestaurantsScreen } from '../features/food/screens/RestaurantsScreen';
 import { ItineraryDetailScreen } from '../features/itineraries/screens/ItineraryDetailScreen';
 import { ListingDetailScreen } from '../features/listings/screens/ListingDetailScreen';
 import { ListingsScreen } from '../features/listings/screens/ListingsScreen';
@@ -67,6 +71,10 @@ export const RootStack = createNativeStackNavigator({
         Listings: ListingsScreen,
         ListingDetail: ListingDetailScreen,
         BookingDetail: BookingDetailScreen,
+        Restaurants: RestaurantsScreen,
+        RestaurantMenu: RestaurantMenuScreen,
+        Checkout: CheckoutScreen,
+        OrderDetail: OrderDetailScreen,
         TripPlanner: {
           screen: TripPlannerFormScreen,
           options: { presentation: 'modal' },

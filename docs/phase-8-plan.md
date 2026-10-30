@@ -38,7 +38,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | 8.1 | Restaurants and menus: a restaurant profile (prep time, minimum order, delivery areas, open/closed), menu categories and items, partner management API and console pages, a public browse API (restaurants by area, a restaurant's menu) | Unit and integration tests: ownership, visibility rules, item availability, price rules, areas validated |
 | 8.2 | Orders domain and server-side quote: cart validation, price breakdown (items, tax, fees), order creation with an idempotency key, the order state machine, restaurant accept / reject / preparing / ready, customer cancel rules | Transition-table tests for every row; duplicate submissions create one order; price revalidated; tax recorded per line |
 | 8.3 | Paying for orders: generalise payment attempts, refunds, ledger and statements to orders as well as bookings | The Phase 7 tests still pass; an order pays, refunds and settles; ledger balances |
-| 8.4 | Customer app: food browse by area, menu, cart, checkout and price breakdown, order status | App tests; run on the phone |
+| 8.4 | Customer app: food browse by area, menu, cart, checkout and price breakdown, order status | App tests; run on the emulator (the Razorpay checkout itself needs the phone) |
 | 8.5 | Partner console: order inbox with accept, reject and preparation states, and the restaurant and menu pages | Console tests and build |
 | 8.6 | Driver app (new Expo app in `apps/driver-mobile`): sign-in, onboarding, duty status, assignment | App tests; run on the phone |
 | 8.7 | Delivery assignment and customer tracking: offers, single-acceptance rule, pickup and drop-off, location only during an active job | Race test: two drivers accept at once, exactly one wins |
@@ -116,6 +116,41 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   accepts, and the database refusing edits to lines and history, bad totals and an order with no lines).
 - **Not done in 8.2:** paying for an order and refunds (8.3), push notifications about orders, a note to the kitchen (the order has a *delivery* note only), the app
   screens (8.4), the console inbox (8.5), the driver side (8.6 to 8.7), a discount or coupon (the column exists and is always 0).
+
+**8.4 (the customer app's food screens).** Flow in [workflows.md](workflows.md) §25.7.
+
+- **Screens (`src/features/food`):** Restaurants (open ones for the picked area, no sign-in needed), a restaurant's menu with a cart, Checkout, and the order screen, all pushed
+  from Home's Food shortcut (shown as available only while the server's `food` flag is `available`, via `implementedModules`). Food orders are also listed below bookings in
+  the Bookings tab.
+- **The cart** is in memory (`CartProvider`, a pure reducer) and holds one restaurant at a time; adding from another asks first. It stops at the server's limits (20 of a dish,
+  30 dishes). Whenever a menu is read, gone or sold-out dishes leave it. It holds ids and quantities only, so nothing personal is kept.
+- **Money:** the app never sends a price. Checkout shows the server's quote (dishes, GST, delivery, packaging, total) and places the order with `expectedTotal`; a changed menu
+  gives `order_price_changed`, the cart is priced again and the new total is shown. One idempotency key per cart and area, reused on retry. The smallest order is checked in the
+  app too (the server still enforces it). The customer is told they pay only after the restaurant accepts (F6).
+- **Paying reuses the booking payment code.** `paymentFlow` is generic (`payFor`, with `payForBooking` kept as is) and the pay card became `PaymentPanel`, used by bookings and
+  orders; the server alone decides whether a payment succeeded. Whatever the checkout reports, the app asks the server.
+- **The order screen** re-reads itself while anything is awaited (5 s waiting for the restaurant or payment; 15 s while cooking, on its way or refunding) and shows status in
+  plain words, the breakdown, address, licence number, history, ETA, receipt and refunds. Cancel is offered when the server says `canCancel`.
+- **Not done:** push notifications about orders (so the app does not ask for permission for them), saved addresses, reorder, dish photos, order tracking on a map (8.7), the
+  restaurant console (8.5).
+- **Run on the Android emulator** (Pixel 7, API 36, against a local API and a throwaway PostgreSQL 18 database seeded through the real endpoints; sign-in codes from the
+  development log, no real SMS or gateway keys): Home's Food shortcut became available from the server flag alone; the restaurant list and menu showed live data (a
+  sold-out dish with no add button, veg labels, the licence number); the cart; a guest tapping the cart was sent to sign in and found the cart intact afterwards;
+  checkout showed the server's breakdown (₹285 + ₹14.25 GST + ₹30 + ₹10 = ₹339.25, and ₹166 for one dosa) and refused to place until address and phone were filled; the order
+  was placed and then, with the restaurant acting through the partner API, **updated by itself** from "Waiting for the restaurant" to "Confirmed" to "Being prepared" (with
+  the ETA, and the Cancel button gone once cooking started); the restaurant's own view of the order had no address or phone; with payments switched on, an accepted order showed
+  the pay card with a live countdown, and tapping Pay with no gateway configured showed "Payment isn't available right now" instead of failing; the Bookings tab listed both
+  orders. The device's installed dev client predated the Phase 7 push work (it lacked `ExpoPushTokenManager`), so it was rebuilt with `expo run:android` first.
+- **Found on the emulator and fixed:** a confirmed order that was never paid (online payment off) said "Paid and confirmed"; it now says so only when there is a receipt. The
+  bottom buttons sat against the system gesture bar; the food screens now respect the bottom inset.
+- **Not proven on the emulator:** Razorpay's own checkout (it crashes on the emulator, so that stays a phone test, as for bookings), cancelling, the price-changed path (unit-tested), and
+  how it looks with large system text.
+- **Open point for the owner:** with the `payments` module **off**, an accepted order is confirmed with no payment taken, and until cash on delivery exists (8.8, off by default)
+  that would mean food delivered unpaid. The same is intended for bookings (pay at the venue), but food has no such step. Before `food` is switched on anywhere real, either require
+  `payments` to be available for food orders (a small server check) or approve cash on delivery.
+- **Tests:** 62 new app tests (cart rules; area and error helpers; restaurant list; menu and cart, including replacing a cart and dropping sold-out dishes; checkout, including
+  the exact request sent, retry with the same key, a changed price, a cart under the minimum, server field errors and the guest; the order screen in each state; food orders in
+  the Bookings tab) and updated module and Bookings tests. Whole app suite: 332 tests across 37 suites pass; type-check and lint are clean.
 
 **8.3 (paying for orders, sandbox).**
 

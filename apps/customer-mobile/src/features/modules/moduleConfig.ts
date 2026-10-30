@@ -21,6 +21,7 @@ export const implementedModules: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
   'tripPlanner',
   'activities',
   'stays',
+  'food',
 ]);
 
 const isStatus = (value: unknown): value is ModuleStatus =>

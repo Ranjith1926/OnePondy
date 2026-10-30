@@ -15,7 +15,7 @@ describe('effectiveModuleStatus', () => {
   });
 
   it('never shows a module as available when this app version cannot open it', () => {
-    expect(effectiveModuleStatus({ food: 'available' }).food).toBe('comingSoon');
+    expect(effectiveModuleStatus({ rides: 'available' }).rides).toBe('comingSoon');
   });
 
   it('opens Stays and Activities now that bookings exist, but only when the server says so', () => {
@@ -25,6 +25,12 @@ describe('effectiveModuleStatus', () => {
     });
     expect(effectiveModuleStatus({ stays: 'comingSoon' }).stays).toBe('comingSoon');
     expect(effectiveModuleStatus({ activities: 'hidden' }).activities).toBe('hidden');
+  });
+
+  it('opens Food now that ordering exists, but only when the server says so', () => {
+    expect(effectiveModuleStatus({ food: 'available' }).food).toBe('available');
+    expect(effectiveModuleStatus({ food: 'comingSoon' }).food).toBe('comingSoon');
+    expect(effectiveModuleStatus({ food: 'hidden' }).food).toBe('hidden');
   });
 
   it('ignores unknown values', () => {
