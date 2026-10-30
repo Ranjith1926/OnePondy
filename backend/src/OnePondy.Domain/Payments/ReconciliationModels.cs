@@ -78,6 +78,8 @@ public sealed class ReconciliationException
 
     public Guid? BookingId { get; private set; }
 
+    public Guid? FoodOrderId { get; private set; }
+
     public Guid? PaymentAttemptId { get; private set; }
 
     public Guid? RefundId { get; private set; }
@@ -117,7 +119,8 @@ public sealed class ReconciliationException
         Guid? gatewayEventId = null,
         string? providerReference = null,
         decimal? expectedAmount = null,
-        decimal? actualAmount = null)
+        decimal? actualAmount = null,
+        Guid? foodOrderId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fingerprint);
         return new ReconciliationException
@@ -127,6 +130,7 @@ public sealed class ReconciliationException
             Status = ReconciliationStatus.Open,
             Fingerprint = fingerprint,
             BookingId = bookingId,
+            FoodOrderId = foodOrderId,
             PaymentAttemptId = paymentAttemptId,
             RefundId = refundId,
             GatewayEventId = gatewayEventId,

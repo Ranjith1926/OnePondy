@@ -1,21 +1,25 @@
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
+using OnePondy.Application.Bookings;
 using OnePondy.Application.Common;
+using OnePondy.Application.Payments;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Food;
+using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Food;
 
 /// <summary>
-/// Food orders (spec Phase 8, step 8.2). The server prices every cart from the menu, revalidates the price when the order is placed,
-/// and is the only thing that moves an order from one state to the next. Paying for an order arrives in step 8.3: until then an
-/// order that needs online payment waits in <c>awaiting_payment</c> and expires.
+/// Food orders (spec Phase 8, steps 8.2 and 8.3). The server prices every cart from the menu, revalidates the price when the order is
+/// placed, and is the only thing that moves an order from one state to the next. An order that needs online payment waits in
+/// <c>awaiting_payment</c> until <see cref="PaymentService"/> confirms it; cancelling a paid order refunds it in full (decision F8).
 /// </summary>
 public sealed partial class OrderService(
     IOnePondyDbContext db,
     RestaurantService restaurants,
+    RefundService refunds,
     IOptions<FoodOptions> food,
     TimeProvider time)
 {
@@ -25,8 +29,6 @@ public sealed partial class OrderService(
 
     /// <summary>The most orders one list returns, newest first.</summary>
     public const int MaxListed = 100;
-
-    private const int BatchSize = 100;
 
     [GeneratedRegex(@"^\+?[0-9]{10,13}$")]
     private static partial Regex PhonePattern();
@@ -154,7 +156,11 @@ public sealed partial class OrderService(
         }
 
         var failure = await TransitionAsync(
-            order, expectedVersion, o => o.Cancel(FoodOrderActorType.Customer, customerUserId, reason, time.GetUtcNow()), cancellationToken);
+            order,
+            expectedVersion,
+            o => o.Cancel(FoodOrderActorType.Customer, customerUserId, reason, time.GetUtcNow()),
+            cancellationToken,
+            RefundReason.CustomerCancelled);
         return failure is null ? await ToDetailAsync(order, cancellationToken) : failure;
     }
 
@@ -229,43 +235,31 @@ public sealed partial class OrderService(
         return errors.Any
             ? Task.FromResult(Result<PartnerOrderDetail>.Failure(errors.ToError()))
             : ForBusinessAsync(
-                businessId, id, expectedVersion, ownerUserId, o => o.Cancel(FoodOrderActorType.Partner, ownerUserId, trimmed, time.GetUtcNow()), cancellationToken);
+                businessId,
+                id,
+                expectedVersion,
+                ownerUserId,
+                o => o.Cancel(FoodOrderActorType.Partner, ownerUserId, trimmed, time.GetUtcNow()),
+                cancellationToken,
+                RefundReason.PartnerCancelled);
     }
 
     // --- Worker ---
 
     /// <summary>
-    /// Closes orders the restaurant did not answer, or the customer did not pay for, in time. Each order is its own save, so a lost
-    /// race on one (someone accepted it at that moment) never blocks the rest. Not reachable through any API endpoint.
+    /// Expires one order whose deadline has passed, loaded fresh. Called by <see cref="FoodOrderExpiry"/>, after it has asked the gateway
+    /// about an order that was waiting for payment; not reachable through any API endpoint. False when it no longer needed expiring or
+    /// someone else moved it at the same moment.
     /// </summary>
-    public async Task<int> ExpireDueAsync(CancellationToken cancellationToken)
+    public async Task<bool> TryExpireAsync(Guid orderId, CancellationToken cancellationToken)
     {
-        var now = time.GetUtcNow();
-        var due = await db.FoodOrders.AsNoTracking()
-            .Where(o => (o.Status == FoodOrderStatus.Placed || o.Status == FoodOrderStatus.AwaitingPayment) && o.ExpiresAt < now)
-            .OrderBy(o => o.ExpiresAt)
-            .Take(BatchSize)
-            .Select(o => o.Id)
-            .ToListAsync(cancellationToken);
-
-        var expired = 0;
-        foreach (var id in due)
+        var order = await Orders().SingleOrDefaultAsync(o => o.Id == orderId, cancellationToken);
+        if (order is null || !order.IsHolding || order.ExpiresAt >= time.GetUtcNow())
         {
-            var order = await Orders().SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
-            if (order is null || !order.IsHolding)
-            {
-                continue;
-            }
-
-            // Step 8.3 asks the gateway first for an order that was awaiting payment, as bookings do.
-            var failure = await TransitionAsync(order, order.Version, o => o.Expire(time.GetUtcNow()), cancellationToken);
-            if (failure is null)
-            {
-                expired++;
-            }
+            return false;
         }
 
-        return expired;
+        return await TransitionAsync(order, order.Version, o => o.Expire(time.GetUtcNow()), cancellationToken) is null;
     }
 
     // --- Shared ---
@@ -358,7 +352,13 @@ public sealed partial class OrderService(
     }
 
     private async Task<Result<PartnerOrderDetail>> ForBusinessAsync(
-        Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, Action<FoodOrder> apply, CancellationToken cancellationToken)
+        Guid businessId,
+        Guid id,
+        uint expectedVersion,
+        Guid ownerUserId,
+        Action<FoodOrder> apply,
+        CancellationToken cancellationToken,
+        RefundReason? cancelReason = null)
     {
         if (!await OwnsBusinessAsync(businessId, ownerUserId, cancellationToken))
         {
@@ -371,16 +371,39 @@ public sealed partial class OrderService(
             return OrderErrors.NotFound;
         }
 
-        var failure = await TransitionAsync(order, expectedVersion, apply, cancellationToken);
+        var failure = await TransitionAsync(order, expectedVersion, apply, cancellationToken, cancelReason);
         return failure is null ? ToPartnerDetail(order) : failure;
     }
 
-    /// <summary>Applies one state change if the caller saw the current version; returns the problem, or null when it was saved.</summary>
-    private async Task<AppError?> TransitionAsync(FoodOrder order, uint expectedVersion, Action<FoodOrder> apply, CancellationToken cancellationToken)
+    /// <summary>
+    /// Applies one state change if the caller saw the current version; returns the problem, or null when it was saved. A cancellation
+    /// (<paramref name="cancelReason"/> set) of a paid order decides its refund first and saves it with the cancellation; any move out of
+    /// waiting closes the order's open payment, in the same save, so a payment landing at that instant collides with it and is retried
+    /// or refunded, never lost.
+    /// </summary>
+    private async Task<AppError?> TransitionAsync(
+        FoodOrder order,
+        uint expectedVersion,
+        Action<FoodOrder> apply,
+        CancellationToken cancellationToken,
+        RefundReason? cancelReason = null)
     {
         if (order.Version != expectedVersion)
         {
             return OrderErrors.Changed;
+        }
+
+        // Decided before anything is changed, so a refusal (refunds switched off) leaves the order exactly as it was.
+        RefundPlan? plan = null;
+        if (cancelReason is not null)
+        {
+            var planned = await refunds.PlanFoodCancellationAsync(order, cancellationToken);
+            if (!planned.IsSuccess)
+            {
+                return planned.Error;
+            }
+
+            plan = planned.Value;
         }
 
         db.ExpectVersion(order, expectedVersion);
@@ -394,9 +417,29 @@ public sealed partial class OrderService(
             return OrderErrors.InvalidTransition(exception.Message);
         }
 
+        var now = time.GetUtcNow();
+        Refund? refund = null;
+        if (plan is not null && order.Status == FoodOrderStatus.Cancelled)
+        {
+            order.RequestRefund(FoodOrderActorType.System, null, now);
+            refund = Refund.Of(plan.Attempt, plan.Amount, cancelReason!.Value, now);
+            db.Refunds.Add(refund);
+        }
+
         for (var i = historyBefore; i < order.History.Count; i++)
         {
             db.MarkAdded(order.History[i]);
+        }
+
+        if (order.Status is FoodOrderStatus.Cancelled or FoodOrderStatus.Rejected or FoodOrderStatus.Expired or FoodOrderStatus.Failed or FoodOrderStatus.RefundPending)
+        {
+            var open = await db.PaymentAttempts
+                .Where(a => a.FoodOrderId == order.Id && a.Status == PaymentAttemptStatus.Created)
+                .ToListAsync(cancellationToken);
+            foreach (var attempt in open)
+            {
+                attempt.MarkExpired(now);
+            }
         }
 
         try
@@ -405,9 +448,16 @@ public sealed partial class OrderService(
         }
         catch (Exception ex) when (WriteConflicts.Is(ex))
         {
-            // Someone else moved this order at the same moment; nothing of ours was saved.
+            // Someone else moved this order (or paid it, or refunded it) at the same moment; nothing of ours was saved.
             db.ClearTracked();
             return OrderErrors.Changed;
+        }
+
+        if (refund is not null)
+        {
+            // After the save, so the cancellation and the refund it owes are never separated; if the gateway cannot be reached the
+            // refund is retried by the Worker.
+            await refunds.SendAsync(refund, plan!.Attempt, cancellationToken);
         }
 
         return null;
@@ -439,6 +489,13 @@ public sealed partial class OrderService(
     private async Task<OrderDetail> ToDetailAsync(FoodOrder order, CancellationToken cancellationToken)
     {
         var business = await db.Businesses.AsNoTracking().SingleAsync(b => b.Id == order.BusinessId, cancellationToken);
+
+        // The receipt: the payment that confirmed the order is the first one captured (a later one would be a duplicate, refunded).
+        var paid = await db.PaymentAttempts.AsNoTracking()
+            .Where(a => a.FoodOrderId == order.Id && a.Status == PaymentAttemptStatus.Captured)
+            .OrderBy(a => a.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        var orderRefunds = await db.Refunds.AsNoTracking().Where(r => r.FoodOrderId == order.Id).OrderBy(r => r.RequestedAt).ToListAsync(cancellationToken);
         return new OrderDetail(
             order.Id,
             order.Version,
@@ -459,7 +516,9 @@ public sealed partial class OrderService(
             order.ClosedReason,
             ToHistoryViews(order),
             order.CreatedAt,
-            order.UpdatedAt);
+            order.UpdatedAt,
+            paid is null ? null : new PaymentView(paid.Amount, paid.Currency, paid.UpdatedAt, paid.ProviderPaymentId!),
+            [.. orderRefunds.Select(r => new RefundView(r.Amount, r.Reason, r.Status, r.RequestedAt, r.ProcessedAt))]);
     }
 
     private static PartnerOrderDetail ToPartnerDetail(FoodOrder order) => new(

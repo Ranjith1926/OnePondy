@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
@@ -11,6 +12,8 @@ namespace OnePondy.Infrastructure.Persistence.Configurations;
 
 // Migration 3 (spec section 17.3, Phase 7). Money is numeric(12,2) in INR. The balance, over-refund and
 // append-only rules that EF cannot express are triggers added by hand in the AddPaymentsAndLedger migration.
+// Step 8.3 (AddFoodOrderPayments): a payment, refund or statement line belongs to exactly one booking or food order, and a ledger
+// line or reconciliation exception to at most one; a refund's booking or order is its payment's (a trigger).
 
 public sealed class PaymentAttemptConfiguration : IEntityTypeConfiguration<PaymentAttempt>
 {
@@ -24,6 +27,7 @@ public sealed class PaymentAttemptConfiguration : IEntityTypeConfiguration<Payme
             table.HasCheckConstraint(
                 "ck_payment_attempt_captured",
                 $"status <> '{SnakeCaseEnum<PaymentAttemptStatus>.ToDatabase(PaymentAttemptStatus.Captured)}' OR provider_payment_id IS NOT NULL");
+            table.HasCheckConstraint("ck_payment_attempt_subject", "num_nonnulls(booking_id, food_order_id) = 1");
         });
 
         builder.HasKey(p => p.Id);
@@ -48,6 +52,14 @@ public sealed class PaymentAttemptConfiguration : IEntityTypeConfiguration<Payme
         builder.HasIndex(p => p.BookingId)
             .IsUnique()
             .HasDatabaseName("ux_payment_attempts_open_booking")
+            .HasFilter($"status = '{SnakeCaseEnum<PaymentAttemptStatus>.ToDatabase(PaymentAttemptStatus.Created)}'");
+
+        // The same for a food order (a null booking_id never collides, so bookings need their own index and orders theirs).
+        builder.HasOne<FoodOrder>().WithMany().HasForeignKey(p => p.FoodOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(p => new { p.FoodOrderId, p.CreatedAt }).HasDatabaseName("ix_payment_attempts_food_order");
+        builder.HasIndex(p => p.FoodOrderId)
+            .IsUnique()
+            .HasDatabaseName("ux_payment_attempts_open_food_order")
             .HasFilter($"status = '{SnakeCaseEnum<PaymentAttemptStatus>.ToDatabase(PaymentAttemptStatus.Created)}'");
     }
 }
@@ -85,6 +97,7 @@ public sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
             table.HasCheckConstraint(
                 "ck_refund_processed",
                 $"status <> '{SnakeCaseEnum<RefundStatus>.ToDatabase(RefundStatus.Processed)}' OR provider_refund_id IS NOT NULL");
+            table.HasCheckConstraint("ck_refund_subject", "num_nonnulls(booking_id, food_order_id) = 1");
         });
 
         builder.HasKey(r => r.Id);
@@ -98,6 +111,8 @@ public sealed class RefundConfiguration : IEntityTypeConfiguration<Refund>
         builder.HasOne<Booking>().WithMany().HasForeignKey(r => r.BookingId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(r => r.PaymentAttemptId).HasDatabaseName("ix_refunds_payment_attempt");
         builder.HasIndex(r => r.BookingId).HasDatabaseName("ix_refunds_booking");
+        builder.HasOne<FoodOrder>().WithMany().HasForeignKey(r => r.FoodOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(r => r.FoodOrderId).HasDatabaseName("ix_refunds_food_order");
         builder.HasIndex(r => r.ProviderRefundId).IsUnique().HasDatabaseName("ux_refunds_provider_refund").HasFilter("provider_refund_id IS NOT NULL");
     }
 }
@@ -111,7 +126,8 @@ public sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<LedgerEn
             table.HasCheckConstraint("ck_ledger_amount", "amount <> 0");
             table.HasCheckConstraint(
                 "ck_ledger_account",
-                "account ~ '^(gateway_clearing|customer_refunds|platform_commission|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
+                "account ~ '^(gateway_clearing|customer_refunds|platform_commission|delivery_fees|tax_payable|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
+            table.HasCheckConstraint("ck_ledger_subject", "num_nonnulls(booking_id, food_order_id) <= 1");
         });
 
         builder.HasKey(e => e.Id);
@@ -125,6 +141,8 @@ public sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<LedgerEn
         builder.HasIndex(e => new { e.TransactionId, e.Account }).IsUnique().HasDatabaseName("ux_ledger_entries_transaction_account");
         builder.HasIndex(e => new { e.Account, e.CreatedAt }).HasDatabaseName("ix_ledger_entries_account");
         builder.HasIndex(e => e.BookingId).HasDatabaseName("ix_ledger_entries_booking");
+        builder.HasOne<FoodOrder>().WithMany().HasForeignKey(e => e.FoodOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(e => e.FoodOrderId).HasDatabaseName("ix_ledger_entries_food_order");
     }
 }
 
@@ -166,6 +184,7 @@ public sealed class SettlementItemConfiguration : IEntityTypeConfiguration<Settl
         {
             table.HasCheckConstraint("ck_settlement_item_kind", $"kind IN ({SnakeCaseEnum<SettlementItemKind>.SqlList})");
             table.HasCheckConstraint("ck_settlement_item_amounts", "gross_amount >= 0 AND commission_amount >= 0");
+            table.HasCheckConstraint("ck_settlement_item_subject", "num_nonnulls(booking_id, food_order_id) = 1");
         });
 
         builder.HasKey(i => i.Id);
@@ -177,8 +196,11 @@ public sealed class SettlementItemConfiguration : IEntityTypeConfiguration<Settl
         builder.HasOne<Settlement>().WithMany().HasForeignKey(i => i.SettlementId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Booking>().WithMany().HasForeignKey(i => i.BookingId).OnDelete(DeleteBehavior.Restrict);
 
-        // A booking is settled once as a sale and at most once as a refund, so no statement double-counts it.
+        // A booking is settled once as a sale and at most once as a refund, so no statement double-counts it; a food order likewise
+        // (its own index, since rows with a null booking_id never collide in the first).
         builder.HasIndex(i => new { i.BookingId, i.Kind }).IsUnique().HasDatabaseName("ux_settlement_items_booking_kind");
+        builder.HasOne<FoodOrder>().WithMany().HasForeignKey(i => i.FoodOrderId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(i => new { i.FoodOrderId, i.Kind }).IsUnique().HasDatabaseName("ux_settlement_items_food_order_kind");
         builder.HasIndex(i => i.SettlementId).HasDatabaseName("ix_settlement_items_settlement");
     }
 }
@@ -273,6 +295,7 @@ public sealed class ReconciliationExceptionConfiguration : IEntityTypeConfigurat
                 "ck_reconciliation_person_note",
                 $"status <> '{SnakeCaseEnum<ReconciliationStatus>.ToDatabase(ReconciliationStatus.Resolved)}' OR (resolved_by_user_id IS NOT NULL AND resolution_note IS NOT NULL)");
             table.HasCheckConstraint("ck_reconciliation_occurrences", "occurrences >= 1");
+            table.HasCheckConstraint("ck_reconciliation_subject", "num_nonnulls(booking_id, food_order_id) <= 1");
         });
 
         builder.HasKey(e => e.Id);
@@ -287,6 +310,7 @@ public sealed class ReconciliationExceptionConfiguration : IEntityTypeConfigurat
         builder.Property(e => e.ResolutionNote).HasMaxLength(ReconciliationException.MaxNoteLength);
 
         builder.HasOne<Booking>().WithMany().HasForeignKey(e => e.BookingId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<FoodOrder>().WithMany().HasForeignKey(e => e.FoodOrderId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<PaymentAttempt>().WithMany().HasForeignKey(e => e.PaymentAttemptId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Refund>().WithMany().HasForeignKey(e => e.RefundId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<GatewayEvent>().WithMany().HasForeignKey(e => e.GatewayEventId).OnDelete(DeleteBehavior.Restrict);

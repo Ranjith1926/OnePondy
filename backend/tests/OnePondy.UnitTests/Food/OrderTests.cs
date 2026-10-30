@@ -4,9 +4,11 @@ using Microsoft.Extensions.Options;
 using OnePondy.Application.Audit;
 using OnePondy.Application.Food;
 using OnePondy.Application.Identity;
+using OnePondy.Application.Payments;
 using OnePondy.Domain.Configuration;
 using OnePondy.Domain.Food;
 using OnePondy.Domain.Identity;
+using OnePondy.UnitTests.Bookings;
 using OnePondy.UnitTests.Businesses;
 using OnePondy.UnitTests.Identity;
 
@@ -23,6 +25,7 @@ public class OrderTests
     private readonly RestaurantService _restaurants;
     private readonly MenuService _menu;
     private readonly OrderService _orders;
+    private readonly FoodOrderExpiry _expiry;
     private readonly FoodOptions _options = new();
     private readonly Guid _owner;
     private readonly Guid _buyer;
@@ -33,7 +36,9 @@ public class OrderTests
         var audit = new AuditTrail(_b.Db, _b.Time);
         _restaurants = new RestaurantService(_b.Db, audit, _b.Time);
         _menu = new MenuService(_b.Db, _restaurants, audit, _b.Time);
-        _orders = new OrderService(_b.Db, _restaurants, Options.Create(_options), _b.Time);
+        var payments = FoodOrderHarness.PaymentServices(_b.Db, _b.Time, new PaymentsOptions(), new FakePaymentGateway());
+        _orders = new OrderService(_b.Db, _restaurants, payments.Refunds, Options.Create(_options), _b.Time);
+        _expiry = new FoodOrderExpiry(_b.Db, _orders, payments.Payments, _b.Time, Options.Create(_options));
         _owner = _b.Customer;
         _buyer = _b.Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919000022222", None).Result.Id;
         _otherBuyer = _b.Accounts.FindOrCreateAsync(OtpChannel.Sms, "+919000033333", None).Result.Id;
@@ -529,10 +534,10 @@ public class OrderTests
         var shop = await OpenShopAsync();
         var order = await PlacedAsync(shop);
         _b.Time.Advance(TimeSpan.FromMinutes(4));
-        Assert.Equal(0, await _orders.ExpireDueAsync(None));
+        Assert.Equal(0, (await _expiry.ExpireDueAsync(None)).Expired);
 
         _b.Time.Advance(TimeSpan.FromMinutes(2));
-        var expired = await _orders.ExpireDueAsync(None);
+        var expired = (await _expiry.ExpireDueAsync(None)).Expired;
         var seen = (await _orders.GetMineAsync(order.Id, _buyer, None)).Value!;
 
         Assert.Equal(1, expired);
@@ -554,7 +559,7 @@ public class OrderTests
         await _orders.AcceptAsync(shop.BusinessId, confirmed.Id, 0, _owner, None);
 
         _b.Time.Advance(TimeSpan.FromMinutes(30));
-        var expired = await _orders.ExpireDueAsync(None);
+        var expired = (await _expiry.ExpireDueAsync(None)).Expired;
 
         Assert.Equal(1, expired);
         Assert.Equal(FoodOrderStatus.Expired, (await _orders.GetMineAsync(unpaid.Id, _buyer, None)).Value!.Status);

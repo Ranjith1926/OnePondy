@@ -27,6 +27,7 @@ const detail: SettlementDetail = {
   items: [
     {
       bookingId: 'b0000000-0000-4000-8000-000000000001',
+      foodOrderId: null,
       listingTitle: 'Sunset Kayak Tour',
       serviceStartAt: '2026-10-03T06:00:00Z',
       kind: 'sale',
@@ -36,6 +37,7 @@ const detail: SettlementDetail = {
     },
     {
       bookingId: 'b0000000-0000-4000-8000-000000000001',
+      foodOrderId: null,
       listingTitle: 'Sunset Kayak Tour',
       serviceStartAt: '2026-10-03T06:00:00Z',
       kind: 'refund',

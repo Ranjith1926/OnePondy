@@ -1,7 +1,7 @@
 import type { SettlementDetail } from '@/lib/apiTypes';
 import { formatDate, formatMoney } from '@/lib/labels';
 
-/** The totals and one row per booking of a statement, as the administrator and the partner both read it. */
+/** The totals and one row per booking or food order of a statement, as the administrator and the partner both read it. */
 export function StatementItems({ detail }: { detail: SettlementDetail }) {
   const { settlement, items } = detail;
   const totals: [string, number][] = [
@@ -53,13 +53,15 @@ export function StatementItems({ detail }: { detail: SettlementDetail }) {
           <tbody>
             {items.map((item) => (
               <tr
-                key={`${item.bookingId}-${item.kind}`}
+                key={`${item.bookingId ?? item.foodOrderId}-${item.kind}`}
                 className="border-b border-line last:border-b-0"
               >
                 <td className="py-3 pr-4 whitespace-nowrap">{formatDate(item.serviceStartAt)}</td>
                 <td className="py-3 pr-4">
                   {item.listingTitle}
-                  <span className="block font-mono text-xs text-muted">{item.bookingId}</span>
+                  <span className="block font-mono text-xs text-muted">
+                    {item.bookingId ?? item.foodOrderId}
+                  </span>
                 </td>
                 <td className="py-3 pr-4">{item.kind === 'sale' ? 'Sale' : 'Refund'}</td>
                 <td className="py-3 pr-4 text-right whitespace-nowrap">

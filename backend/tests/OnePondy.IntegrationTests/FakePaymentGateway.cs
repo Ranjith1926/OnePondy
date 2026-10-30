@@ -13,6 +13,8 @@ public sealed class FakePaymentGateway(TimeSpan? orderDelay = null) : IPaymentGa
 
     public List<GatewayRefundRequest> RefundRequests { get; } = [];
 
+    public System.Collections.Concurrent.ConcurrentQueue<GatewayOrderRequest> OrderRequests { get; } = new();
+
     public async Task<Result<GatewayOrder>> CreateOrderAsync(GatewayOrderRequest request, CancellationToken cancellationToken)
     {
         if (orderDelay is { } delay)
@@ -20,6 +22,7 @@ public sealed class FakePaymentGateway(TimeSpan? orderDelay = null) : IPaymentGa
             await Task.Delay(delay, cancellationToken);
         }
 
+        OrderRequests.Enqueue(request);
         return Result<GatewayOrder>.Success(
             new GatewayOrder($"order_it_{Guid.NewGuid():N}_{Interlocked.Increment(ref _orders)}", request.AmountPaise, request.Currency));
     }

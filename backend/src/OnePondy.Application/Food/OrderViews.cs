@@ -1,3 +1,4 @@
+using OnePondy.Application.Bookings;
 using OnePondy.Application.Common;
 using OnePondy.Domain.Food;
 
@@ -17,6 +18,12 @@ public sealed class FoodOptions
     public decimal DeliveryFee { get; set; } = 30m;
 
     public decimal PackagingFee { get; set; } = 10m;
+
+    /// <summary>
+    /// How long past its payment window an unpaid order may wait when the gateway cannot be asked whether it was paid (step 8.3). Shorter
+    /// than the bookings' grace, because a restaurant is waiting on it; a payment that lands after this is refunded in full.
+    /// </summary>
+    public TimeSpan GatewayCheckGrace { get; set; } = TimeSpan.FromMinutes(5);
 }
 
 /// <summary>Refuses to start with food settings that would give nonsense prices or windows.</summary>
@@ -37,6 +44,11 @@ public static class FoodOptionsGuard
         if (options.DeliveryFee is < 0m or > 500m || options.PackagingFee is < 0m or > 500m)
         {
             throw new InvalidOperationException("Food:DeliveryFee and Food:PackagingFee must each be between 0 and 500.");
+        }
+
+        if (options.GatewayCheckGrace < TimeSpan.FromMinutes(1) || options.GatewayCheckGrace > TimeSpan.FromHours(1))
+        {
+            throw new InvalidOperationException("Food:GatewayCheckGrace must be between 1 minute and 1 hour.");
         }
     }
 }
@@ -117,7 +129,10 @@ public sealed record OrderDetail(
     string? ClosedReason,
     IReadOnlyList<OrderHistoryView> History,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    /// <summary>The payment that confirmed the order, as a receipt; null while unpaid or when nothing was paid online.</summary>
+    PaymentView? Payment,
+    IReadOnlyList<RefundView> Refunds);
 
 public sealed record OrderSummary(
     Guid Id,

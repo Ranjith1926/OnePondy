@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
 using OnePondy.Domain.Bookings;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Payments;
@@ -18,6 +19,10 @@ namespace OnePondy.Application.Payments;
 /// <item>Payment that no booking wants (late, duplicate): <c>gateway_clearing</c> debit; <c>customer_refunds</c> credit,
 /// the money held for the customer.</item>
 /// <item>Refund processed: the reverse of whichever of those applied, in proportion.</item>
+/// <item>Payment that confirms a food order (step 8.3, provisional split): <c>gateway_clearing</c> debit; commission on the dishes
+/// (<c>platform_commission</c>), the restaurant's share of the dishes plus packaging (<c>partner_payable</c>), the delivery fee
+/// (<c>delivery_fees</c>) and the GST (<c>tax_payable</c>) credit. A food refund is always in full (decision F8) and reverses
+/// exactly what its capture posted.</item>
 /// </list>
 /// Lines are added to the caller's unit of work, so a ledger entry and the booking change it describes are saved together.
 /// A transaction id is derived from the event (for example <c>capture:{attempt}</c>), so posting the same event twice is
@@ -53,8 +58,40 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
         Add(transaction, LedgerAccounts.PartnerPayable(booking.BusinessId), -partner, booking.Id, "Partner share", now);
     }
 
+    /// <summary>
+    /// A payment that confirms a food order. The commission is on the dishes only (not the tax or the fees); the restaurant is owed the
+    /// rest of the dishes and the packaging fee; the delivery fee and the GST are OnePondy's to keep and to pay over. Provisional until
+    /// D21 and the tax review (decision F3) settle it.
+    /// </summary>
+    public async Task PostFoodCaptureAsync(FoodOrder order, PaymentAttempt attempt, CancellationToken cancellationToken)
+    {
+        if (attempt.FoodOrderId != order.Id || attempt.Amount != order.TotalAmount)
+        {
+            throw new InvalidOperationException("A food payment must be for its order's total.");
+        }
+
+        var transaction = TransactionId(CaptureKey(attempt.Id));
+        if (await AlreadyPostedAsync(transaction, cancellationToken))
+        {
+            return;
+        }
+
+        var commission = CommissionFor(order.Subtotal - order.DiscountAmount, options.Value.CommissionPercent);
+        var partner = attempt.Amount - commission - order.DeliveryFee - order.TaxAmount;
+        var now = time.GetUtcNow();
+        AddForOrder(transaction, LedgerAccounts.GatewayClearing, attempt.Amount, order.Id, "Payment received", now);
+        AddForOrder(transaction, LedgerAccounts.PlatformCommission, -commission, order.Id, "Commission", now);
+        AddForOrder(transaction, LedgerAccounts.PartnerPayable(order.BusinessId), -partner, order.Id, "Restaurant share", now);
+        AddForOrder(transaction, LedgerAccounts.DeliveryFees, -order.DeliveryFee, order.Id, "Delivery fee", now);
+        AddForOrder(transaction, LedgerAccounts.TaxPayable, -order.TaxAmount, order.Id, "GST collected", now);
+    }
+
     /// <summary>A payment no booking wants: held for the customer until it is refunded.</summary>
-    public async Task PostHeldPaymentAsync(Booking booking, PaymentAttempt attempt, CancellationToken cancellationToken)
+    public Task PostHeldPaymentAsync(Booking booking, PaymentAttempt attempt, CancellationToken cancellationToken) =>
+        PostHeldPaymentAsync(attempt, cancellationToken);
+
+    /// <summary>A payment nothing wants any more (late, or a duplicate), for a booking or a food order: held for the customer until it is refunded.</summary>
+    public async Task PostHeldPaymentAsync(PaymentAttempt attempt, CancellationToken cancellationToken)
     {
         var transaction = TransactionId(CaptureKey(attempt.Id));
         if (await AlreadyPostedAsync(transaction, cancellationToken))
@@ -63,8 +100,8 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
         }
 
         var now = time.GetUtcNow();
-        Add(transaction, LedgerAccounts.GatewayClearing, attempt.Amount, booking.Id, "Payment received, to be refunded", now);
-        Add(transaction, LedgerAccounts.CustomerRefunds, -attempt.Amount, booking.Id, "Held for refund", now);
+        Add(transaction, LedgerAccounts.GatewayClearing, attempt.Amount, attempt.BookingId, "Payment received, to be refunded", now, attempt.FoodOrderId);
+        Add(transaction, LedgerAccounts.CustomerRefunds, -attempt.Amount, attempt.BookingId, "Held for refund", now, attempt.FoodOrderId);
     }
 
     /// <summary>The money has gone back to the customer: undo the payment's entries for the amount refunded.</summary>
@@ -100,6 +137,36 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
         Add(transaction, LedgerAccounts.PartnerPayable(booking.BusinessId), partnerBack, booking.Id, "Partner share returned", now);
     }
 
+    /// <summary>
+    /// A food order's money has gone back to the customer. Food refunds are always in full (decision F8), so this reverses, line for
+    /// line, whatever the payment posted: the commission, the restaurant's share, the fee and the GST all go back.
+    /// </summary>
+    public async Task PostFoodRefundAsync(Refund refund, PaymentAttempt attempt, CancellationToken cancellationToken)
+    {
+        var transaction = TransactionId(RefundKey(refund.Id));
+        if (await AlreadyPostedAsync(transaction, cancellationToken))
+        {
+            return;
+        }
+
+        var orderId = attempt.FoodOrderId ?? throw new InvalidOperationException("Not a food payment.");
+        if (refund.Amount != attempt.Amount)
+        {
+            throw new InvalidOperationException("A food order is only ever refunded in full.");
+        }
+
+        var captureTransaction = TransactionId(CaptureKey(attempt.Id));
+        var captured = await db.LedgerEntries.AsNoTracking()
+            .Where(e => e.TransactionId == captureTransaction)
+            .Select(e => new { e.Account, e.Amount })
+            .ToListAsync(cancellationToken);
+        var now = time.GetUtcNow();
+        foreach (var line in captured)
+        {
+            AddForOrder(transaction, line.Account, -line.Amount, orderId, line.Account == LedgerAccounts.GatewayClearing ? "Refund paid out" : "Returned on refund", now);
+        }
+    }
+
     public static string PayoutKey(Guid settlementId) => $"payout:{settlementId}";
 
     /// <summary>
@@ -124,11 +191,14 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
         db.LedgerEntries.AsNoTracking().AnyAsync(e => e.TransactionId == transaction, cancellationToken);
 
     /// <summary>Adds a line unless it is zero (a 0% commission, say), which a balanced transaction does not need.</summary>
-    private void Add(Guid transaction, string account, decimal amount, Guid? bookingId, string description, DateTimeOffset now)
+    private void Add(Guid transaction, string account, decimal amount, Guid? bookingId, string description, DateTimeOffset now, Guid? foodOrderId = null)
     {
         if (amount != 0m)
         {
-            db.LedgerEntries.Add(LedgerEntry.Create(transaction, account, amount, bookingId, description, now));
+            db.LedgerEntries.Add(LedgerEntry.Create(transaction, account, amount, bookingId, description, now, foodOrderId));
         }
     }
+
+    private void AddForOrder(Guid transaction, string account, decimal amount, Guid foodOrderId, string description, DateTimeOffset now) =>
+        Add(transaction, account, amount, null, description, now, foodOrderId);
 }

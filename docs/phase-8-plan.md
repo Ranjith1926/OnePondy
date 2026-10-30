@@ -55,7 +55,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 4. F4 to F8: confirm the defaults, or give other numbers.
 5. Still open from Phase 7 and needed before any of this goes live: D21 and D22 sign-off, the legal and tax review.
 
-Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above are what gets built.
+Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above are what gets built (8.3 is built on them).
 
 ## 5. Build notes (as built)
 
@@ -116,3 +116,43 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   accepts, and the database refusing edits to lines and history, bad totals and an order with no lines).
 - **Not done in 8.2:** paying for an order and refunds (8.3), push notifications about orders, a note to the kitchen (the order has a *delivery* note only), the app
   screens (8.4), the console inbox (8.5), the driver side (8.6 to 8.7), a discount or coupon (the column exists and is always 0).
+
+**8.3 (paying for orders, sandbox).**
+
+- **One machinery, two subjects.** A payment attempt, refund, ledger line, statement line and reconciliation exception now belongs to a booking *or* a food order
+  (`food_order_id` beside `booking_id`; a database check says exactly one for a payment, refund and statement line, at most one for a ledger line and an exception).
+  Nothing was copied: `PaymentService` branches on the attempt's subject, and the webhook, the refund sweep and reconciliation work unchanged from the gateway's ids.
+  Booking behaviour, routes, JSON and the Razorpay notes (`booking_id`) and receipt are byte-for-byte as before.
+- **Routes:** `POST /api/v1/food/orders/{id}/payment` (the same Razorpay order if asked again, even at the same instant) and `.../payment/refresh` ("is it paid yet?": the
+  server asks Razorpay itself). Razorpay's receipt is `fo_<order id>` and its notes name `food_order_id`. Another customer's order is 404.
+- **The ledger split (provisional, D21 and F3):** a payment books five lines: `gateway_clearing` (the total); `platform_commission` (`Payments:CommissionPercent` of the
+  **dishes only**); `partner_payable` (dishes and packaging, less commission); `delivery_fees` (OnePondy keeps it, its own drivers deliver); `tax_payable` (the GST,
+  which OnePondy owes as the e-commerce operator). Two new accounts, so `ck_ledger_account` was widened. A food refund is **always in full** (F8) and reverses the
+  capture's lines exactly. Change the split and you change only `LedgerService.PostFoodCaptureAsync`; nothing already booked is rewritten.
+- **Cancelling a paid order** plans its refund first and refuses (`refunds_not_enabled`) while `Payments:RefundsEnabled` is off, so the customer's money is never
+  silently kept; the cancellation, the refund and `refund_pending` are then saved together and the refund sent after. A payment nothing wants (late, duplicate) is
+  always refunded in full, whatever that setting.
+- **Closing an order closes its payment:** cancel, reject and expiry mark the order's open Razorpay order expired in the same save, so a payment landing at that instant
+  collides with the change and is retried or refunded, never lost.
+- **Asking the gateway before expiring:** expiry moved out of `OrderService` into `FoodOrderExpiry` (like `BookingHoldExpiry`). An unpaid order is checked with Razorpay first; a
+  payment found confirms it. If Razorpay cannot be asked, it waits `Food:GatewayCheckGrace` (5 minutes, shorter than bookings' 15 because a restaurant is waiting).
+- **Statements:** a **delivered** order goes on its restaurant's statement once (its side only), agreeing with the ledger. Until the driver app (8.7) no order can be
+  delivered through the API, so this is proven by tests that deliver through the domain.
+- **Also fixed (a Phase 7 bug found on the way):** a booking paid twice and then completed made its statement disagree with the ledger for good (the second, refunded payment
+  was counted as a sale), blocking every statement for that business. Only the payment that paid the partner counts now (unit test added).
+- **Also changed:** account deletion is blocked by food orders in progress (new codes `food_orders_in_progress`, `partner_food_orders_in_progress`, inside the one existing
+  guard). The statement CSV's first two headings are now "Reference" and "Item" (it carries bookings and orders). The console's types and statement table accept a null
+  `bookingId` and a `foodOrderId`.
+- **Migration:** `AddFoodOrderPayments` (columns, checks, indexes, two accounts, two triggers: a payment never changes what it pays for; a refund is for what its payment paid
+  for). Only `ADD COLUMN` and a dropped `NOT NULL`: the append-only ledger is never rewritten. **Applied to a database holding Phase 7 and 8.2 data (79 bookings, 47 payments,
+  19 refunds, 119 ledger lines): every row kept, and rolled back and forward again.** Apply it as `onepondy_app` like the others.
+- **Tests:** 28 new unit tests (27 for food: start, capture, ledger split, duplicates, cancel-while-paying, late payment, expiry with and without the gateway, reconciliation,
+  every refund path, the sweep, statements, admin lists, deletion guard; plus one for the booking statement fix), 8 new PostgreSQL integration tests (the HTTP flow; cancel and refund through the real webhook; refunds off; eight
+  simultaneous "pay" taps; a payment racing a cancellation five times; the Worker's expiry with the gateway; settlement through the endpoints; the database refusing orphan
+  payments, mismatched refunds, a two-subject ledger line, an unknown account and a double settlement). Whole suite: 690 unit, 9 architecture, 128 integration (6 live-gateway
+  skipped), all passing on a fresh PostgreSQL 18 database. Console: type-check, lint, formatting and 32 tests pass.
+- **Also fixed:** an existing Phase 7 integration test (`The_daily_check_lists_money_at_the_gateway...`) failed whenever the suite ran in the first three hours after midnight UTC,
+  because the daily check rightly waits three hours after a day ends. It now runs on a fixed midday clock; what it asserts is unchanged.
+- **Not done in 8.3:** push notifications about order payments and refunds, an administrator's cancel of a food order, the app's food checkout (8.4), any partial food refund,
+  and a real-device Razorpay run for food (sandbox only, like bookings). **An independent multi-agent review of this diff did not run** (it hit the usage limit); the diff was
+  self-reviewed against the Phase 7 invariants instead.

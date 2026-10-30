@@ -4,7 +4,8 @@ namespace OnePondy.Application.Payments;
 
 /// <param name="AmountPaise">Whole paise, the gateway's smallest unit. Money elsewhere is a decimal rupee amount.</param>
 /// <param name="Receipt">Our own reference, shown on the gateway dashboard.</param>
-public sealed record GatewayOrderRequest(long AmountPaise, string Currency, string Receipt, Guid BookingId);
+/// <param name="BookingId">What is being paid for: a booking, or (with this null) the food order in <paramref name="FoodOrderId"/>.</param>
+public sealed record GatewayOrderRequest(long AmountPaise, string Currency, string Receipt, Guid? BookingId, Guid? FoodOrderId = null);
 
 public sealed record GatewayOrder(string OrderId, long AmountPaise, string Currency);
 
@@ -94,7 +95,17 @@ public static class PaymentErrors
     public static readonly AppError Busy = new(
         "payment_busy",
         ErrorKind.Conflict,
-        "The booking changed at the same moment. Retry the payment result.");
+        "The booking or order changed at the same moment. Retry the payment result.");
+
+    public static readonly AppError OrderNotDue = new(
+        "payment_not_due",
+        ErrorKind.Conflict,
+        "This order is not waiting for payment.");
+
+    public static readonly AppError OrderWindowClosed = new(
+        "payment_window_closed",
+        ErrorKind.Conflict,
+        "The time to pay for this order has run out.");
 
     public static readonly AppError UnknownRefund = new(
         "payment_unknown_refund",

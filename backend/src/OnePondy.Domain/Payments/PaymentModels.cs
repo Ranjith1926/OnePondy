@@ -42,7 +42,9 @@ public enum SettlementItemKind
     Refund = 2,
 }
 
-/// <summary>One try at paying for a booking: a gateway order, and what became of it.</summary>
+/// <summary>
+/// One try at paying for a booking or a food order (exactly one of the two, a database rule): a gateway order, and what became of it.
+/// </summary>
 public sealed class PaymentAttempt
 {
     private PaymentAttempt()
@@ -51,7 +53,9 @@ public sealed class PaymentAttempt
 
     public Guid Id { get; private set; }
 
-    public Guid BookingId { get; private set; }
+    public Guid? BookingId { get; private set; }
+
+    public Guid? FoodOrderId { get; private set; }
 
     public PaymentProvider Provider { get; private set; }
 
@@ -72,7 +76,13 @@ public sealed class PaymentAttempt
     /// <summary>Optimistic concurrency token (PostgreSQL xmin).</summary>
     public uint Version { get; private set; }
 
-    public static PaymentAttempt Create(Guid bookingId, string providerOrderId, decimal amount, string currency, DateTimeOffset now)
+    public static PaymentAttempt Create(Guid bookingId, string providerOrderId, decimal amount, string currency, DateTimeOffset now) =>
+        New(bookingId, null, providerOrderId, amount, currency, now);
+
+    public static PaymentAttempt CreateForFoodOrder(Guid foodOrderId, string providerOrderId, decimal amount, string currency, DateTimeOffset now) =>
+        New(null, foodOrderId, providerOrderId, amount, currency, now);
+
+    private static PaymentAttempt New(Guid? bookingId, Guid? foodOrderId, string providerOrderId, decimal amount, string currency, DateTimeOffset now)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerOrderId);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(amount);
@@ -80,6 +90,7 @@ public sealed class PaymentAttempt
         {
             Id = Guid.CreateVersion7(),
             BookingId = bookingId,
+            FoodOrderId = foodOrderId,
             Provider = PaymentProvider.Razorpay,
             ProviderOrderId = providerOrderId,
             Amount = amount,
@@ -188,7 +199,10 @@ public sealed class Refund
 
     public Guid PaymentAttemptId { get; private set; }
 
-    public Guid BookingId { get; private set; }
+    /// <summary>What the refunded payment was for: a copy of the payment attempt's own booking or food order (a database rule keeps them equal).</summary>
+    public Guid? BookingId { get; private set; }
+
+    public Guid? FoodOrderId { get; private set; }
 
     public decimal Amount { get; private set; }
 
@@ -202,7 +216,14 @@ public sealed class Refund
 
     public DateTimeOffset? ProcessedAt { get; private set; }
 
-    public static Refund Request(Guid paymentAttemptId, Guid bookingId, decimal amount, RefundReason reason, DateTimeOffset now)
+    public static Refund Request(Guid paymentAttemptId, Guid bookingId, decimal amount, RefundReason reason, DateTimeOffset now) =>
+        New(paymentAttemptId, bookingId, null, amount, reason, now);
+
+    /// <summary>A refund of <paramref name="attempt"/>, for whatever it paid for.</summary>
+    public static Refund Of(PaymentAttempt attempt, decimal amount, RefundReason reason, DateTimeOffset now) =>
+        New(attempt.Id, attempt.BookingId, attempt.FoodOrderId, amount, reason, now);
+
+    private static Refund New(Guid paymentAttemptId, Guid? bookingId, Guid? foodOrderId, decimal amount, RefundReason reason, DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(amount);
         return new Refund
@@ -210,6 +231,7 @@ public sealed class Refund
             Id = Guid.CreateVersion7(),
             PaymentAttemptId = paymentAttemptId,
             BookingId = bookingId,
+            FoodOrderId = foodOrderId,
             Amount = amount,
             Reason = reason,
             Status = RefundStatus.Pending,
@@ -246,6 +268,12 @@ public static class LedgerAccounts
     public const string CustomerRefunds = "customer_refunds";
     public const string PlatformCommission = "platform_commission";
 
+    /// <summary>Food delivery fees, kept by OnePondy because its own drivers deliver (decision F1; provisional).</summary>
+    public const string DeliveryFees = "delivery_fees";
+
+    /// <summary>GST collected on food orders, owed to the government by OnePondy as the e-commerce operator (spec section 21; provisional, decision F3).</summary>
+    public const string TaxPayable = "tax_payable";
+
     public static string PartnerPayable(Guid businessId) => $"partner_payable:{businessId}";
 
     public static string PartnerPaid(Guid businessId) => $"partner_paid:{businessId}";
@@ -270,18 +298,27 @@ public sealed class LedgerEntry
     /// <summary>Double-entry sign: a debit is positive and a credit negative. Money held at the gateway is a debit; what OnePondy owes a partner or customer is a credit.</summary>
     public decimal Amount { get; private set; }
 
+    /// <summary>The booking or food order the line is about; neither for a payout, which settles a whole statement.</summary>
     public Guid? BookingId { get; private set; }
+
+    public Guid? FoodOrderId { get; private set; }
 
     public string Description { get; private set; } = string.Empty;
 
     public DateTimeOffset CreatedAt { get; private set; }
 
-    public static LedgerEntry Create(Guid transactionId, string account, decimal amount, Guid? bookingId, string description, DateTimeOffset now)
+    public static LedgerEntry Create(
+        Guid transactionId, string account, decimal amount, Guid? bookingId, string description, DateTimeOffset now, Guid? foodOrderId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(account);
         if (amount == 0m)
         {
             throw new ArgumentOutOfRangeException(nameof(amount), "A ledger line cannot be zero.");
+        }
+
+        if (bookingId is not null && foodOrderId is not null)
+        {
+            throw new ArgumentException("A ledger line is about a booking or a food order, not both.", nameof(foodOrderId));
         }
 
         return new LedgerEntry
@@ -291,6 +328,7 @@ public sealed class LedgerEntry
             Account = account,
             Amount = amount,
             BookingId = bookingId,
+            FoodOrderId = foodOrderId,
             Description = description,
             CreatedAt = now,
         };
@@ -394,7 +432,10 @@ public sealed class SettlementItem
 
     public Guid SettlementId { get; private set; }
 
-    public Guid BookingId { get; private set; }
+    /// <summary>The booking or food order on the statement (exactly one, a database rule).</summary>
+    public Guid? BookingId { get; private set; }
+
+    public Guid? FoodOrderId { get; private set; }
 
     public SettlementItemKind Kind { get; private set; }
 
@@ -403,11 +444,19 @@ public sealed class SettlementItem
     public decimal CommissionAmount { get; private set; }
 
     public static SettlementItem Create(Guid settlementId, Guid bookingId, SettlementItemKind kind, decimal grossAmount, decimal commissionAmount) =>
+        New(settlementId, bookingId, null, kind, grossAmount, commissionAmount);
+
+    public static SettlementItem CreateForFoodOrder(Guid settlementId, Guid foodOrderId, SettlementItemKind kind, decimal grossAmount, decimal commissionAmount) =>
+        New(settlementId, null, foodOrderId, kind, grossAmount, commissionAmount);
+
+    private static SettlementItem New(
+        Guid settlementId, Guid? bookingId, Guid? foodOrderId, SettlementItemKind kind, decimal grossAmount, decimal commissionAmount) =>
         new()
         {
             Id = Guid.CreateVersion7(),
             SettlementId = settlementId,
             BookingId = bookingId,
+            FoodOrderId = foodOrderId,
             Kind = kind,
             GrossAmount = grossAmount,
             CommissionAmount = commissionAmount,

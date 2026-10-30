@@ -13,10 +13,11 @@ namespace OnePondy.IntegrationTests;
 
 /// <summary>
 /// Food orders (spec Phase 8, step 8.2), against a real, migrated PostgreSQL database: the HTTP flow from quote to a finished
-/// kitchen, access control, simultaneous requests, and the rules only the database can enforce. Runs only when
-/// ONEPONDY_TEST_DATABASE is set (see README).
+/// kitchen, access control, simultaneous requests, and the rules only the database can enforce. Paying for orders (step 8.3) is in
+/// FoodOrderPaymentApiTests.cs, part of this same class so its tests never run alongside the one that switches the food module off.
+/// Runs only when ONEPONDY_TEST_DATABASE is set (see README).
 /// </summary>
-public sealed class FoodOrderApiTests : IAsyncLifetime
+public sealed partial class FoodOrderApiTests : IAsyncLifetime
 {
     private const string Address = "12 Rue Suffren, White Town";
 

@@ -1733,18 +1733,21 @@ public sealed class BookingApiTests : IAsyncLifetime
             Assert.Equal(2, problem.Occurrences);
         }
 
-        // The system records how far the daily check has got, as itself rather than as a user.
+        // The system records how far the daily check has got, as itself rather than as a user. A day is only checked a few hours
+        // after it ends, so this runs at midday UTC rather than whenever the suite happens to run (just after midnight it would
+        // rightly find nothing due yet).
+        var midday = new FakeTimeProvider(new DateTimeOffset(DateTime.UtcNow.Date.AddHours(12), TimeSpan.Zero));
         await using (var scope = Factory.Services.CreateAsyncScope())
         {
             var db = DbOf(scope);
             await db.Database.ExecuteSqlAsync($"DELETE FROM app_settings WHERE key = 'payments_reconciled_through'");
-            var days = await Wire(db, gateway, TimeProvider.System, options).Reconciliation.RunDueDailyChecksAsync(default);
+            var days = await Wire(db, gateway, midday, options).Reconciliation.RunDueDailyChecksAsync(default);
             Assert.Equal(1, days);
         }
 
         await using var check = Factory.Services.CreateAsyncScope();
         var setting = await DbOf(check).AppSettings.AsNoTracking().SingleAsync(s => s.Key == "payments_reconciled_through");
-        Assert.Equal(DateTime.UtcNow.Date.AddDays(-1).ToString("yyyy-MM-dd"), setting.Value);
+        Assert.Equal(midday.GetUtcNow().UtcDateTime.Date.AddDays(-1).ToString("yyyy-MM-dd"), setting.Value);
         Assert.Null(setting.UpdatedByUserId);
     }
 

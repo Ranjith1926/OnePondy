@@ -1760,6 +1760,10 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("description");
 
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
+
                     b.Property<Guid>("TransactionId")
                         .HasColumnType("uuid")
                         .HasColumnName("transaction_id");
@@ -1770,6 +1774,9 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId")
                         .HasDatabaseName("ix_ledger_entries_booking");
 
+                    b.HasIndex("FoodOrderId")
+                        .HasDatabaseName("ix_ledger_entries_food_order");
+
                     b.HasIndex("Account", "CreatedAt")
                         .HasDatabaseName("ix_ledger_entries_account");
 
@@ -1779,9 +1786,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
                     b.ToTable("ledger_entries", null, t =>
                         {
-                            t.HasCheckConstraint("ck_ledger_account", "account ~ '^(gateway_clearing|customer_refunds|platform_commission|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
+                            t.HasCheckConstraint("ck_ledger_account", "account ~ '^(gateway_clearing|customer_refunds|platform_commission|delivery_fees|tax_payable|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
 
                             t.HasCheckConstraint("ck_ledger_amount", "amount <> 0");
+
+                            t.HasCheckConstraint("ck_ledger_subject", "num_nonnulls(booking_id, food_order_id) <= 1");
                         });
                 });
 
@@ -1863,7 +1872,7 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("amount");
 
-                    b.Property<Guid>("BookingId")
+                    b.Property<Guid?>("BookingId")
                         .HasColumnType("uuid")
                         .HasColumnName("booking_id");
 
@@ -1877,6 +1886,10 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("character(3)")
                         .HasColumnName("currency")
                         .IsFixedLength();
+
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -1923,6 +1936,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_payment_attempts_open")
                         .HasFilter("status = 'created'");
 
+                    b.HasIndex("FoodOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_payment_attempts_open_food_order")
+                        .HasFilter("status = 'created'");
+
                     b.HasIndex("ProviderOrderId")
                         .IsUnique()
                         .HasDatabaseName("ux_payment_attempts_order");
@@ -1935,6 +1953,9 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId", "CreatedAt")
                         .HasDatabaseName("ix_payment_attempts_booking");
 
+                    b.HasIndex("FoodOrderId", "CreatedAt")
+                        .HasDatabaseName("ix_payment_attempts_food_order");
+
                     b.ToTable("payment_attempts", null, t =>
                         {
                             t.HasCheckConstraint("ck_payment_attempt_amount", "amount > 0");
@@ -1944,6 +1965,8 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_payment_attempt_provider", "provider IN ('razorpay')");
 
                             t.HasCheckConstraint("ck_payment_attempt_status", "status IN ('created', 'captured', 'failed', 'expired')");
+
+                            t.HasCheckConstraint("ck_payment_attempt_subject", "num_nonnulls(booking_id, food_order_id) = 1");
                         });
                 });
 
@@ -1982,6 +2005,10 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.Property<DateTimeOffset>("FirstSeenAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("first_seen_at");
+
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
 
                     b.Property<Guid?>("GatewayEventId")
                         .HasColumnType("uuid")
@@ -2043,6 +2070,9 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_reconciliation_fingerprint");
 
+                    b.HasIndex("FoodOrderId")
+                        .HasDatabaseName("ix_reconciliation_exceptions_food_order_id");
+
                     b.HasIndex("GatewayEventId")
                         .HasDatabaseName("ix_reconciliation_exceptions_gateway_event_id");
 
@@ -2070,6 +2100,8 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_reconciliation_resolved", "(status = 'open') = (resolved_at IS NULL)");
 
                             t.HasCheckConstraint("ck_reconciliation_status", "status IN ('open', 'resolved', 'auto_resolved')");
+
+                            t.HasCheckConstraint("ck_reconciliation_subject", "num_nonnulls(booking_id, food_order_id) <= 1");
                         });
                 });
 
@@ -2084,9 +2116,13 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("amount");
 
-                    b.Property<Guid>("BookingId")
+                    b.Property<Guid?>("BookingId")
                         .HasColumnType("uuid")
                         .HasColumnName("booking_id");
+
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
 
                     b.Property<Guid>("PaymentAttemptId")
                         .HasColumnType("uuid")
@@ -2123,6 +2159,9 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookingId")
                         .HasDatabaseName("ix_refunds_booking");
 
+                    b.HasIndex("FoodOrderId")
+                        .HasDatabaseName("ix_refunds_food_order");
+
                     b.HasIndex("PaymentAttemptId")
                         .HasDatabaseName("ix_refunds_payment_attempt");
 
@@ -2140,6 +2179,8 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_refund_reason", "reason IN ('rejected', 'partner_cancelled', 'customer_cancelled', 'late_payment')");
 
                             t.HasCheckConstraint("ck_refund_status", "status IN ('pending', 'processed', 'failed')");
+
+                            t.HasCheckConstraint("ck_refund_subject", "num_nonnulls(booking_id, food_order_id) = 1");
                         });
                 });
 
@@ -2237,7 +2278,7 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<Guid>("BookingId")
+                    b.Property<Guid?>("BookingId")
                         .HasColumnType("uuid")
                         .HasColumnName("booking_id");
 
@@ -2245,6 +2286,10 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("commission_amount");
+
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
 
                     b.Property<decimal>("GrossAmount")
                         .HasPrecision(12, 2)
@@ -2271,11 +2316,17 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .IsUnique()
                         .HasDatabaseName("ux_settlement_items_booking_kind");
 
+                    b.HasIndex("FoodOrderId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ux_settlement_items_food_order_kind");
+
                     b.ToTable("settlement_items", null, t =>
                         {
                             t.HasCheckConstraint("ck_settlement_item_amounts", "gross_amount >= 0 AND commission_amount >= 0");
 
                             t.HasCheckConstraint("ck_settlement_item_kind", "kind IN ('sale', 'refund')");
+
+                            t.HasCheckConstraint("ck_settlement_item_subject", "num_nonnulls(booking_id, food_order_id) = 1");
                         });
                 });
 
@@ -3303,6 +3354,12 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_ledger_entries_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ledger_entries_food_orders_food_order_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Payments.PaymentAttempt", b =>
@@ -3311,8 +3368,13 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_payment_attempts_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_payment_attempts_food_orders_food_order_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Payments.ReconciliationException", b =>
@@ -3322,6 +3384,12 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_reconciliation_exceptions_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reconciliation_exceptions_food_orders_food_order_id");
 
                     b.HasOne("OnePondy.Domain.Payments.GatewayEvent", null)
                         .WithMany()
@@ -3354,8 +3422,13 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_refunds_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_refunds_food_orders_food_order_id");
 
                     b.HasOne("OnePondy.Domain.Payments.PaymentAttempt", null)
                         .WithMany()
@@ -3381,8 +3454,13 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("BookingId")
                         .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
                         .HasConstraintName("fk_settlement_items_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_settlement_items_food_orders_food_order_id");
 
                     b.HasOne("OnePondy.Domain.Payments.Settlement", null)
                         .WithMany()

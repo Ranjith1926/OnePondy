@@ -2,6 +2,7 @@ using System.Security.Claims;
 using OnePondy.Application.Common;
 using OnePondy.Application.Food;
 using OnePondy.Application.Identity;
+using OnePondy.Application.Payments;
 using OnePondy.Domain.Food;
 
 namespace OnePondy.Api.Http;
@@ -25,8 +26,9 @@ public sealed record OrderVersionBody(uint Version);
 public sealed record OrderReasonBody(uint Version, string? Reason);
 
 /// <summary>
-/// Food orders (spec Phase 8, step 8.2): a customer prices a cart, places an order and may cancel it while the restaurant has not
-/// started cooking; the restaurant works through its inbox. Paying for an order arrives in the next step.
+/// Food orders (spec Phase 8, steps 8.2 and 8.3): a customer prices a cart, places an order, pays once the restaurant accepts, and may
+/// cancel while the restaurant has not started cooking; the restaurant works through its inbox. A payment's result never comes from
+/// here: the gateway's webhook, or the server asking the gateway itself, confirms it.
 /// </summary>
 public static class FoodOrderEndpoints
 {
@@ -38,6 +40,12 @@ public static class FoodOrderEndpoints
         customer.MapGet("/orders", ListMine);
         customer.MapGet("/orders/{id:guid}", GetMine);
         customer.MapPost("/orders/{id:guid}/cancel", CancelMine);
+
+        // Safe to repeat: asking again returns the same gateway order while it is open.
+        customer.MapPost("/orders/{id:guid}/payment", StartPayment);
+
+        // "Is it paid yet?": the server asks the gateway itself, so a slow webhook never leaves a customer waiting.
+        customer.MapPost("/orders/{id:guid}/payment/refresh", RefreshPayment);
 
         var partner = app.MapGroup("/api/v1/partner/businesses/{businessId:guid}/orders").RequireAuthorization().WithTags("Partner orders");
         partner.MapGet("/", ListForBusiness);
@@ -82,6 +90,18 @@ public static class FoodOrderEndpoints
     private static async Task<IResult> CancelMine(
         Guid id, OrderReasonBody body, ClaimsPrincipal user, OrderService service, HttpContext httpContext, CancellationToken ct) =>
         EndpointResults.Ok(await service.CancelMineAsync(id, user.GetUserId(), body.Reason, body.Version, ct), httpContext);
+
+    private static async Task<IResult> StartPayment(Guid id, ClaimsPrincipal user, PaymentService payments, HttpContext httpContext, CancellationToken ct) =>
+        EndpointResults.Ok(await payments.StartFoodOrderPaymentAsync(id, user.GetUserId(), ct), httpContext);
+
+    private static async Task<IResult> RefreshPayment(
+        Guid id, ClaimsPrincipal user, PaymentService payments, OrderService orders, HttpContext httpContext, CancellationToken ct)
+    {
+        var error = await payments.CheckFoodOrderNowAsync(id, user.GetUserId(), ct);
+        return error is not null
+            ? ProblemResults.From(error, httpContext)
+            : EndpointResults.Ok(await orders.GetMineAsync(id, user.GetUserId(), ct), httpContext);
+    }
 
     private static async Task<IResult> ListForBusiness(
         Guid businessId, string? status, ClaimsPrincipal user, OrderService service, HttpContext httpContext, CancellationToken ct)

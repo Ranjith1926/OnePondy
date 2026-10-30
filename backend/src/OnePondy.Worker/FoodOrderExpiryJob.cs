@@ -2,7 +2,7 @@ using OnePondy.Application.Food;
 
 namespace OnePondy.Worker;
 
-/// <summary>Closes food orders the restaurant never answered, or the customer never paid for, every minute.</summary>
+/// <summary>Closes food orders the restaurant never answered, or the customer never paid for, every minute (asking the gateway first about unpaid ones).</summary>
 public sealed class FoodOrderExpiryJob(
     IServiceScopeFactory scopeFactory,
     TimeProvider time,
@@ -25,10 +25,20 @@ public sealed class FoodOrderExpiryJob(
         try
         {
             await using var scope = scopeFactory.CreateAsyncScope();
-            var expired = await scope.ServiceProvider.GetRequiredService<OrderService>().ExpireDueAsync(cancellationToken);
-            if (expired > 0)
+            var result = await scope.ServiceProvider.GetRequiredService<FoodOrderExpiry>().ExpireDueAsync(cancellationToken);
+            if (result.Expired > 0 || result.Resolved > 0 || result.Deferred > 0)
             {
-                logger.LogInformation("Food orders: {Expired} expired", expired);
+                logger.LogInformation(
+                    "Food orders: {Expired} expired, {Resolved} found paid at the gateway and confirmed, {Deferred} waiting for the gateway to answer",
+                    result.Expired,
+                    result.Resolved,
+                    result.Deferred);
+            }
+
+            if (result.Deferred > 0)
+            {
+                // A restaurant is waiting on these while Razorpay cannot be asked: worth an operator's attention.
+                logger.LogWarning("{Count} food orders are waiting because the payment gateway could not be asked", result.Deferred);
             }
         }
         catch (Exception exception) when (exception is not OperationCanceledException)

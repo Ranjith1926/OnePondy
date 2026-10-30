@@ -409,9 +409,12 @@ export type SettlementStatus = 'draft' | 'approved' | 'paid';
 
 export type SettlementItemKind = 'sale' | 'refund';
 
+/** A payment, refund or statement line is for a booking or (step 8.3) a food order: exactly one of the two ids is set. */
 export interface PaymentRow {
   id: string;
-  bookingId: string;
+  bookingId: string | null;
+  foodOrderId: string | null;
+  /** The listing, or "Food order". */
   listingTitle: string;
   businessId: string;
   businessName: string;
@@ -426,7 +429,8 @@ export interface PaymentRow {
 
 export interface RefundRow {
   id: string;
-  bookingId: string;
+  bookingId: string | null;
+  foodOrderId: string | null;
   listingTitle: string;
   businessName: string;
   amount: number;
@@ -456,7 +460,8 @@ export interface SettlementSummary {
 }
 
 export interface SettlementItem {
-  bookingId: string;
+  bookingId: string | null;
+  foodOrderId: string | null;
   listingTitle: string;
   serviceStartAt: string | null;
   kind: SettlementItemKind;
@@ -491,6 +496,7 @@ export interface ReconciliationExceptionView {
   kind: ReconciliationKind;
   status: ReconciliationStatus;
   bookingId: string | null;
+  foodOrderId: string | null;
   providerReference: string | null;
   expectedAmount: number | null;
   actualAmount: number | null;

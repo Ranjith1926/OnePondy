@@ -33,7 +33,7 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 22. [Reconciliation (Worker)](#22-reconciliation-worker)
 23. [Notifications (Expo push)](#23-notifications-expo-push)
 24. [Partner statements and payouts](#24-partner-statements-and-payouts)
-25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-and-82)
+25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-83)
 26. [Not built](#26-not-built)
 
 ---
@@ -867,17 +867,17 @@ per-listing commission.
 
 ---
 
-## 25. Food orders (Phase 8, steps 8.1 and 8.2)
+## 25. Food orders (Phase 8, steps 8.1 to 8.3)
 
 ### 25.1 States
 
 ```
-placed ──accept (online payment on)──► awaiting_payment ──paid (step 8.3)──► confirmed ──► preparing ──► ready_for_pickup ──► out_for_delivery ──► delivered
-   │      accept (payment off / nothing to pay) ────────────────────────────► confirmed                    (the last two are the driver's, step 8.7)
+placed ──accept (online payment on)──► awaiting_payment ──paid──► confirmed ──► preparing ──► ready_for_pickup ──► out_for_delivery ──► delivered
+   │      accept (payment off / nothing to pay) ─────────────────► confirmed                    (the last two are the driver's, step 8.7)
    ├─ reject (restaurant) ─► rejected
    ├─ cancel (customer) ───► cancelled          awaiting_payment also: expired · failed
    └─ no answer in time ───► expired
-rejected / cancelled ──(a payment was taken)──► refund_pending ──► refunded      (step 8.3)
+rejected / cancelled ──(a payment was taken)──► refund_pending ──► refunded
 ```
 
 Who may cancel: the **customer** from `placed`, `awaiting_payment` and `confirmed` (until the kitchen starts); the **restaurant** from `confirmed`,
@@ -911,13 +911,36 @@ save through and the other receives `order_changed` (409), never an error and ne
 
 ### 25.5 Expiry (Worker, `FoodOrderExpiryJob`, every minute)
 
-An order still `placed` or `awaiting_payment` after `expires_at` becomes `expired` (recorded as the system). Step 8.3 adds the gateway check before an
-`awaiting_payment` order expires, as bookings have.
+An order still `placed` or `awaiting_payment` after `expires_at` becomes `expired` (recorded as the system). Before an `awaiting_payment` order expires,
+Razorpay is asked whether it was paid, exactly as for a booking (§21): a payment found there is applied and the order confirmed instead; if Razorpay
+cannot be asked, the order waits up to `Food:GatewayCheckGrace` (5 minutes) and then expires anyway, and a payment that still arrives is refunded in full.
+Expiring, cancelling or rejecting an order also closes its open Razorpay order in the same save.
 
-### 25.6 Not built yet
+### 25.6 Paying for an order (step 8.3)
 
-Paying for an order and refunds (8.3), notifications about orders, the customer's food screens (8.4), the console inbox (8.5), the driver app and delivery
-(8.6 to 8.7), cash on delivery (8.8, only if approved), administrators' order monitoring (8.9).
+The same machinery as bookings (§20 to §24), with a payment, refund, ledger line and statement line belonging to the order instead of a booking.
+
+1. The restaurant accepts; with the `payments` module on, the order waits for payment (`Food:PaymentWindow`, 10 minutes).
+2. `POST /food/orders/{id}/payment` returns the Razorpay order to open in the app (the same one if asked twice, even at the same instant). The receipt
+   on Razorpay's side is `fo_` plus the order id, and the order's notes name `food_order_id`.
+3. The **signed webhook** (or the app's `POST /food/orders/{id}/payment/refresh`, which asks Razorpay itself, or reconciliation) applies the payment: the
+   order is confirmed and the ledger books the total as: commission on the dishes (`platform_commission`), the restaurant's share of the dishes plus
+   the packaging fee (`partner_payable`), the delivery fee (`delivery_fees`) and the GST (`tax_payable`). This split is provisional (D21, F3).
+4. A payment nothing wants any more (the order was cancelled, rejected or expired meanwhile, or it is a second payment) is recorded and refunded in
+   full, always, whatever the refund setting. A cancelled or rejected order moves to `refund_pending`; an expired one stays expired.
+5. **Cancelling a paid order** (the customer before cooking starts, or the restaurant until it leaves) refunds it **in full** (F8). While
+   `Payments:RefundsEnabled` is off (the default) that cancel is refused with `refunds_not_enabled` and nothing changes. When on, the cancellation,
+   the refund and `refund_pending` are saved together, then the refund is sent to Razorpay (retried by the Worker if it does not get through).
+   Razorpay's refund webhook completes it: `refunded`, and the ledger reverses every line of the payment.
+6. A **delivered** order goes on the restaurant's next statement: its side only (dishes and packaging, less commission), once. Until the driver app
+   (step 8.7) no order can be delivered through the API, so this is proven by tests only.
+
+The customer's order view shows the payment as a receipt and any refunds with their status.
+
+### 25.7 Not built yet
+
+Notifications about orders, an administrator's cancel of a food order, the customer's food screens (8.4), the console inbox (8.5), the driver app and
+delivery (8.6 to 8.7), cash on delivery (8.8, only if approved), administrators' order monitoring (8.9).
 
 ---
 
@@ -929,6 +952,6 @@ Paying for an order and refunds (8.3), notifications about orders, the customer'
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus and orders to the kitchen are built (section 25); paying, the app screens and delivery are not. |
+| Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus, orders to the kitchen and paying for them (sandbox) are built (section 25); the app screens and delivery are not. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

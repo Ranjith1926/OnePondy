@@ -264,13 +264,19 @@ All money is `numeric(12,2)`, currency `char(3)` (INR). Status columns are `snak
 list. Every foreign key below is `RESTRICT`: a financial record never loses the booking, payment or business it
 describes. The story behind these tables is in [workflows.md](workflows.md) §20–§24.
 
-**`payment_attempts`** – one row per gateway order (`provider` is `razorpay`). `booking_id`,
+Since step 8.3 (migration 16) a payment, a refund and a statement line belong to **a booking or a food order**:
+each has `booking_id` and `food_order_id`, and `num_nonnulls(booking_id, food_order_id) = 1` (`ck_*_subject`). A ledger
+line and a reconciliation exception may name at most one of the two (a payout names neither).
+
+**`payment_attempts`** – one row per gateway order (`provider` is `razorpay`). `booking_id` or `food_order_id`,
 `provider_order_id`, `provider_payment_id` (null until paid), `amount > 0`, `currency`, `status`
-(`created`, `captured`, `failed`, `expired`), `created_at`, `updated_at`. Has `xmin`.
+(`created`, `captured`, `failed`, `expired`), `created_at`, `updated_at`. Has `xmin`. A trigger (§5) stops an attempt
+ever changing what it pays for.
 - `ux_payment_attempts_order (provider_order_id)` and `ux_payment_attempts_payment (provider_payment_id)` (partial,
   where not null): an order or a payment is never recorded twice.
 - `ux_payment_attempts_open_booking (booking_id) WHERE status = 'created'`: a booking has at most one open order, so
-  two simultaneous "pay" taps get the same order.
+  two simultaneous "pay" taps get the same order. `ux_payment_attempts_open_food_order` does the same for a food order
+  (a null `booking_id` never collides in the first index, so each needs its own).
 - `ck_payment_attempt_captured`: a `captured` attempt must have a `provider_payment_id`.
 - `ix_payment_attempts_open` (partial, `created`) serves the Worker's check of orders still open at the gateway.
 
@@ -280,16 +286,16 @@ describes. The story behind these tables is in [workflows.md](workflows.md) §20
 `ix_gateway_events_unprocessed` (partial, `processed_at IS NULL`) finds events that never finished. Rows whose signature
 is wrong are not stored at all, so an unauthenticated caller cannot fill the table. Never deleted by the application.
 
-**`refunds`** – `payment_attempt_id`, `booking_id`, `amount > 0`, `reason` (`rejected`, `partner_cancelled`,
-`customer_cancelled`, `late_payment`), `status` (`pending`, `processed`, `failed`), `provider_refund_id`,
-`requested_at`, `processed_at`. `ck_refund_processed`: a `processed` refund has a provider refund id.
-`ux_refunds_provider_refund` is unique where not null. A trigger (§5) stops the refunds of one payment adding up to
-more than was captured.
+**`refunds`** – `payment_attempt_id`, `booking_id` or `food_order_id` (a copy of the payment's, which a trigger
+enforces), `amount > 0`, `reason` (`rejected`, `partner_cancelled`, `customer_cancelled`, `late_payment`), `status`
+(`pending`, `processed`, `failed`), `provider_refund_id`, `requested_at`, `processed_at`. `ck_refund_processed`: a
+`processed` refund has a provider refund id. `ux_refunds_provider_refund` is unique where not null. A trigger (§5)
+stops the refunds of one payment adding up to more than was captured.
 
 **`ledger_entries`** – the double-entry ledger, one row per line: `transaction_id`, `account`, `amount` (debit
-positive, credit negative, never zero), `booking_id` (null for a payout), `description`, `created_at`.
-- `ck_ledger_account`: one of `gateway_clearing`, `customer_refunds`, `platform_commission`, or
-  `partner_payable:<business id>` / `partner_paid:<business id>`.
+positive, credit negative, never zero), `booking_id` or `food_order_id` (neither for a payout), `description`, `created_at`.
+- `ck_ledger_account`: one of `gateway_clearing`, `customer_refunds`, `platform_commission`, `delivery_fees` and
+  `tax_payable` (food, step 8.3), or `partner_payable:<business id>` / `partner_paid:<business id>`.
 - `ux_ledger_entries_transaction_account (transaction_id, account)`: the transaction id is derived from the event
   (for example the payment attempt), so posting the same event twice is refused by the database, not only checked.
 - Triggers (§5) make every transaction sum to zero when it commits and make the table append-only.
@@ -300,14 +306,15 @@ positive, credit negative, never zero), `booking_id` (null for a payout), `descr
 - `ck_settlement_net`: `net_amount = gross_amount - commission_amount - refund_amount`.
 - `ck_settlement_paid`: a `paid` statement has a payout reference and a paid time.
 - `ux_settlements_period (business_id, period_start, period_end)`: one statement per business and period.
-- `settlement_items`: `settlement_id`, `booking_id`, `kind` (`sale`, `refund`), `gross_amount`, `commission_amount`
-  (both `>= 0`). `ux_settlement_items_booking_kind (booking_id, kind)`: a booking is a sale once and a refund at most
+- `settlement_items`: `settlement_id`, `booking_id` or `food_order_id`, `kind` (`sale`, `refund`), `gross_amount`,
+  `commission_amount` (both `>= 0`). `ux_settlement_items_booking_kind (booking_id, kind)` and
+  `ux_settlement_items_food_order_kind (food_order_id, kind)`: a booking or order is a sale once and a refund at most
   once, across every statement, so none can count it twice.
 
 **`reconciliation_exceptions`** – differences found between our records and the gateway's, listed for a person.
 `kind` (twelve values, for example `payment_mismatch`, `refund_stuck`, `ledger_problem`), `status` (`open`, `resolved`,
 `auto_resolved`), `fingerprint` (unique, so finding the same problem again bumps `occurrences` and `last_seen_at`
-instead of adding a row), optional links to the booking, payment attempt, refund and gateway event,
+instead of adding a row), optional links to the booking or food order, payment attempt, refund and gateway event,
 `provider_reference`, `expected_amount`, `actual_amount`, `detail`, `first_seen_at`, `last_seen_at`, `occurrences`,
 `resolved_at`, `resolved_by_user_id`, `resolution_note`. `ck_reconciliation_person_note`: a `resolved` one names who and
 why; `ck_reconciliation_resolved`: it has a resolved time exactly when it is not `open`.
@@ -364,6 +371,13 @@ considered it); the app reads the receipt and refunds from the booking detail in
 - Triggers: `food_order_records_are_immutable()` refuses `UPDATE`, `DELETE` and `TRUNCATE` on lines and history; `food_order_matches_its_lines()` is a deferred
   constraint trigger that, at commit, refuses an order whose `subtotal` and `tax_amount` are not the sums of its lines (so an order cannot exist without lines).
 
+**Paying for orders (step 8.3, migration 16, `AddFoodOrderPayments`).** No new tables: the Phase 7 payment tables (§3.7) gained `food_order_id`
+(RESTRICT) with the exactly-one rules above, their own indexes (`ix_payment_attempts_food_order`, `ux_payment_attempts_open_food_order`,
+`ix_refunds_food_order`, `ix_ledger_entries_food_order`, `ux_settlement_items_food_order_kind`), two ledger accounts (`delivery_fees`, `tax_payable`) and two
+triggers (§5). Only columns were added and `booking_id` made nullable; no existing row is rewritten (the ledger is append-only). A food payment posts
+five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes), `partner_payable` (dishes and packaging less commission),
+`delivery_fees` and `tax_payable`; a food refund reverses them exactly.
+
 ## 4. Foreign-key delete policy
 
 | Parent → child | Policy | Reason |
@@ -376,7 +390,7 @@ considered it); the app reads the receipt and refunds from the booking detail in
 | `businesses` → `listings`, `listings` → `availability_slots` | RESTRICT | Commercial history must survive. |
 | `listings`/`availability_slots` → bookings, `booking_slots` | RESTRICT | A booking can never lose its listing or slot. |
 | `bookings` → `booking_slots`, `booking_status_history` | RESTRICT | History is immutable. |
-| `bookings`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
+| `bookings`, `food_orders`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
 | `app_users`, `user_sessions` → `device_tokens` | CASCADE | A phone is meaningful only while its session lives. |
 | `device_tokens` → `notification_log` | SET NULL | The log survives a removed phone. |
 | `app_users`, `outbox_messages` → `notification_log` | RESTRICT | The log is kept for the retention period. |
@@ -396,6 +410,8 @@ migration; EF Core cannot express a non-cascade ownership FK in the model snapsh
 | `trg_refunds_within_captured` (row), function `refunds_within_captured_amount()` | `refunds` | Locks the payment and raises if its refunds (other than failed ones) would exceed what was captured, so two simultaneous refunds cannot both pass. |
 | `trg_food_order_status_history_append_only` / `_no_truncate` and `trg_food_order_lines_append_only` / `_no_truncate`, function `food_order_records_are_immutable()` | `food_order_status_history`, `food_order_lines` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: an order's lines and history are written once. |
 | `trg_food_orders_match_lines` and `trg_food_order_lines_match_order` (rows, **deferred constraint triggers**), function `food_order_matches_its_lines()` | `food_orders`, `food_order_lines` | At commit, raises unless the order's `subtotal` and `tax_amount` equal the sums of its lines. |
+| `trg_payment_attempts_keep_subject` (row), function `payment_attempt_keeps_its_subject()` | `payment_attempts` | Raises if an update changes `booking_id` or `food_order_id`: a payment is for one thing for good. |
+| `trg_refunds_match_payment` (row), function `refund_matches_its_payment()` | `refunds` | Raises unless the refund's `booking_id` and `food_order_id` are its payment's, so money is only ever given back for what was paid for. |
 
 ## 6. Migrations
 
@@ -418,6 +434,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 13 | `20261029110845_AddSettlementRowVersion` | `xmin` row version on `settlements` (no new physical column). |
 | 14 | `20261029130624_AddRestaurantsAndMenus` | `restaurant_profiles`, `restaurant_delivery_areas`, `menu_categories`, `menu_items`. |
 | 15 | `20261029152153_AddFoodOrders` | `food_orders`, `food_order_lines`, `food_order_status_history`; their immutability and sum-of-lines triggers. |
+| 16 | `20261029235224_AddFoodOrderPayments` | `food_order_id` on the payment, refund, ledger, statement-line and reconciliation tables, the exactly-one checks, the `delivery_fees` and `tax_payable` accounts, and the subject triggers. |
 
 Rules for new migrations:
 

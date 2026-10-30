@@ -22,7 +22,8 @@ public sealed record ReconciliationExceptionView(
     DateTimeOffset LastSeenAt,
     int Occurrences,
     DateTimeOffset? ResolvedAt,
-    string? ResolutionNote);
+    string? ResolutionNote,
+    Guid? FoodOrderId);
 
 public static class ReconciliationErrors
 {
@@ -95,7 +96,7 @@ public sealed class ReconciliationExceptionService(IOnePondyDbContext db, AuditT
             AuditActions.ReconciliationExceptionResolved,
             AuditEntityTypes.ReconciliationException,
             exception.Id,
-            new { kind = exception.Kind.ToString(), exception.BookingId, exception.ProviderReference, note = trimmed });
+            new { kind = exception.Kind.ToString(), exception.BookingId, exception.FoodOrderId, exception.ProviderReference, note = trimmed });
         await db.SaveChangesAsync(cancellationToken);
         return ToView(exception);
     }
@@ -116,5 +117,6 @@ public sealed class ReconciliationExceptionService(IOnePondyDbContext db, AuditT
         e.LastSeenAt,
         e.Occurrences,
         e.ResolvedAt,
-        e.ResolutionNote);
+        e.ResolutionNote,
+        e.FoodOrderId);
 }

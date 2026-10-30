@@ -22,12 +22,24 @@ public sealed class RazorpayPaymentGateway(HttpClient httpClient, IOptions<Payme
 
     public async Task<Result<GatewayOrder>> CreateOrderAsync(GatewayOrderRequest request, CancellationToken cancellationToken)
     {
+        // The note names what is paid for, so a payment on the gateway's dashboard can be traced to a booking or a food order.
+        var notes = new Dictionary<string, string>();
+        if (request.BookingId is { } bookingId)
+        {
+            notes["booking_id"] = bookingId.ToString("D");
+        }
+
+        if (request.FoodOrderId is { } foodOrderId)
+        {
+            notes["food_order_id"] = foodOrderId.ToString("D");
+        }
+
         var body = new
         {
             amount = request.AmountPaise,
             currency = request.Currency,
             receipt = request.Receipt,
-            notes = new { booking_id = request.BookingId.ToString("D") },
+            notes,
         };
 
         var response = await PostAsync("orders", body, cancellationToken);

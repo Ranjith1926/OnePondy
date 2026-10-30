@@ -52,6 +52,25 @@ public class SettlementTests
     }
 
     [Fact]
+    public async Task A_booking_paid_twice_is_settled_on_the_payment_that_confirmed_it()
+    {
+        // The second payment was held for the customer and refunded; it never reached the partner, so it is no part of the sale.
+        var (booking, _, _) = await _h.PaidAsync();
+        var duplicate = PaymentAttempt.Create(booking.Id, "order_dup", 1000m, "INR", _h.Bookings.Time.GetUtcNow());
+        _h.Bookings.Db.PaymentAttempts.Add(duplicate);
+        await _h.Bookings.Db.SaveChangesAsync();
+        Assert.Equal(CaptureOutcome.RefundRaised, (await _h.Payments.RecordCaptureAsync("order_dup", "pay_dup", 1000m, None)).Value!.Outcome);
+        var current = await _h.BookingAsync(booking.Id);
+        await _h.Bookings.Bookings.CompleteAsync(BusinessId, current.Id, current.Version, _h.Bookings.Owner, None);
+
+        var draft = await DraftAsync();
+
+        Assert.True(draft.IsSuccess, draft.Error?.Detail);
+        Assert.Equal((1000m, 100m, 900m), (draft.Value!.Settlement.GrossAmount, draft.Value.Settlement.CommissionAmount, draft.Value.Settlement.NetAmount));
+        Assert.Equal(await OwedToPartnerAsync(), draft.Value.Settlement.NetAmount);
+    }
+
+    [Fact]
     public async Task A_booking_that_is_only_confirmed_is_not_on_a_statement_yet()
     {
         await _h.PaidAsync();
@@ -296,7 +315,7 @@ public class SettlementTests
     {
         var detail = new SettlementDetail(
             new SettlementSummary(Guid.NewGuid(), Guid.NewGuid(), "Biz", new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 7), 100m, 10m, 0m, 90m, SettlementStatus.Approved, null, DateTimeOffset.UnixEpoch, null, null, 1),
-            [new SettlementItemView(Guid.NewGuid(), typed, null, SettlementItemKind.Sale, 100m, 10m, 90m)]);
+            [new SettlementItemView(Guid.NewGuid(), null, typed, null, SettlementItemKind.Sale, 100m, 10m, 90m)]);
 
         var row = StatementCsv.Render(detail).Split("\r\n", StringSplitOptions.RemoveEmptyEntries).Last();
 
@@ -308,7 +327,7 @@ public class SettlementTests
     {
         var detail = new SettlementDetail(
             new SettlementSummary(Guid.NewGuid(), Guid.NewGuid(), "Biz", new DateOnly(2026, 10, 1), new DateOnly(2026, 10, 7), 0m, 0m, 0m, 0m, SettlementStatus.Approved, null, DateTimeOffset.UnixEpoch, null, null, 1),
-            [new SettlementItemView(Guid.NewGuid(), "Kayaking", null, SettlementItemKind.Refund, 500m, 50m, -450m)]);
+            [new SettlementItemView(Guid.NewGuid(), null, "Kayaking", null, SettlementItemKind.Refund, 500m, 50m, -450m)]);
 
         Assert.EndsWith(",Refund,500.00,50.00,-450.00", StatementCsv.Render(detail).TrimEnd(), StringComparison.Ordinal);
     }

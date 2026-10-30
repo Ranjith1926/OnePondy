@@ -121,6 +121,7 @@ public sealed class ReconciliationService(
                 $"Payment {paymentId} was found at the gateway with no webhook and was applied ({applied.Value.Outcome}).",
                 "Applied from the gateway's own record, by the same path a webhook takes.",
                 bookingId: attempt.BookingId,
+                foodOrderId: attempt.FoodOrderId,
                 paymentAttemptId: attempt.Id,
                 providerReference: paymentId,
                 amount: attempt.Amount);
@@ -141,6 +142,7 @@ public sealed class ReconciliationService(
             $"payment_mismatch:{attempt.Id}",
             $"The gateway reports payment {paymentId} for {amountPaise / 100m:0.00}, but this order is for {attempt.Amount:0.00} ({applied.Error.Code}). It was not applied.",
             bookingId: attempt.BookingId,
+            foodOrderId: attempt.FoodOrderId,
             paymentAttemptId: attempt.Id,
             providerReference: paymentId,
             expectedAmount: attempt.Amount,
@@ -180,6 +182,7 @@ public sealed class ReconciliationService(
                             $"Refund {refund.ProviderRefundId} was paid out at the gateway with no webhook and was applied.",
                             "Applied from the gateway's own record, by the same path a webhook takes.",
                             bookingId: refund.BookingId,
+                            foodOrderId: refund.FoodOrderId,
                             refundId: refund.Id,
                             providerReference: refund.ProviderRefundId,
                             amount: refund.Amount);
@@ -205,6 +208,7 @@ public sealed class ReconciliationService(
                             $"refund_stuck:{refund.Id}",
                             $"Refund {refund.ProviderRefundId} of {refund.Amount:0.00} has been pending at the gateway since {refund.RequestedAt:u}.",
                             bookingId: refund.BookingId,
+                            foodOrderId: refund.FoodOrderId,
                             refundId: refund.Id,
                             providerReference: refund.ProviderRefundId,
                             actualAmount: refund.Amount);
@@ -237,6 +241,7 @@ public sealed class ReconciliationService(
                 $"refund_not_sent:{refund.Id}",
                 $"Refund of {refund.Amount:0.00} has not reached the gateway since {refund.RequestedAt:u}.",
                 bookingId: refund.BookingId,
+                foodOrderId: refund.FoodOrderId,
                 refundId: refund.Id,
                 actualAmount: refund.Amount);
         }
@@ -248,6 +253,7 @@ public sealed class ReconciliationService(
         $"refund_failed:{refund.Id}",
         $"Refund of {refund.Amount:0.00} failed at the gateway; the customer has not been paid back.",
         bookingId: refund.BookingId,
+        foodOrderId: refund.FoodOrderId,
         refundId: refund.Id,
         providerReference: refund.ProviderRefundId,
         actualAmount: refund.Amount,
@@ -313,6 +319,7 @@ public sealed class ReconciliationService(
                 $"ledger_missing:capture:{attempt.Id}",
                 $"Payment {attempt.ProviderPaymentId} of {attempt.Amount:0.00} is recorded as received but has no ledger entries.",
                 bookingId: attempt.BookingId,
+                foodOrderId: attempt.FoodOrderId,
                 paymentAttemptId: attempt.Id,
                 providerReference: attempt.ProviderPaymentId,
                 actualAmount: attempt.Amount,
@@ -333,6 +340,7 @@ public sealed class ReconciliationService(
                 $"ledger_missing:refund:{refund.Id}",
                 $"Refund {refund.ProviderRefundId} of {refund.Amount:0.00} is recorded as paid but has no ledger entries.",
                 bookingId: refund.BookingId,
+                foodOrderId: refund.FoodOrderId,
                 refundId: refund.Id,
                 providerReference: refund.ProviderRefundId,
                 actualAmount: refund.Amount,
@@ -455,6 +463,7 @@ public sealed class ReconciliationService(
                     $"payment_mismatch:{attempt.Id}",
                     $"The gateway holds payment {record.PaymentId} for {record.AmountPaise / 100m:0.00}, but the order is for {attempt.Amount:0.00}.",
                     bookingId: attempt.BookingId,
+                    foodOrderId: attempt.FoodOrderId,
                     paymentAttemptId: attempt.Id,
                     providerReference: record.PaymentId,
                     expectedAmount: attempt.Amount,
@@ -477,6 +486,7 @@ public sealed class ReconciliationService(
                     $"payment_id_mismatch:{attempt.Id}",
                     $"Order {attempt.ProviderOrderId} is recorded as paid by {attempt.ProviderPaymentId}, but the gateway shows payment {record.PaymentId}.",
                     bookingId: attempt.BookingId,
+                    foodOrderId: attempt.FoodOrderId,
                     paymentAttemptId: attempt.Id,
                     providerReference: record.PaymentId,
                     cancellationToken: cancellationToken);
@@ -497,6 +507,7 @@ public sealed class ReconciliationService(
                     $"refund_total_mismatch:{attempt.Id}",
                     $"For payment {record.PaymentId} the gateway has refunded {record.AmountRefundedPaise / 100m:0.00}, but our refunds add up to {ourPaise / 100m:0.00}.",
                     bookingId: attempt.BookingId,
+                    foodOrderId: attempt.FoodOrderId,
                     paymentAttemptId: attempt.Id,
                     providerReference: record.PaymentId,
                     expectedAmount: ourPaise / 100m,
@@ -521,6 +532,7 @@ public sealed class ReconciliationService(
                     $"payment_missing_at_gateway:{attempt.Id}",
                     $"Payment {attempt.ProviderPaymentId} of {attempt.Amount:0.00} is recorded as received on {day:yyyy-MM-dd}, but the gateway does not list it as captured.",
                     bookingId: attempt.BookingId,
+                    foodOrderId: attempt.FoodOrderId,
                     paymentAttemptId: attempt.Id,
                     providerReference: attempt.ProviderPaymentId,
                     expectedAmount: attempt.Amount,
@@ -563,7 +575,8 @@ public sealed class ReconciliationService(
         string? providerReference = null,
         decimal? expectedAmount = null,
         decimal? actualAmount = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        Guid? foodOrderId = null)
     {
         var now = time.GetUtcNow();
         var existing = await db.ReconciliationExceptions.FirstOrDefaultAsync(e => e.Fingerprint == fingerprint, cancellationToken);
@@ -579,7 +592,18 @@ public sealed class ReconciliationService(
         }
 
         var created = ReconciliationException.Detect(
-            kind, fingerprint, detail, now, bookingId, paymentAttemptId, refundId, gatewayEventId, providerReference, expectedAmount, actualAmount);
+            kind,
+            fingerprint,
+            detail,
+            now,
+            bookingId: bookingId,
+            paymentAttemptId: paymentAttemptId,
+            refundId: refundId,
+            gatewayEventId: gatewayEventId,
+            providerReference: providerReference,
+            expectedAmount: expectedAmount,
+            actualAmount: actualAmount,
+            foodOrderId: foodOrderId);
         db.ReconciliationExceptions.Add(created);
         try
         {
@@ -604,7 +628,8 @@ public sealed class ReconciliationService(
         Guid? paymentAttemptId = null,
         Guid? refundId = null,
         string? providerReference = null,
-        decimal? amount = null)
+        decimal? amount = null,
+        Guid? foodOrderId = null)
     {
         if (await db.ReconciliationExceptions.AnyAsync(e => e.Fingerprint == fingerprint))
         {
@@ -613,7 +638,16 @@ public sealed class ReconciliationService(
 
         var now = time.GetUtcNow();
         var created = ReconciliationException.Detect(
-            kind, fingerprint, detail, now, bookingId, paymentAttemptId, refundId, null, providerReference, null, amount);
+            kind,
+            fingerprint,
+            detail,
+            now,
+            bookingId: bookingId,
+            paymentAttemptId: paymentAttemptId,
+            refundId: refundId,
+            providerReference: providerReference,
+            actualAmount: amount,
+            foodOrderId: foodOrderId);
         created.AutoResolve(note, now);
         db.ReconciliationExceptions.Add(created);
         try

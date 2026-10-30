@@ -4,10 +4,13 @@ using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Payments;
 
-/// <summary>One payment attempt, for the console. No customer details: the booking id is how support finds the rest.</summary>
+/// <summary>
+/// One payment attempt, for the console. No customer details: the booking or food order id (exactly one is set) is how support finds
+/// the rest. A food order's "listing" is shown as "Food order" and its business is the restaurant.
+/// </summary>
 public sealed record PaymentRow(
     Guid Id,
-    Guid BookingId,
+    Guid? BookingId,
     string ListingTitle,
     Guid BusinessId,
     string BusinessName,
@@ -17,11 +20,12 @@ public sealed record PaymentRow(
     string ProviderOrderId,
     string? ProviderPaymentId,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    Guid? FoodOrderId);
 
 public sealed record RefundRow(
     Guid Id,
-    Guid BookingId,
+    Guid? BookingId,
     string ListingTitle,
     string BusinessName,
     decimal Amount,
@@ -29,7 +33,8 @@ public sealed record RefundRow(
     RefundStatus Status,
     string? ProviderRefundId,
     DateTimeOffset RequestedAt,
-    DateTimeOffset? ProcessedAt);
+    DateTimeOffset? ProcessedAt,
+    Guid? FoodOrderId);
 
 public sealed record PaymentQuery(PaymentAttemptStatus? Status, Guid? BusinessId, int? Page, int? PageSize);
 
@@ -38,6 +43,8 @@ public sealed record RefundQuery(RefundStatus? Status, int? Page, int? PageSize)
 /// <summary>What the console shows of money in and out: every payment attempt and every refund, newest first (spec Phase 7).</summary>
 public sealed class PaymentAdminService(IOnePondyDbContext db)
 {
+    public const string FoodOrderTitle = "Food order";
+
     public async Task<PagedResult<PaymentRow>> ListPaymentsAsync(PaymentQuery query, CancellationToken cancellationToken)
     {
         var (page, pageSize) = Paging.Normalize(query.Page, query.PageSize);
@@ -50,7 +57,9 @@ public sealed class PaymentAdminService(IOnePondyDbContext db)
         if (query.BusinessId is { } businessId)
         {
             var bookingIds = db.Bookings.Where(b => b.BusinessId == businessId).Select(b => b.Id);
-            attempts = attempts.Where(a => bookingIds.Contains(a.BookingId));
+            var orderIds = db.FoodOrders.Where(o => o.BusinessId == businessId).Select(o => o.Id);
+            attempts = attempts.Where(a =>
+                (a.BookingId != null && bookingIds.Contains(a.BookingId.Value)) || (a.FoodOrderId != null && orderIds.Contains(a.FoodOrderId.Value)));
         }
 
         var total = await attempts.CountAsync(cancellationToken);
@@ -60,23 +69,24 @@ public sealed class PaymentAdminService(IOnePondyDbContext db)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        var context = await ContextAsync(rows.Select(a => a.BookingId).Distinct().ToList(), cancellationToken);
+        var context = await ContextAsync(rows.Select(a => (a.BookingId, a.FoodOrderId)), cancellationToken);
         var items = rows.Select(a =>
         {
-            var booking = context.GetValueOrDefault(a.BookingId);
+            var about = context.GetValueOrDefault(a.BookingId ?? a.FoodOrderId!.Value);
             return new PaymentRow(
                 a.Id,
                 a.BookingId,
-                booking?.ListingTitle ?? string.Empty,
-                booking?.BusinessId ?? Guid.Empty,
-                booking?.BusinessName ?? string.Empty,
+                about?.Title ?? string.Empty,
+                about?.BusinessId ?? Guid.Empty,
+                about?.BusinessName ?? string.Empty,
                 a.Amount,
                 a.Currency,
                 a.Status,
                 a.ProviderOrderId,
                 a.ProviderPaymentId,
                 a.CreatedAt,
-                a.UpdatedAt);
+                a.UpdatedAt,
+                a.FoodOrderId);
         });
         return new PagedResult<PaymentRow>([.. items], page, pageSize, total);
     }
@@ -97,40 +107,59 @@ public sealed class PaymentAdminService(IOnePondyDbContext db)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        var context = await ContextAsync(rows.Select(r => r.BookingId).Distinct().ToList(), cancellationToken);
+        var context = await ContextAsync(rows.Select(r => (r.BookingId, r.FoodOrderId)), cancellationToken);
         var items = rows.Select(r =>
         {
-            var booking = context.GetValueOrDefault(r.BookingId);
+            var about = context.GetValueOrDefault(r.BookingId ?? r.FoodOrderId!.Value);
             return new RefundRow(
                 r.Id,
                 r.BookingId,
-                booking?.ListingTitle ?? string.Empty,
-                booking?.BusinessName ?? string.Empty,
+                about?.Title ?? string.Empty,
+                about?.BusinessName ?? string.Empty,
                 r.Amount,
                 r.Reason,
                 r.Status,
                 r.ProviderRefundId,
                 r.RequestedAt,
-                r.ProcessedAt);
+                r.ProcessedAt,
+                r.FoodOrderId);
         });
         return new PagedResult<RefundRow>([.. items], page, pageSize, total);
     }
 
-    private sealed record BookingContext(string ListingTitle, Guid BusinessId, string BusinessName);
+    private sealed record Context(string Title, Guid BusinessId, string BusinessName);
 
-    /// <summary>The listing and business names for a page of rows, in three plain queries (as the booking lists do).</summary>
-    private async Task<Dictionary<Guid, BookingContext>> ContextAsync(List<Guid> bookingIds, CancellationToken cancellationToken)
+    /// <summary>
+    /// The listing (or "Food order") and business names for a page of rows, keyed by booking or food order id, in plain queries (as
+    /// the booking lists do). The ids are version 7 GUIDs, so a booking and an order never share one.
+    /// </summary>
+    private async Task<Dictionary<Guid, Context>> ContextAsync(IEnumerable<(Guid? BookingId, Guid? FoodOrderId)> subjects, CancellationToken cancellationToken)
     {
+        var list = subjects.ToList();
+        var bookingIds = list.Where(s => s.BookingId != null).Select(s => s.BookingId!.Value).Distinct().ToList();
+        var orderIds = list.Where(s => s.FoodOrderId != null).Select(s => s.FoodOrderId!.Value).Distinct().ToList();
+
         var bookings = await db.Bookings.AsNoTracking()
             .Where(b => bookingIds.Contains(b.Id))
             .Select(b => new { b.Id, b.ListingId, b.BusinessId })
             .ToListAsync(cancellationToken);
+        var orders = await db.FoodOrders.AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id))
+            .Select(o => new { o.Id, o.BusinessId })
+            .ToListAsync(cancellationToken);
         var listingIds = bookings.Select(b => b.ListingId).Distinct().ToList();
-        var businessIds = bookings.Select(b => b.BusinessId).Distinct().ToList();
+        var businessIds = bookings.Select(b => b.BusinessId).Concat(orders.Select(o => o.BusinessId)).Distinct().ToList();
         var titles = await db.Listings.AsNoTracking().Where(l => listingIds.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => l.Title, cancellationToken);
         var names = await db.Businesses.AsNoTracking().Where(b => businessIds.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name, cancellationToken);
-        return bookings.ToDictionary(
+
+        var context = bookings.ToDictionary(
             b => b.Id,
-            b => new BookingContext(titles.GetValueOrDefault(b.ListingId, string.Empty), b.BusinessId, names.GetValueOrDefault(b.BusinessId, string.Empty)));
+            b => new Context(titles.GetValueOrDefault(b.ListingId, string.Empty), b.BusinessId, names.GetValueOrDefault(b.BusinessId, string.Empty)));
+        foreach (var order in orders)
+        {
+            context[order.Id] = new Context(FoodOrderTitle, order.BusinessId, names.GetValueOrDefault(order.BusinessId, string.Empty));
+        }
+
+        return context;
     }
 }

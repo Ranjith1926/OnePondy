@@ -5,6 +5,7 @@ using OnePondy.Application.Audit;
 using OnePondy.Application.Common;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Bookings;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Payments;
@@ -26,9 +27,13 @@ public sealed record SettlementSummary(
     DateTimeOffset? PaidAt,
     uint Version);
 
-/// <summary>One booking's line on a statement. No customer details: a booking id and the listing are enough to find it.</summary>
+/// <summary>
+/// One booking's or food order's line on a statement. No customer details: the id and the listing (or "Food order") are enough to find
+/// it. Exactly one of <c>BookingId</c> and <c>FoodOrderId</c> is set.
+/// </summary>
 public sealed record SettlementItemView(
-    Guid BookingId,
+    Guid? BookingId,
+    Guid? FoodOrderId,
     string ListingTitle,
     DateTimeOffset? ServiceStartAt,
     SettlementItemKind Kind,
@@ -56,7 +61,7 @@ public static class SettlementErrors
     public static readonly AppError NothingDue = new(
         "settlement_nothing_due",
         ErrorKind.Conflict,
-        "Nothing is payable to this business for that period yet. Completed bookings, or refunds on earlier statements, are what make a statement.");
+        "Nothing is payable to this business for that period yet. Completed bookings, delivered food orders, or refunds on earlier statements, are what make a statement.");
 
     public static readonly AppError PeriodExists = new(
         "settlement_period_exists",
@@ -71,12 +76,12 @@ public static class SettlementErrors
     public static readonly AppError Busy = new(
         "settlement_busy",
         ErrorKind.Conflict,
-        "The statement changed at the same moment, or one of its bookings went onto another statement. Reload and try again.");
+        "The statement changed at the same moment, or one of its bookings or orders went onto another statement. Reload and try again.");
 
     public static readonly AppError LedgerMismatch = new(
         "settlement_ledger_mismatch",
         ErrorKind.Conflict,
-        "The statement does not agree with the ledger for one of its bookings, so it was not created. Check the payments for that business.");
+        "The statement does not agree with the ledger for one of its bookings or orders, so it was not created. Check the payments for that business.");
 }
 
 /// <summary>
@@ -86,6 +91,9 @@ public static class SettlementErrors
 /// <list type="bullet">
 /// <item>A booking is on a statement once it is <c>completed</c>, or <c>refunded</c> after a partial refund (the partner keeps
 /// what the customer was not given back). A fully refunded booking owes the partner nothing and never appears.</item>
+/// <item>A food order is on a statement once it is <c>delivered</c>. Its line is the restaurant's side of the order (the dishes and
+/// the packaging fee, less commission); the delivery fee and the GST are not the restaurant's. Food refunds are always in full, so a
+/// refunded order is never on one.</item>
 /// <item>Marking a statement paid posts the payout to the ledger (<c>partner_payable</c> down, <c>partner_paid</c> up).</item>
 /// <item>A booking is a sale once and a refund at most once (a database rule), so no statement counts it twice. A refund that comes
 /// after its sale was settled is carried on a later statement as an adjustment.</item>
@@ -182,7 +190,9 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
         db.Settlements.Add(settlement);
         foreach (var line in lines.Items)
         {
-            db.SettlementItems.Add(SettlementItem.Create(settlement.Id, line.BookingId, line.Kind, line.GrossAmount, line.CommissionAmount));
+            db.SettlementItems.Add(line.FoodOrderId is { } orderId
+                ? SettlementItem.CreateForFoodOrder(settlement.Id, orderId, line.Kind, line.GrossAmount, line.CommissionAmount)
+                : SettlementItem.Create(settlement.Id, line.BookingId!.Value, line.Kind, line.GrossAmount, line.CommissionAmount));
         }
 
         audit.Record(
@@ -198,7 +208,7 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
         }
         catch (Exception ex) when (WriteConflicts.Is(ex))
         {
-            // The same period was drafted at the same moment, or a booking landed on another statement meanwhile.
+            // The same period was drafted at the same moment, or a booking or order landed on another statement meanwhile.
             db.ClearTracked();
             return SettlementErrors.Busy;
         }
@@ -374,33 +384,46 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
             .Select(b => b.Name)
             .SingleOrDefaultAsync(cancellationToken) ?? string.Empty;
         var items = await db.SettlementItems.AsNoTracking().Where(i => i.SettlementId == settlement.Id).ToListAsync(cancellationToken);
-        var bookingIds = items.Select(i => i.BookingId).ToList();
+        var bookingIds = items.Where(i => i.BookingId != null).Select(i => i.BookingId!.Value).ToList();
         var bookings = await db.Bookings.AsNoTracking()
             .Where(b => bookingIds.Contains(b.Id))
             .Select(b => new { b.Id, b.ListingId, b.StartAt })
-            .ToListAsync(cancellationToken);
-        var listingIds = bookings.Select(b => b.ListingId).Distinct().ToList();
+            .ToDictionaryAsync(b => b.Id, cancellationToken);
+        var listingIds = bookings.Values.Select(b => b.ListingId).Distinct().ToList();
         var titles = await db.Listings.AsNoTracking()
             .Where(l => listingIds.Contains(l.Id))
             .ToDictionaryAsync(l => l.Id, l => l.Title, cancellationToken);
-        var byBooking = bookings.ToDictionary(b => b.Id);
+
+        // A delivered order's date is when it was delivered: the last change to a delivered order is its delivery.
+        var orderIds = items.Where(i => i.FoodOrderId != null).Select(i => i.FoodOrderId!.Value).ToList();
+        var deliveredAt = await db.FoodOrders.AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id))
+            .ToDictionaryAsync(o => o.Id, o => o.UpdatedAt, cancellationToken);
 
         var views = items
             .Select(i =>
             {
-                var booking = byBooking[i.BookingId];
                 var share = i.GrossAmount - i.CommissionAmount;
+                var partnerAmount = i.Kind == SettlementItemKind.Sale ? share : -share;
+                if (i.FoodOrderId is { } orderId)
+                {
+                    return new SettlementItemView(
+                        null, orderId, "Food order", deliveredAt.GetValueOrDefault(orderId), i.Kind, i.GrossAmount, i.CommissionAmount, partnerAmount);
+                }
+
+                var booking = bookings[i.BookingId!.Value];
                 return new SettlementItemView(
                     i.BookingId,
+                    null,
                     titles.GetValueOrDefault(booking.ListingId, string.Empty),
                     booking.StartAt,
                     i.Kind,
                     i.GrossAmount,
                     i.CommissionAmount,
-                    i.Kind == SettlementItemKind.Sale ? share : -share);
+                    partnerAmount);
             })
             .OrderBy(v => v.ServiceStartAt)
-            .ThenBy(v => v.BookingId)
+            .ThenBy(v => v.BookingId ?? v.FoodOrderId)
             .ThenBy(v => v.Kind)
             .ToList();
         return new SettlementDetail(ToSummary(settlement, businessName), views);
@@ -423,7 +446,8 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
         s.PaidAt,
         s.Version);
 
-    private sealed record Line(Guid BookingId, SettlementItemKind Kind, decimal GrossAmount, decimal CommissionAmount);
+    /// <summary>One statement line, for a booking or (with <c>BookingId</c> null) a food order.</summary>
+    private sealed record Line(Guid? BookingId, Guid? FoodOrderId, SettlementItemKind Kind, decimal GrossAmount, decimal CommissionAmount);
 
     private sealed record Lines(IReadOnlyList<Line> Items, AppError? Error);
 
@@ -434,8 +458,85 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
     /// </summary>
     private async Task<Lines> BuildLinesAsync(Guid businessId, DateTimeOffset cutoff, CancellationToken cancellationToken)
     {
-        var onASale = db.SettlementItems.Where(i => i.Kind == SettlementItemKind.Sale).Select(i => i.BookingId);
-        var onARefund = db.SettlementItems.Where(i => i.Kind == SettlementItemKind.Refund).Select(i => i.BookingId);
+        var bookingLines = await BuildBookingLinesAsync(businessId, cutoff, cancellationToken);
+        if (bookingLines.Error is not null)
+        {
+            return bookingLines;
+        }
+
+        var foodLines = await BuildFoodLinesAsync(businessId, cutoff, cancellationToken);
+        return foodLines.Error is not null ? foodLines : new Lines([.. bookingLines.Items, .. foodLines.Items], null);
+    }
+
+    /// <summary>
+    /// Delivered food orders not yet on a statement. The restaurant's side of each is its dishes and packaging (less any discount); the
+    /// commission is what the order's payment booked; together they must equal what the ledger says the restaurant is owed for it.
+    /// </summary>
+    private async Task<Lines> BuildFoodLinesAsync(Guid businessId, DateTimeOffset cutoff, CancellationToken cancellationToken)
+    {
+        var onASale = db.SettlementItems
+            .Where(i => i.Kind == SettlementItemKind.Sale && i.FoodOrderId != null)
+            .Select(i => i.FoodOrderId!.Value);
+        var delivered = await db.FoodOrders.AsNoTracking()
+            .Where(o => o.BusinessId == businessId
+                && o.Status == FoodOrderStatus.Delivered
+                && o.UpdatedAt < cutoff
+                && !onASale.Contains(o.Id))
+            .OrderBy(o => o.UpdatedAt)
+            .Select(o => new { o.Id, RestaurantGross = o.Subtotal - o.DiscountAmount + o.PackagingFee })
+            .Take(MaxBookingsPerStatement)
+            .ToListAsync(cancellationToken);
+        if (delivered.Count == 0)
+        {
+            return new Lines([], null);
+        }
+
+        var orderIds = delivered.Select(o => o.Id).ToList();
+        var partnerAccount = LedgerAccounts.PartnerPayable(businessId);
+        var attempts = await db.PaymentAttempts.AsNoTracking()
+            .Where(a => a.FoodOrderId != null && orderIds.Contains(a.FoodOrderId.Value) && a.Status == PaymentAttemptStatus.Captured)
+            .Select(a => new { a.Id, OrderId = a.FoodOrderId!.Value })
+            .ToListAsync(cancellationToken);
+        var entries = await db.LedgerEntries.AsNoTracking()
+            .Where(e => e.FoodOrderId != null && orderIds.Contains(e.FoodOrderId.Value)
+                && (e.Account == partnerAccount || e.Account == LedgerAccounts.PlatformCommission))
+            .Select(e => new { OrderId = e.FoodOrderId!.Value, e.TransactionId, e.Account, e.Amount })
+            .ToListAsync(cancellationToken);
+
+        var lines = new List<Line>();
+        foreach (var order in delivered)
+        {
+            var mine = entries.Where(e => e.OrderId == order.Id).ToList();
+
+            // The payment that paid the restaurant is the one whose capture posted a restaurant share; a second payment was held for
+            // the customer instead and is no part of the statement.
+            var paying = attempts
+                .Where(a => a.OrderId == order.Id)
+                .Select(a => LedgerService.TransactionId(LedgerService.CaptureKey(a.Id)))
+                .Where(t => mine.Any(e => e.TransactionId == t && e.Account == partnerAccount))
+                .ToHashSet();
+            var partnerOwed = -mine.Where(e => e.Account == partnerAccount).Sum(e => e.Amount);
+            if (paying.Count == 0 && partnerOwed == 0m)
+            {
+                continue; // not paid online (payments were off): nothing passed through OnePondy for it
+            }
+
+            var commissionKept = -mine.Where(e => e.Account == LedgerAccounts.PlatformCommission && paying.Contains(e.TransactionId)).Sum(e => e.Amount);
+            if (paying.Count != 1 || order.RestaurantGross - commissionKept != partnerOwed)
+            {
+                return new Lines([], SettlementErrors.LedgerMismatch);
+            }
+
+            lines.Add(new Line(null, order.Id, SettlementItemKind.Sale, order.RestaurantGross, commissionKept));
+        }
+
+        return new Lines(lines, null);
+    }
+
+    private async Task<Lines> BuildBookingLinesAsync(Guid businessId, DateTimeOffset cutoff, CancellationToken cancellationToken)
+    {
+        var onASale = db.SettlementItems.Where(i => i.Kind == SettlementItemKind.Sale && i.BookingId != null).Select(i => i.BookingId!.Value);
+        var onARefund = db.SettlementItems.Where(i => i.Kind == SettlementItemKind.Refund && i.BookingId != null).Select(i => i.BookingId!.Value);
 
         var finished = await db.Bookings.AsNoTracking()
             .Where(b => b.BusinessId == businessId
@@ -453,10 +554,11 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
             .Where(r => r.Status == RefundStatus.Processed
                 && r.Reason != RefundReason.LatePayment
                 && r.ProcessedAt < cutoff
-                && businessBookings.Contains(r.BookingId)
-                && onASale.Contains(r.BookingId)
-                && !onARefund.Contains(r.BookingId))
-            .Select(r => r.BookingId)
+                && r.BookingId != null
+                && businessBookings.Contains(r.BookingId.Value)
+                && onASale.Contains(r.BookingId.Value)
+                && !onARefund.Contains(r.BookingId.Value))
+            .Select(r => r.BookingId!.Value)
             .Distinct()
             .Take(MaxBookingsPerStatement)
             .ToListAsync(cancellationToken);
@@ -469,12 +571,12 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
 
         var partnerAccount = LedgerAccounts.PartnerPayable(businessId);
         var attempts = await db.PaymentAttempts.AsNoTracking()
-            .Where(a => bookingIds.Contains(a.BookingId) && a.Status == PaymentAttemptStatus.Captured)
-            .Select(a => new { a.Id, a.BookingId, a.Amount })
+            .Where(a => a.BookingId != null && bookingIds.Contains(a.BookingId.Value) && a.Status == PaymentAttemptStatus.Captured)
+            .Select(a => new { a.Id, BookingId = a.BookingId!.Value, a.Amount })
             .ToListAsync(cancellationToken);
         var refunds = await db.Refunds.AsNoTracking()
-            .Where(r => bookingIds.Contains(r.BookingId) && r.Status == RefundStatus.Processed && r.Reason != RefundReason.LatePayment)
-            .Select(r => new { r.Id, r.BookingId, r.Amount })
+            .Where(r => r.BookingId != null && bookingIds.Contains(r.BookingId.Value) && r.Status == RefundStatus.Processed && r.Reason != RefundReason.LatePayment)
+            .Select(r => new { r.Id, BookingId = r.BookingId!.Value, r.Amount })
             .ToListAsync(cancellationToken);
         var entries = await db.LedgerEntries.AsNoTracking()
             .Where(e => e.BookingId != null && bookingIds.Contains(e.BookingId.Value)
@@ -485,12 +587,19 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
         var lines = new List<Line>();
         foreach (var bookingId in bookingIds)
         {
-            var captured = attempts.Where(a => a.BookingId == bookingId).ToList();
+            var mine = entries.Where(e => e.BookingId == bookingId).ToList();
+
+            // Only the payment that paid the partner is a sale. A second payment for the same booking was held for the customer and
+            // refunded (its capture posted nothing to the partner or the commission), so counting it would make the statement
+            // disagree with the ledger for good.
+            var captured = attempts
+                .Where(a => a.BookingId == bookingId)
+                .Where(a => mine.Any(e => e.Account == partnerAccount && e.TransactionId == LedgerService.TransactionId(LedgerService.CaptureKey(a.Id))))
+                .ToList();
             var sold = captured.Sum(a => a.Amount);
             var returned = refunds.Where(r => r.BookingId == bookingId).Sum(r => r.Amount);
             var captureTransactions = captured.Select(a => LedgerService.TransactionId(LedgerService.CaptureKey(a.Id))).ToHashSet();
             var refundTransactions = refunds.Where(r => r.BookingId == bookingId).Select(r => LedgerService.TransactionId(LedgerService.RefundKey(r.Id))).ToHashSet();
-            var mine = entries.Where(e => e.BookingId == bookingId).ToList();
             var commissionKept = -mine.Where(e => e.Account == LedgerAccounts.PlatformCommission && captureTransactions.Contains(e.TransactionId)).Sum(e => e.Amount);
             var commissionBack = mine.Where(e => e.Account == LedgerAccounts.PlatformCommission && refundTransactions.Contains(e.TransactionId)).Sum(e => e.Amount);
             var partnerOwed = -mine.Where(e => e.Account == partnerAccount).Sum(e => e.Amount);
@@ -507,12 +616,12 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
                     return new Lines([], SettlementErrors.LedgerMismatch);
                 }
 
-                lines.Add(new Line(bookingId, SettlementItemKind.Sale, sold, commissionKept));
+                lines.Add(new Line(bookingId, null, SettlementItemKind.Sale, sold, commissionKept));
             }
 
             if (returned > 0m && (finished.Contains(bookingId) || adjustments.Contains(bookingId)))
             {
-                lines.Add(new Line(bookingId, SettlementItemKind.Refund, returned, commissionBack));
+                lines.Add(new Line(bookingId, null, SettlementItemKind.Refund, returned, commissionBack));
             }
         }
 
@@ -541,12 +650,12 @@ public static class StatementCsv
         Row(csv, "Net payable", Money(s.NetAmount));
         Row(csv, "Payout reference", Text(s.PayoutReference ?? string.Empty));
         csv.Append(NewLine);
-        Row(csv, "Booking", "Listing", "Service date", "Type", "Amount", "Commission", "Partner amount");
+        Row(csv, "Reference", "Item", "Service date", "Type", "Amount", "Commission", "Partner amount");
         foreach (var item in detail.Items)
         {
             Row(
                 csv,
-                item.BookingId.ToString(),
+                (item.BookingId ?? item.FoodOrderId)?.ToString() ?? string.Empty,
                 Text(item.ListingTitle),
                 item.ServiceStartAt?.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty,
                 item.Kind == SettlementItemKind.Sale ? "Sale" : "Refund",

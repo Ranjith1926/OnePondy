@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
 using OnePondy.Domain.Bookings;
+using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Payments;
@@ -16,10 +17,15 @@ public static class RefundErrors
         "refunds_not_enabled",
         ErrorKind.Unavailable,
         "Cancelling a paid booking is not available yet. Contact support.");
+
+    public static readonly AppError NotEnabledForOrder = new(
+        "refunds_not_enabled",
+        ErrorKind.Unavailable,
+        "Cancelling a paid order is not available yet. Contact support.");
 }
 
 /// <summary>
-/// Refunds of paid bookings (spec D22, Phase 7). Deciding what is owed is separate from sending it: the decision is
+/// Refunds of paid bookings (spec D22, Phase 7) and food orders (decision F8, step 8.3). Deciding what is owed is separate from sending it: the decision is
 /// saved with the booking's cancellation, then the gateway is asked, and a request that does not get through is
 /// retried by <see cref="SendUnsentAsync"/> rather than lost.
 /// </summary>
@@ -62,6 +68,32 @@ public sealed class RefundService(
 
         var amount = RefundCalculator.Calculate(paid.Amount, reason, booking.CancellationPolicySnapshot, booking.StartAt, time.GetUtcNow());
         return Result<RefundPlan?>.Success(new RefundPlan(paid, amount));
+    }
+
+    /// <summary>
+    /// What cancelling this food order now would refund: always the whole payment (decision F8; there is no partial refund for food).
+    /// <c>null</c> when nothing was paid online. Refused while refunds are switched off, as for bookings, so a paid order is never
+    /// cancelled with the customer's money silently kept.
+    /// </summary>
+    public async Task<Result<RefundPlan?>> PlanFoodCancellationAsync(FoodOrder order, CancellationToken cancellationToken)
+    {
+        if (order.Status is not (FoodOrderStatus.Confirmed or FoodOrderStatus.Preparing or FoodOrderStatus.ReadyForPickup or FoodOrderStatus.OutForDelivery))
+        {
+            return Result<RefundPlan?>.Success(null);
+        }
+
+        var paid = await db.PaymentAttempts
+            .Where(a => a.FoodOrderId == order.Id && a.Status == PaymentAttemptStatus.Captured)
+            .OrderBy(a => a.UpdatedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (paid is null)
+        {
+            return Result<RefundPlan?>.Success(null);
+        }
+
+        return options.Value.RefundsEnabled
+            ? Result<RefundPlan?>.Success(new RefundPlan(paid, paid.Amount))
+            : RefundErrors.NotEnabledForOrder;
     }
 
     /// <summary>

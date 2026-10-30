@@ -318,9 +318,11 @@ The transactional outbox plus the Expo push service (D7). Messages are written w
 
 A statement is built from the ledger per business and period, approved by an administrator, and marked paid with the bank reference, which books the payout. Partners read their own and download CSV. Flow: [workflows.md](workflows.md) §24.
 
-### 7.11 Food (Phase 8, steps 8.1 and 8.2)
+### 7.11 Food (Phase 8, steps 8.1 to 8.3)
 
-A restaurant is a business of type restaurant plus a profile, delivery areas and a menu (`RestaurantService`, `MenuService`); customers browse only restaurants that are open, approved, active and serving their area. `OrderService` prices a cart from the menu, places an order (idempotent per customer, price revalidated against the total the customer was shown, snapshots of every dish), and moves it through the state table in `FoodOrder`: the restaurant accepts, rejects, starts and finishes cooking; the customer may cancel until cooking starts; the Worker expires orders nobody answered or paid for. The restaurant never sees the customer's address or phone (OnePondy's own drivers deliver, F1). Paying for orders (8.3), the driver app and delivery (8.6 to 8.7) are not built yet. Flow: [workflows.md](workflows.md) §25; plan: [phase-8-plan.md](phase-8-plan.md).
+A restaurant is a business of type restaurant plus a profile, delivery areas and a menu (`RestaurantService`, `MenuService`); customers browse only restaurants that are open, approved, active and serving their area. `OrderService` prices a cart from the menu, places an order (idempotent per customer, price revalidated against the total the customer was shown, snapshots of every dish), and moves it through the state table in `FoodOrder`: the restaurant accepts, rejects, starts and finishes cooking; the customer may cancel until cooking starts; `FoodOrderExpiry` (Worker) expires orders nobody answered or paid for. The restaurant never sees the customer's address or phone (OnePondy's own drivers deliver, F1).
+
+**Paying (step 8.3)** reuses the Phase 7 services rather than copying them: a `PaymentAttempt`, `Refund`, `LedgerEntry`, `SettlementItem` and `ReconciliationException` belongs to a booking or a food order, and `PaymentService` branches on which once it has the attempt (start, capture, the check before expiry, "is it paid yet?", refund completion). Webhooks, the refund sweep and reconciliation are unchanged: they work from the gateway's ids and find the order through the attempt. `LedgerService.PostFoodCaptureAsync` books the provisional split (commission on the dishes; dishes and packaging to the restaurant; delivery fee to `delivery_fees`; GST to `tax_payable`); `PostFoodRefundAsync` reverses it exactly, since a food refund is always in full (F8). Cancelling a paid order plans its refund first (`RefundService.PlanFoodCancellationAsync`, refused while `Payments:RefundsEnabled` is off), saves the cancellation, refund and closed payment together, then sends the refund. `SettlementService` puts a delivered order on the restaurant's statement (its side only: dishes and packaging, less commission). Food orders send no push notifications yet. Flow: [workflows.md](workflows.md) §25; plan: [phase-8-plan.md](phase-8-plan.md).
 
 ## 8. AI trip planner
 
@@ -348,8 +350,7 @@ and runnable as a console app in development. It shares Application and Infrastr
 |---|---|---|
 | `AuthDataRetentionJob` | hourly (and once at start-up) | Calls `AuthDataRetention`: deletes OTP challenges created more than 1 day ago, refresh tokens expired or consumed more than 30 days ago, and sessions revoked or expired more than 90 days ago (their remaining tokens cascade). |
 | `BookingHoldExpiryJob` | every minute (and once at start-up) | Calls `BookingHoldExpiry`: takes up to 100 open holds past `expires_at`, oldest first, and runs `TryExpireAsync` on each. Each booking is saved separately, so a lost race (for example a second worker instance, or the partner accepting at that instant) never blocks the rest of the batch. |
-
-| `FoodOrderExpiryJob` | every minute (and once at start-up) | Calls `OrderService.ExpireDueAsync`: closes food orders past `expires_at` that are still `placed` (the restaurant never answered) or `awaiting_payment`. Each order is saved on its own, so a lost race never blocks the rest. |
+| `FoodOrderExpiryJob` | every minute (and once at start-up) | Calls `FoodOrderExpiry`: takes up to 100 food orders past `expires_at` that are still `placed` (the restaurant never answered) or `awaiting_payment`. An unpaid one is first checked with Razorpay, as a booking is: a payment found there confirms the order; if Razorpay cannot be asked the order waits up to `Food:GatewayCheckGrace` (5 minutes) before it expires anyway. Expiring closes the order's open payment in the same save. Each order is saved on its own, so a lost race never blocks the rest. |
 | `PendingRefundJob` | every minute | Sends pending refunds to Razorpay (the refund's own id is the idempotency key) and retries ones that never left. |
 | `PaymentReconciliationJob` | every 5 minutes | Checks open orders, stuck refunds and unprocessed webhooks, applies what a lost webhook missed, raises exceptions; once a day compares the previous day's payments with Razorpay's. |
 | `OutboxDispatchJob` | every 20 seconds | Sends due notifications through Expo, reads delivery receipts about 15 minutes later, deletes dead phones, and (hourly) removes old log and outbox rows. |
@@ -381,7 +382,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Ai:Gemini` | `ApiKey`, `Model`, `BaseUrl`, `Timeout` |
 | `Twilio` | `AccountSid`, `AuthToken`, and either `From` (`Auth:Otp:Delivery` = `Twilio`) or `VerifyServiceSid` (`TwilioVerify`). Development only; secrets, never committed. |
 | `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
-| `Food` | `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available. |
+| `Food` | `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
 | `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
 | `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
 | `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
@@ -452,7 +453,8 @@ administrator.
 | POST `/devices`, DELETE `/devices/{id}` | U | Register or remove this phone for push notifications. |
 | GET `/restaurants?area=`, `/restaurants/{id}`, `/restaurants/{id}/menu` | P | Open restaurants for an area and their menus (not gated by the module flag). |
 | POST `/food/quote` | U | Prices a cart from the menu: lines, tax per line, fees, total. |
-| POST/GET `/food/orders`, GET `/food/orders/{id}`, POST `/food/orders/{id}/cancel` | U (own order) | Place (needs `idempotencyKey` and `expectedTotal`), list, view, cancel until cooking starts. |
+| POST/GET `/food/orders`, GET `/food/orders/{id}`, POST `/food/orders/{id}/cancel` | U (own order) | Place (needs `idempotencyKey` and `expectedTotal`), list, view (with the payment receipt and any refunds), cancel until cooking starts (a paid order is refunded in full, or refused while refunds are off). |
+| POST `/food/orders/{id}/payment`, POST `/food/orders/{id}/payment/refresh` | U (own order) | Start (or get the open) Razorpay order for an accepted order; "is it paid yet?" asks Razorpay and returns the order. Another customer's order is 404. |
 
 ### Payments (no sign-in)
 | Method and path | Auth | Purpose |
