@@ -1,6 +1,6 @@
 # Phase 8 plan: food ordering and the driver app
 
-Status: proposed 2026-10-29. Steps are built one at a time and reported, as in Phase 7. Nothing here switches on real money:
+Status: **built through 8.7 and 8.9; 8.8 (cash on delivery) not built, waiting for the owner (F2); 8.10 (this documentation pass) done 2026-10-30.** Proposed 2026-10-29. Steps were built one at a time and reported, as in Phase 7. Nothing here switches on real money:
 online payment for food stays in sandbox until the Phase 7 go-live gate is met, and the `food` module flag stays `coming_soon`
 until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and decisions D3, D13, D21, D22.
 
@@ -46,16 +46,18 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | 8.9 | Admin order monitoring; extend the customer history view with food orders | Console and view tests |
 | 8.10 | Docs: architecture, database and workflow documents, spec rows | Reviewed |
 
-## 4. What I need from you
+## 4. Where the decisions stand
 
-1. F1: the delivery operations plan (or tell me to build the driver app against a simulated fleet only, as the spec's journey
-   allows: "driver accepts a simulated assignment").
-2. F2: is cash on delivery in scope for Release 3?
-3. F3: the GST treatment, from your tax adviser.
-4. F4 to F8: confirm the defaults, or give other numbers.
-5. Still open from Phase 7 and needed before any of this goes live: D21 and D22 sign-off, the legal and tax review.
-
-Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above are what gets built (8.3 is built on them).
+| # | Question | State |
+|---|---|---|
+| F1 | Delivery operations plan | **Not provided.** Built as the default: OnePondy's own drivers, assigned by the platform, with no real fleet behind it. A real launch needs the plan (who the drivers are, pay, insurance, hours). |
+| F2 | Cash on delivery | **Not decided.** Step 8.8 is not built. With the `payments` module off, an accepted order confirms with nothing paid, so this and the next row belong together. |
+| (new) | Require the `payments` module for food orders | **Not decided.** I recommend a small server check (refuse to open food ordering unless online payment is available) unless cash on delivery is approved. |
+| F3 | GST treatment | **Not confirmed.** Tax is calculated per line at a provisional 5% and booked separately; fees carry no tax. Needs the tax adviser. |
+| F4 | Fees | Built on the defaults (delivery 30, packaging 10). Not confirmed. |
+| F5, F6 | Areas, accept-then-pay | Built on the defaults. Not objected to. |
+| F7, F8 | Commission on food, cancellation and refund rule | Built on the defaults (provisional 10%; refund always in full; customer may cancel until cooking starts). Need D21 and D22 sign-off. |
+| | Still open from Phase 7 | D21 and D22 sign-off, the legal and tax review, MSG91 DLT, Expo/EAS and Firebase, a public URL for the Razorpay webhook, rotating the exposed Twilio and Razorpay test secrets. |
 
 ## 5. Build notes (as built)
 
@@ -270,7 +272,7 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   position stored. **Not seen working end to end:** the phone's own position reaching the API. The emulator's GPS stopped producing fixes after the first one, so no report was sent from the app (the same request sent
   directly to the endpoint worked, and the app's reporting is covered by its tests). This needs a run on a real phone.
 
-**8.9 (administrators watch orders and deliveries; the history view gains food orders).** Flow in [workflows.md](workflows.md) §25b.
+**8.9 (administrators watch orders and deliveries; the history view gains food orders).** Flow in [workflows.md](workflows.md) §25.10.
 
 - **Console, Orders** (`/orders`, administrators only): every food order across restaurants, newest first, filtered by status or by "needs attention only"; a banner counts the orders that need attention. An order's page
   shows the delivery (who has it, their phone, when each step happened), the customer's address and phone, the dishes and price, the payment and any refunds, and the history, with the two actions below.
@@ -296,3 +298,12 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   the audit log held all three entries.
 - **Not done in 8.9:** push notifications about stuck orders (an administrator learns only by opening the console; nothing refreshes by itself), reassigning a delivery to a chosen driver (it is offered to all),
   an administrator marking an order delivered, a map, an administrators' view of a driver's past positions (none are kept), and an order-level support note. Cash on delivery (8.8) is still not built.
+
+**8.10 (documentation).** This pass brought every document up to the end of Phase 8: the architecture document (scope, endpoints, services, settings, what is not built), the database document (migrations 14 to 19 and
+the tables they add), the workflow document (§25 in full, and the not-built table), the data-retention document (restaurant, order, driver, delivery and position data), the README (status and a Phase 8
+verification against the six acceptance criteria) and this plan (where the decisions stand). The functional specification itself was not edited: it states requirements, and none changed.
+
+**What is left before Phase 8 could go live** (nothing here is a code defect; it is the work the owner and the business must do or decide):
+the owner decisions above; a decision on blanking an order's delivery address and phone after its customer deletes their account (they are kept today); a real delivery team and its operations plan; a run of the food checkout and the driver app on real phones; push notifications for orders and deliveries (so nobody has to watch a screen);
+driver document upload and review; cash on delivery if approved; the legal and tax review; the Phase 7 go-live gate. Phase 9 (transport) builds on the driver app and on the delivery job pattern but needs its own
+licensing and safety work first.

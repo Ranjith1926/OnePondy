@@ -580,3 +580,43 @@ Known limitations:
   GST/TCS on commission wait for the legal and tax review. The commission (10%) is provisional.
 - Phase 7 migrations (`AddPaymentsAndLedger` through `AddSettlementRowVersion`) may not yet be applied to the shared development database; apply every pending migration as `onepondy_app`.
 - **Secrets to rotate:** the Twilio auth token and the Razorpay test secret were shared in chat during development.
+
+### Phase 8 verification (2026-10-30)
+
+Phase 8 is built as steps 8.1 to 8.7 and 8.9 (plan and as-built notes: `docs/phase-8-plan.md`). **Cash on delivery (8.8) is not built**: it waits for the owner's decision (F2). Online payment for food
+runs in **sandbox only**, on the Phase 7 machinery, and the `food` module flag stays off in any real environment.
+
+| Acceptance criterion (spec §10, Phase 8) | Result |
+|---|---|
+| Price is revalidated on the server at checkout | The app never sends a price. The server prices every cart from the menu and the order must carry the total the customer was shown (`expectedTotal`); a changed menu is refused with the new total (`order_price_changed`). Unit and integration tests. |
+| Duplicate submissions do not create duplicate orders | An order carries an idempotency key, unique per customer in the database; placing again returns the same order, including when two requests arrive at once. |
+| Restaurant and delivery states cannot be changed arbitrarily by a customer | One method moves an order and checks a table of allowed steps (tested row by row). The customer's routes can place, view, pay and cancel until cooking starts; delivery steps exist only on the driver's routes, and a driver can act only on a job they hold. |
+| An assignment cannot be accepted by more than one delivery partner | Three layers: a row version, a database trigger that refuses to give a taken job to a second driver, and a unique index allowing one live job per driver. Integration tests fire four drivers at one job five times and one driver at two jobs three times: exactly one wins each time. |
+| GST on restaurant orders is calculated and recorded as required for an e-commerce operator (§21) | Tax is calculated per line from the dish's rate (provisional 5%), stored apart from the price on every order line, and booked to a `tax_payable` ledger account. **That the rate and the treatment are right is not verified: it needs the owner's tax adviser (F3).** |
+| Refund and settlement records are auditable | A food refund is always in full, goes through the Phase 7 refund and ledger path (append-only, balanced by a database trigger), and appears on the customer's order and in the console. Delivered orders are on the restaurant's statement once. Every administrator action on an order or a driver is in the audit log, including each look at a driver's position. Refunds stay off by default. |
+
+Checks: Prettier, ESLint and `tsc` clean for the customer app, the driver app and the console; Jest 336/336 for the customer app (it needs `--testTimeout=30000` on a slow machine: three modal tests
+exceed the 5-second default under load and fail the same way before Phase 8's last steps) and 130/130 for the new driver app; Vitest 96/96 for the console and a production build of it; backend 9 architecture,
+776 unit and 147 integration tests (6 live-service tests skipped), the last against a real PostgreSQL 18 database, on a fresh empty database.
+
+Driven for real (local API, scratch database, no real SMS or gateway): the customer app's food screens, the driver app through apply, approval, duty, taking, collecting and handing over a delivery
+(Android emulator), and the console's restaurant inbox and administrators' order pages (headless Edge against a production build).
+
+Known limitations:
+
+- **Not run on a real phone.** The Razorpay checkout for food, and the driver app's own GPS reaching the API, have not been seen. The emulator's GPS stopped after one fix, so no position report was sent from the
+  app (the endpoint accepts the same request, and the app's reporting is covered by its tests).
+- **Open owner decisions:** the delivery operations plan (the drivers were built as OnePondy's own, assigned by the platform, F1); cash on delivery (F2); the GST treatment (F3); the commission, delivery and
+  packaging fees and the food refund rule (F4, F7, F8 with D21 and D22); and whether food orders must require the `payments` module. **With `payments` off, an accepted order is confirmed without any payment
+  being taken**, and the app says "Confirmed", never "Paid".
+- **No notifications** about orders, deliveries or stuck orders to anyone. Drivers see new deliveries by the app refreshing every 10 seconds; administrators and restaurants learn by opening the console, which does not
+  refresh by itself (the restaurant's inbox does).
+- **Drivers' documents are not uploaded:** an administrator compares the licence and registration numbers with the originals by other means. There is no driver earnings or pay rule, no map for the customer (D6), and no
+  reassigning a delivery to a chosen driver.
+- **Personal data stays on an order after its customer deletes their account:** the delivery address, note and contact phone are not scrubbed (the order is a financial record). Needs a decision on blanking
+  them, and when; see `docs/data-retention.md`.
+- **Migrations to apply** to the shared development database as `onepondy_app`, after the Phase 7 ones: `AddRestaurantsAndMenus`, `AddFoodOrders`, `AddFoodOrderPayments`, `AddDriverProfiles`, `AddDeliveryJobs`,
+  `ExtendCustomerHistoryAndAdminRefundReason`.
+- **The independent multi-agent review of the diffs did not run** (it hit the usage limit at 8.3); each step was self-reviewed against the guardrails in the plan instead.
+- Building the driver app on Windows fails in the C++ step because of the 260-character path limit; the workaround is in `apps/driver-mobile/README.md`.
+- **Secrets to rotate** (unchanged): the Twilio auth token and the Razorpay test secret.

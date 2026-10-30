@@ -68,6 +68,16 @@ The public page never reveals whether an account exists for a phone number or em
 | Notification log | 30 days | Type, status and Expo's ticket id. Never the message text. Removed by the Worker. |
 | Outbox messages | 30 days after they are finished | Holds only who the notification is for and which booking; removed by the Worker once no log row still refers to it. A message not sent within 24 hours is dropped, not delivered late. |
 
+## Restaurants, menus and food orders (Phase 8)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| Restaurant profile, delivery areas, menu categories and dishes | While the business exists | A dish is archived, never deleted, because orders point at it. A restaurant is closed (not accepting orders), not removed. |
+| Food orders and their lines | Linked to the anonymised customer row; no end date decided | Never deleted with the account (financial record, like bookings). Lines are copies of what was bought and are append-only. **Each order also keeps the delivery address, the delivery note and the contact phone the customer gave. These are not scrubbed when the account is deleted.** This is a gap: it needs a decision on whether to blank them after deletion (the order, price and history would stay) and after how long, and the tax review may set a period. |
+| Food order status history | As long as the order | Append-only (a trigger refuses edits and deletes). Records who made each step (customer, restaurant, administrator, driver or system) and why. |
+| Payments, refunds and ledger lines for orders | No end date decided | The same Phase 7 records and rules as for bookings (see below); a food order's refund is always in full. |
+| What a restaurant sees of an order | Not stored separately | The restaurant's views leave out the customer's address and phone, in the API and in the console. Only OnePondy's drivers (after they take a delivery) and administrators see them. |
+
 ## Delivery drivers (Phase 8, step 8.6)
 
 | Data | Kept for | Notes |

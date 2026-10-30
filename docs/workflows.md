@@ -996,7 +996,20 @@ The customer's order view shows the payment as a receipt and any refunds with th
 6. A driver cannot go off duty or edit their details while holding a delivery; suspending them returns an uncollected delivery to the pool.
 7. A restaurant sees who is collecting in its order inbox, without the customer's address or phone.
 
-### 25.10 Not built yet (after 8.9: see §25b for what administrators can now do)
+### 25.10 Watching orders and deliveries (step 8.9)
+
+Administrators open **Orders** in the console.
+
+1. **The list** shows every food order, newest first. Choose a status, or "Needs attention only". The banner above it counts orders that look stuck.
+2. **Needs attention** means an order has been in one stage longer than expected: no driver for 10 minutes, a driver who has not collected it for 30, out for delivery for 60, a kitchen 20 minutes late, a refund
+   pending for an hour. The limits are `Food:Attention:*`. It is a prompt to look, not a verdict.
+3. **An order's page** shows the delivery and the driver (name, vehicle, phone), where the driver last said they were (only while the delivery is under way; each look is written to the audit log), the
+   customer's address and phone, the dishes and price, any payment and refund, and the history.
+4. **Offer to other drivers** (only while a driver has the delivery but has not collected the food) takes it from them and shows it to every driver on duty again.
+5. **Cancel this order** (reason required; the customer sees it) closes the order and its delivery. A paid order is refunded in full when refunds are switched on; while they are off the page says so and nothing changes.
+6. Every action is audited, and a page that has gone stale is refused rather than acted on.
+
+### 25.11 Not built yet
 
 Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, notifications about deliveries and stuck orders, cash on delivery
 (8.8, only if approved), administrators' order monitoring (8.9).
@@ -1011,21 +1024,7 @@ Notifications about orders (so a restaurant learns of a new order only by lookin
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus, orders to the kitchen, paying for them (sandbox) and the customer app's screens are built (section 25); delivery is not. |
+| Reviews and ratings, rides | Later phases. Food ordering is built end to end except cash on delivery (section 25): restaurants, menus, orders, paying for them (sandbox), drivers and deliveries, and administrators' monitoring. |
+| Cash on delivery; notifications about orders and deliveries; driver document upload | Not built (Phase 8 gaps: see section 25.11 and phase-8-plan.md §4). Cash on delivery waits for the owner's decision (F2). |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |
-
----
-
-## 25b. Watching food orders (step 8.9)
-
-Administrators open **Orders** in the console.
-
-1. **The list** shows every food order, newest first. Choose a status, or "Needs attention only". The banner above it counts orders that look stuck.
-2. **Needs attention** means an order has been in one stage longer than expected: no driver for 10 minutes, a driver who has not collected it for 30, out for delivery for 60, a kitchen 20 minutes late, a refund
-   pending for an hour. The limits are `Food:Attention:*`. It is a prompt to look, not a verdict.
-3. **An order's page** shows the delivery and the driver (name, vehicle, phone), where the driver last said they were (only while the delivery is under way; each look is written to the audit log), the
-   customer's address and phone, the dishes and price, any payment and refund, and the history.
-4. **Offer to other drivers** (only while a driver has the delivery but has not collected the food) takes it from them and shows it to every driver on duty again.
-5. **Cancel this order** (reason required; the customer sees it) closes the order and its delivery. A paid order is refunded in full when refunds are switched on; while they are off the page says so and nothing changes.
-6. Every action is audited, and a page that has gone stale is refused rather than acted on.

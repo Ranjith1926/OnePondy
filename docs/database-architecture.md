@@ -341,11 +341,12 @@ receives nothing" is guaranteed without the app having to remember anything.
 ### 3.9 View
 
 **`customer_history`** – a unified "what has this customer done" view, created in
-`AddListingsAndBookings`. Today it selects one row per booking (`id`, `kind = 'booking'`,
-`customer_user_id`, listing `title`, `status`, `scheduled_at`, `total_amount`, `currency`,
-`created_at`) by joining `bookings` to `listings`. It is a view and holds no data of its own. It
-is shaped so that food orders (Phase 8) and rides (Phase 9) can be added as further `UNION`
-branches without changing readers. Phase 7 did **not** extend it with payment status (the plan
+`AddListingsAndBookings` and extended by `ExtendCustomerHistoryAndAdminRefundReason` (migration 19). It selects
+one row per booking (`id`, `kind = 'booking'`, `customer_user_id`, listing `title`, `status`, `scheduled_at`,
+`total_amount`, `currency`, `created_at`) by joining `bookings` to `listings`, and, since Phase 8, one row per food
+order (`kind = 'food_order'`, the restaurant's name as `title`, `estimated_ready_at` as `scheduled_at`) by joining
+`food_orders` to `businesses`: the same nine columns, as a `UNION ALL`. It is a view and holds no data of its own, and
+nothing in the application reads it yet. Rides (Phase 9) can be added as a further branch without changing readers. Phase 7 did **not** extend it with payment status (the plan
 considered it); the app reads the receipt and refunds from the booking detail instead.
 
 ### 3.10 Food (Phase 8)
@@ -378,6 +379,23 @@ triggers (§5). Only columns were added and `booking_id` made nullable; no exist
 five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes), `partner_payable` (dishes and packaging less commission),
 `delivery_fees` and `tax_payable`; a food refund reverses them exactly.
 
+**Drivers (step 8.6, migration 17, `AddDriverProfiles`).**
+
+- **`driver_profiles`** – one row per driver account (`user_id` is the key and a RESTRICT foreign key to `app_users`; the profile is removed explicitly when the account is deleted): `full_name`,
+  `vehicle_type` (`bicycle`, `scooter`, `motorbike`), `vehicle_number` and `licence_number` (normalised upper case, none for a bicycle), `approval_status` (`pending`, `approved`, `rejected`, `suspended`),
+  `review_note`, `is_on_duty` and `on_duty_since`, `xmin` version. Checks: only an approved driver is on duty (`ck_driver_duty_requires_approval`); "on duty since" exists exactly while on duty; a motorised
+  vehicle has both numbers and a bicycle neither (`ck_driver_documents`); a rejection or suspension always has a note. `ux_driver_profiles_licence` (filtered, not null) makes a licence belong to one account.
+
+**Deliveries (step 8.7, migration 18, `AddDeliveryJobs`).**
+
+- **`delivery_jobs`** – one per food order (`ux_delivery_jobs_order`; `food_order_id` and `driver_user_id` are RESTRICT foreign keys): `status` (`open`, `accepted`, `picked_up`, `delivered`, `cancelled`),
+  `driver_user_id` (empty while open, set once taken, kept after delivery), a time for each step (`opened_at`, `accepted_at`, `picked_up_at`, `delivered_at`, `cancelled_at`), `cancel_reason`, the driver's **latest**
+  position (`last_latitude`, `last_longitude`, `last_location_at`) and `xmin` version. Checks: who holds the job fits its status (`ck_delivery_job_driver`); every step has its time (`ck_delivery_job_times`); the
+  position exists only while the job is `accepted` or `picked_up`, is all three columns or none, and is on Earth (`ck_delivery_job_location_*`), so it is erased by the database's own rules when a job ends.
+  `ux_delivery_jobs_one_active_per_driver` (filtered to `accepted` and `picked_up`) allows one live job per driver. The migration also gives every order already `ready_for_pickup` its open job.
+
+**Administrators' monitoring (step 8.9, migration 19).** No new tables: the `customer_history` view (§3.9) lists food orders, and `ck_refund_reason` allows `admin_cancelled`.
+
 ## 4. Foreign-key delete policy
 
 | Parent → child | Policy | Reason |
@@ -391,6 +409,7 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 | `listings`/`availability_slots` → bookings, `booking_slots` | RESTRICT | A booking can never lose its listing or slot. |
 | `bookings` → `booking_slots`, `booking_status_history` | RESTRICT | History is immutable. |
 | `bookings`, `food_orders`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
+| `app_users` → `driver_profiles`, `delivery_jobs` (driver); `food_orders` → `delivery_jobs` | RESTRICT | Who delivered which order is a record. A driver profile is removed explicitly on account deletion (never by cascade). |
 | `app_users`, `user_sessions` → `device_tokens` | CASCADE | A phone is meaningful only while its session lives. |
 | `device_tokens` → `notification_log` | SET NULL | The log survives a removed phone. |
 | `app_users`, `outbox_messages` → `notification_log` | RESTRICT | The log is kept for the retention period. |
@@ -410,6 +429,7 @@ migration; EF Core cannot express a non-cascade ownership FK in the model snapsh
 | `trg_refunds_within_captured` (row), function `refunds_within_captured_amount()` | `refunds` | Locks the payment and raises if its refunds (other than failed ones) would exceed what was captured, so two simultaneous refunds cannot both pass. |
 | `trg_food_order_status_history_append_only` / `_no_truncate` and `trg_food_order_lines_append_only` / `_no_truncate`, function `food_order_records_are_immutable()` | `food_order_status_history`, `food_order_lines` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: an order's lines and history are written once. |
 | `trg_food_orders_match_lines` and `trg_food_order_lines_match_order` (rows, **deferred constraint triggers**), function `food_order_matches_its_lines()` | `food_orders`, `food_order_lines` | At commit, raises unless the order's `subtotal` and `tax_amount` equal the sums of its lines. |
+| `trg_delivery_jobs_rules` (row, `UPDATE` and `DELETE`) and `trg_delivery_jobs_no_truncate` (statement), function `delivery_job_follows_the_rules()` | `delivery_jobs` | Allows only the forward steps (open → accepted → picked up → delivered; accepted → open when given up; cancelled from any live state), never gives an accepted or picked-up job to a second driver (the rule behind "exactly one driver gets it"), freezes finished jobs, and refuses deletes, truncates and moving a job to another order. |
 | `trg_payment_attempts_keep_subject` (row), function `payment_attempt_keeps_its_subject()` | `payment_attempts` | Raises if an update changes `booking_id` or `food_order_id`: a payment is for one thing for good. |
 | `trg_refunds_match_payment` (row), function `refund_matches_its_payment()` | `refunds` | Raises unless the refund's `booking_id` and `food_order_id` are its payment's, so money is only ever given back for what was paid for. |
 
@@ -460,8 +480,10 @@ Details are in [data-retention.md](data-retention.md). In short:
 - The Worker removes `notification_log` rows and finished `outbox_messages` after 30 days. Payment, refund, ledger and
   statement rows have no end date yet (they need the tax review) and are linked to the anonymised customer row.
 - Deletion is blocked while the customer has bookings in progress (`pending`,
-  `awaiting_payment`, `confirmed`, `refund_pending`) or, for partners, while their business has
-  any.
+  `awaiting_payment`, `confirmed`, `refund_pending`) or food orders in progress, or, for partners, while their business has
+  any, or, for a driver, while they are on duty. A driver's profile is removed with the account.
+- **Known gap:** an order's delivery address and contact phone stay on the order after its customer's account is anonymised (the order is a financial record). They are
+  not scrubbed; see [data-retention.md](data-retention.md).
 
 ## 8. Not yet in the schema (planned)
 

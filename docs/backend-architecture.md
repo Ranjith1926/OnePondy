@@ -1,10 +1,11 @@
 # OnePondy – Backend Architecture
 
-Audience: developers and operations. Scope: everything built through Phase 7 (accounts,
+Audience: developers and operations. Scope: everything built through Phase 8 (accounts,
 tourism content, itineraries and AI planner, partner onboarding, listings, availability, the
-booking engine, and Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
-push notifications and partner statements). Reviews, food and rides are **not built** and are
-marked as such. Live payments are switched off by design until the go-live gate in
+booking engine, Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
+push notifications and partner statements, and Phase 8: restaurants, food orders and their payment,
+delivery drivers, deliveries and administrators' order monitoring). Reviews, rides and cash on
+delivery are **not built** and are marked as such. Live payments are switched off by design until the go-live gate in
 [phase-7-plan.md](phase-7-plan.md) §9 is met.
 
 Related documents: [database-architecture.md](database-architecture.md),
@@ -497,5 +498,8 @@ yet).
 - **Live payments and payouts.** Everything above is sandbox. Needs the legal and tax review, sign-off of the commission (D21) and refund rule (D22), partner agreements, Razorpay live KYC and an end-to-end settlement checked against Razorpay's report (go-live gate, phase-7-plan.md §9).
 - Razorpay Route payouts (D21); GST and tax collected at source on commission.
 - Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
-- Reviews and ratings, food ordering, rides.
+- Reviews and ratings, rides.
+- **Phase 8 gaps:** cash on delivery (8.8, waiting for the owner); notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); a requirement that
+  food ordering has online payment available (with the `payments` module off an accepted order confirms unpaid); reassigning a delivery to a chosen driver; a map for customers (D6). See
+  [phase-8-plan.md](phase-8-plan.md) §4 and the Phase 8 verification in the README.
 - A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.
