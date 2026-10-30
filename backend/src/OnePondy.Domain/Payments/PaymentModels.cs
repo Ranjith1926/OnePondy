@@ -20,6 +20,9 @@ public enum RefundReason
     PartnerCancelled = 2,
     CustomerCancelled = 3,
     LatePayment = 4,
+
+    /// <summary>An administrator cancelled the order (a delivery that could not be completed, for example).</summary>
+    AdminCancelled = 5,
 }
 
 public enum RefundStatus

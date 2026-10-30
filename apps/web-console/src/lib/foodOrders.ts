@@ -140,6 +140,8 @@ export function deliveryText(order: PartnerOrderSummary): string | null {
       return `${who} has collected it`;
     case 'delivered':
       return `Delivered by ${who}`;
+    case 'cancelled':
+      return null;
   }
 }
 

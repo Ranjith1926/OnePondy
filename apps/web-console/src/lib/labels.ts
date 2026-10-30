@@ -6,10 +6,13 @@ import type {
   DayOfWeek,
   DriverApprovalStatus,
   FoodAreaCode,
+  DeliveryJobStatus,
   FoodOrderStatus,
   ListingStatus,
   ListingType,
   MediaLicence,
+  OrderActor,
+  OrderAttention,
   ModuleStatus,
   PaymentAttemptStatus,
   ReconciliationKind,
@@ -220,6 +223,7 @@ export const refundReasonLabels: Record<RefundReason, string> = {
   partnerCancelled: 'Partner cancelled',
   customerCancelled: 'Customer cancelled',
   latePayment: 'Paid after time ran out',
+  adminCancelled: 'Cancelled by OnePondy',
 };
 
 export const settlementStatusLabels: Record<SettlementStatus, string> = {
@@ -283,4 +287,34 @@ export const foodOrderStatusLabels: Record<FoodOrderStatus, string> = {
   failed: 'Payment failed',
   refundPending: 'Refund in progress',
   refunded: 'Refunded',
+};
+
+/** The same statuses in an administrator's words: the restaurant's list says "Waiting for you", which means nothing to OnePondy staff. */
+export const adminOrderStatusLabels: Record<FoodOrderStatus, string> = {
+  ...foodOrderStatusLabels,
+  placed: 'Waiting for the restaurant',
+};
+
+export const deliveryStatusLabels: Record<DeliveryJobStatus, string> = {
+  open: 'Waiting for a driver',
+  accepted: 'Driver on the way to the restaurant',
+  pickedUp: 'Out for delivery',
+  delivered: 'Delivered',
+  cancelled: 'Cancelled',
+};
+
+export const attentionLabels: Record<OrderAttention, string> = {
+  noDriver: 'No driver has taken it',
+  pickupOverdue: 'Driver has not collected it',
+  deliveryOverdue: 'Out for delivery too long',
+  kitchenOverdue: 'Kitchen is running late',
+  refundOverdue: 'Refund is taking too long',
+};
+
+export const orderActorLabels: Record<OrderActor, string> = {
+  customer: 'Customer',
+  partner: 'Restaurant',
+  admin: 'OnePondy',
+  system: 'System',
+  driver: 'Driver',
 };

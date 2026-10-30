@@ -269,3 +269,30 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   moved the order to out for delivery and showed the customer's address and phone; the customer's order showed the driver's first name and vehicle and no coordinates; handing over delivered the order and left no
   position stored. **Not seen working end to end:** the phone's own position reaching the API. The emulator's GPS stopped producing fixes after the first one, so no report was sent from the app (the same request sent
   directly to the endpoint worked, and the app's reporting is covered by its tests). This needs a run on a real phone.
+
+**8.9 (administrators watch orders and deliveries; the history view gains food orders).** Flow in [workflows.md](workflows.md) §25b.
+
+- **Console, Orders** (`/orders`, administrators only): every food order across restaurants, newest first, filtered by status or by "needs attention only"; a banner counts the orders that need attention. An order's page
+  shows the delivery (who has it, their phone, when each step happened), the customer's address and phone, the dishes and price, the payment and any refunds, and the history, with the two actions below.
+- **Needs attention** is "stuck for longer than expected", never a failure: ready for pickup with no driver for 10 minutes; a driver who took it but has not collected it for 30; out for delivery for 60; a kitchen that
+  has not started a confirmed order, or is 20 minutes past its estimate; a refund still pending after an hour. The limits are `Food:Attention:*` settings (1 minute to 1 day). Only orders still in progress are
+  looked at (at most 500, oldest first), so the check stays cheap.
+- **Two actions on a stuck order,** both audited and both refusing a stale page (the order's version, or the delivery's): **cancel the order** (reason required, the customer sees it; a paid order is refunded in
+  full under the same switch as every other cancellation, `Payments:RefundsEnabled`, and refuses clearly while it is off; works for an order already out for delivery, which is what a vanished driver needs; the
+  delivery is cancelled with it and the driver is free) and **offer the delivery to the other drivers again** (only while a driver has it but has not collected it; their position is erased).
+- **Seeing where a driver is.** The latest position is shown on an order's page to administrators only, only while the delivery is under way and the driver has reported one, as plain coordinates (no map, D6). **Every
+  time it is shown an audit entry is written** (`food_order.driver_location_viewed`), as are the two actions (`food_order.cancelled_by_admin`, `food_order.delivery_released_by_admin`). The lists never carry
+  an address or a position.
+- **Customer history view:** `customer_history` now lists food orders (`kind = 'food_order'`, the restaurant as `title`, the estimated ready time as `scheduled_at`) as well as bookings, with the same nine columns.
+  Nothing in the application reads the view yet, so this is a database change only; the migration drops and recreates it.
+- **New refund reason `admin_cancelled`** ("Cancelled by OnePondy"): the `ck_refund_reason` check was widened. The console's and the customer app's types know it.
+- **Migration:** `ExtendCustomerHistoryAndAdminRefundReason`. Applied to a database holding 8.7 data (the view then listed the existing orders). Its Down cannot be applied to a database that already holds an
+  `admin_cancelled` refund (the old check would refuse it); a refund is never rewritten.
+- **Tests:** 21 new unit tests (the attention rules row by row, the list and filters, the detail, the audited position, cancelling with and without refunds, an order out for delivery, a delivered order, stale versions,
+  re-offering), 3 new PostgreSQL integration tests (the whole HTTP flow with audit entries; access control, filters and bad input; the view and the refund check on a real database). Whole backend on a fresh
+  database: 9 architecture, 776 unit, 147 integration (6 live-gateway skipped), all passing. Console 96 (9 new: the order action and the labels), customer app 336 and driver app 130 unchanged.
+- **Run for real:** the API (throwaway PostgreSQL 18) and the production console build, driven by headless Edge as an administrator: the list flagged the unclaimed delivery "No driver has taken it"; after a driver
+  took it and reported a position, the order page showed the driver, their phone and the position; "Offer to other drivers" reopened it; "Cancel this order" with a reason cancelled the order and its delivery;
+  the audit log held all three entries.
+- **Not done in 8.9:** push notifications about stuck orders (an administrator learns only by opening the console; nothing refreshes by itself), reassigning a delivery to a chosen driver (it is offered to all),
+  an administrator marking an order delivered, a map, an administrators' view of a driver's past positions (none are kept), and an order-level support note. Cash on delivery (8.8) is still not built.

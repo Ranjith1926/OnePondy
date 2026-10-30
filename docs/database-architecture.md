@@ -437,6 +437,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 16 | `20261029235224_AddFoodOrderPayments` | `food_order_id` on the payment, refund, ledger, statement-line and reconciliation tables, the exactly-one checks, the `delivery_fees` and `tax_payable` accounts, and the subject triggers. |
 | 17 | `20261030053514_AddDriverProfiles` | `driver_profiles` (one row per driver account) with checks: only an approved driver is on duty, "on duty since" exists exactly while on duty, a motorised vehicle has its registration and licence and a bicycle has neither, a rejection or suspension always has a note; a unique index on the licence number. |
 | 18 | `20261030101407_AddDeliveryJobs` | `delivery_jobs` (one per food order) with checks (status, who holds it, a time for every step, the driver's position only while accepted or picked up, complete and on Earth); unique indexes for one job per order and one live job per driver; a trigger that allows only the forward steps, never gives a taken job to a second driver, freezes finished jobs and refuses deletes and truncates; gives each order already ready for pickup its open job. |
+| 19 | `20261030112541_ExtendCustomerHistoryAndAdminRefundReason` | The `customer_history` view now also lists food orders (kind `food_order`); `ck_refund_reason` allows `admin_cancelled`. |
 
 Rules for new migrations:
 

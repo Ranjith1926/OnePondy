@@ -69,7 +69,8 @@ export interface PaymentReceipt {
   reference: string;
 }
 
-export type RefundReason = 'rejected' | 'partnerCancelled' | 'customerCancelled' | 'latePayment';
+export type RefundReason =
+  'rejected' | 'partnerCancelled' | 'customerCancelled' | 'latePayment' | 'adminCancelled';
 
 /** `failed` is shown to customers as still in progress: it is being sorted out by the team. */
 export type RefundStatus = 'pending' | 'processed' | 'failed';

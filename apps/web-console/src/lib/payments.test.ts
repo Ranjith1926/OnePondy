@@ -40,7 +40,7 @@ describe('payment labels', () => {
     [
       'refund reason',
       refundReasonLabels,
-      ['rejected', 'partnerCancelled', 'customerCancelled', 'latePayment'],
+      ['rejected', 'partnerCancelled', 'customerCancelled', 'latePayment', 'adminCancelled'],
     ],
     ['statement status', settlementStatusLabels, ['draft', 'approved', 'paid']],
     ['reconciliation status', reconciliationStatusLabels, ['open', 'resolved', 'autoResolved']],

@@ -61,6 +61,7 @@ public static class AuditEntityTypes
     public const string MenuCategory = "menu_category";
     public const string MenuItem = "menu_item";
     public const string Driver = "driver";
+    public const string FoodOrder = "food_order";
 }
 
 public static class AuditActions
@@ -113,4 +114,7 @@ public static class AuditActions
     public const string DriverRejected = "driver.rejected";
     public const string DriverSuspended = "driver.suspended";
     public const string DriverReinstated = "driver.reinstated";
+    public const string FoodOrderCancelledByAdmin = "food_order.cancelled_by_admin";
+    public const string DeliveryReleasedByAdmin = "food_order.delivery_released_by_admin";
+    public const string DriverLocationViewed = "food_order.driver_location_viewed";
 }

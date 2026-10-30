@@ -262,6 +262,51 @@ public sealed partial class OrderService(
                 RefundReason.PartnerCancelled);
     }
 
+    // --- Administrators (step 8.9) ---
+
+    /// <summary>Any order, for an administrator: the same detail the customer sees, with the delivery as it stands.</summary>
+    public async Task<Result<OrderDetail>> GetForAdminAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var order = await Orders().AsNoTracking().SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
+        return order is null ? OrderErrors.NotFound : await ToDetailAsync(order, cancellationToken);
+    }
+
+    /// <summary>
+    /// An administrator cancels an order that has not arrived (a delivery nobody can complete, a restaurant that cannot cook it). A
+    /// paid order is refunded in full, as for any cancellation. <paramref name="beforeSave"/> runs just before the save, so the
+    /// administrator's audit entry is stored with the cancellation or not at all.
+    /// </summary>
+    public async Task<Result<OrderDetail>> CancelAsAdminAsync(
+        Guid id,
+        uint expectedVersion,
+        Guid adminUserId,
+        string? reason,
+        Action<FoodOrder> beforeSave,
+        CancellationToken cancellationToken)
+    {
+        var errors = new FieldErrors();
+        var trimmed = errors.Required("reason", reason, FoodOrder.MaxReasonLength);
+        if (errors.Any)
+        {
+            return errors.ToError();
+        }
+
+        var order = await Orders().SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
+        if (order is null)
+        {
+            return OrderErrors.NotFound;
+        }
+
+        var failure = await TransitionAsync(
+            order,
+            expectedVersion,
+            o => o.Cancel(FoodOrderActorType.Admin, adminUserId, trimmed, time.GetUtcNow()),
+            cancellationToken,
+            RefundReason.AdminCancelled,
+            beforeSave);
+        return failure is null ? await ToDetailAsync(order, cancellationToken) : failure;
+    }
+
     // --- Worker ---
 
     /// <summary>
@@ -404,7 +449,8 @@ public sealed partial class OrderService(
         uint expectedVersion,
         Action<FoodOrder> apply,
         CancellationToken cancellationToken,
-        RefundReason? cancelReason = null)
+        RefundReason? cancelReason = null,
+        Action<FoodOrder>? beforeSave = null)
     {
         if (order.Version != expectedVersion)
         {
@@ -475,6 +521,7 @@ public sealed partial class OrderService(
             }
         }
 
+        beforeSave?.Invoke(order);
         try
         {
             await db.SaveChangesAsync(cancellationToken);

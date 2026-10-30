@@ -74,6 +74,7 @@ The public page never reveals whether an account exists for a phone number or em
 |---|---|---|
 | Driver profile (name, vehicle type, registration number, licence number, review status and note, on-duty flag) | Until the account is deleted | Deleted with the account (explicitly, because the account row is anonymised, not removed). A driver on duty cannot delete their account until they go off duty. Registration and licence numbers are shown only to the driver and to administrators, and one licence can be on one account only. The review note is the reason an administrator gave and is shown to the driver. |
 | Where a driver is | Only while they hold a delivery, and only the latest position | Reported by the driver app (foreground, with the driver's permission) on `delivery_jobs` and erased when the delivery is delivered, given up or cancelled; the database refuses to keep it on any other job. Never collected because a driver is merely on duty, never shown to customers or restaurants, and no history of positions is kept. |
+| Who looked at a driver's position | With the audit log | Each time an administrator is shown a driver's position an audit entry records who and for which order (not the position). |
 | Delivery jobs | With the order they belong to | Which driver delivered which order, and when each step happened. Kept like the order (financial record); the position is not part of it. |
 | Photos of licence or registration | Not collected | Uploading documents is not built; administrators compare the numbers with the originals by other means. |
 

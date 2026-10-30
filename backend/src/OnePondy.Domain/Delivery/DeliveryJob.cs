@@ -101,6 +101,17 @@ public sealed class DeliveryJob
         UpdatedAt = now;
     }
 
+    /// <summary>An administrator takes an uncollected delivery from its driver and offers it to the others again.</summary>
+    public void AdminRelease(DateTimeOffset now)
+    {
+        Require(DeliveryJobStatus.Accepted);
+        Status = DeliveryJobStatus.Open;
+        DriverUserId = null;
+        AcceptedAt = null;
+        ClearLocation();
+        UpdatedAt = now;
+    }
+
     public void PickUp(Guid driverUserId, DateTimeOffset now)
     {
         RequireDriver(driverUserId, DeliveryJobStatus.Accepted);

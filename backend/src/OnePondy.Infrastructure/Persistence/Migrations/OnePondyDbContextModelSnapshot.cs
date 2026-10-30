@@ -2362,7 +2362,7 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_refund_processed", "status <> 'processed' OR provider_refund_id IS NOT NULL");
 
-                            t.HasCheckConstraint("ck_refund_reason", "reason IN ('rejected', 'partner_cancelled', 'customer_cancelled', 'late_payment')");
+                            t.HasCheckConstraint("ck_refund_reason", "reason IN ('rejected', 'partner_cancelled', 'customer_cancelled', 'late_payment', 'admin_cancelled')");
 
                             t.HasCheckConstraint("ck_refund_status", "status IN ('pending', 'processed', 'failed')");
 

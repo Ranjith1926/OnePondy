@@ -25,6 +25,27 @@ public sealed class FoodOptions
     /// than the bookings' grace, because a restaurant is waiting on it; a payment that lands after this is refunded in full.
     /// </summary>
     public TimeSpan GatewayCheckGrace { get; set; } = TimeSpan.FromMinutes(5);
+
+    /// <summary>How long an order may sit in each stage before the administrators' list flags it as needing attention (step 8.9).</summary>
+    public AttentionOptions Attention { get; set; } = new();
+}
+
+public sealed class AttentionOptions
+{
+    /// <summary>An order ready for pickup that no driver has taken.</summary>
+    public TimeSpan NoDriverAfter { get; set; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>A driver who took a delivery but has not collected it.</summary>
+    public TimeSpan PickupOverdueAfter { get; set; } = TimeSpan.FromMinutes(30);
+
+    /// <summary>A delivery that has been out longer than this.</summary>
+    public TimeSpan DeliveryOverdueAfter { get; set; } = TimeSpan.FromMinutes(60);
+
+    /// <summary>A kitchen that has not started on a confirmed order, or has run past its estimate.</summary>
+    public TimeSpan KitchenOverdueAfter { get; set; } = TimeSpan.FromMinutes(20);
+
+    /// <summary>A refund still pending this long after the order was closed.</summary>
+    public TimeSpan RefundOverdueAfter { get; set; } = TimeSpan.FromHours(1);
 }
 
 /// <summary>Refuses to start with food settings that would give nonsense prices or windows.</summary>
@@ -45,6 +66,13 @@ public static class FoodOptionsGuard
         if (options.DeliveryFee is < 0m or > 500m || options.PackagingFee is < 0m or > 500m)
         {
             throw new InvalidOperationException("Food:DeliveryFee and Food:PackagingFee must each be between 0 and 500.");
+        }
+
+        var attention = options.Attention;
+        TimeSpan[] limits = [attention.NoDriverAfter, attention.PickupOverdueAfter, attention.DeliveryOverdueAfter, attention.KitchenOverdueAfter, attention.RefundOverdueAfter];
+        if (limits.Any(l => l < TimeSpan.FromMinutes(1) || l > TimeSpan.FromDays(1)))
+        {
+            throw new InvalidOperationException("Each Food:Attention limit must be between 1 minute and 1 day.");
         }
 
         if (options.GatewayCheckGrace < TimeSpan.FromMinutes(1) || options.GatewayCheckGrace > TimeSpan.FromHours(1))

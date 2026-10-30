@@ -405,7 +405,8 @@ export type PaymentAttemptStatus = 'created' | 'captured' | 'failed' | 'expired'
 
 export type RefundStatus = 'pending' | 'processed' | 'failed';
 
-export type RefundReason = 'rejected' | 'partnerCancelled' | 'customerCancelled' | 'latePayment';
+export type RefundReason =
+  'rejected' | 'partnerCancelled' | 'customerCancelled' | 'latePayment' | 'adminCancelled';
 
 export type SettlementStatus = 'draft' | 'approved' | 'paid';
 
@@ -588,8 +589,7 @@ export interface FoodOrderLine {
   taxAmount: number;
 }
 
-/** One order in the restaurant's inbox. It never carries the customer's address or phone: OnePondy's own drivers deliver. */
-export type DeliveryJobStatus = 'open' | 'accepted' | 'pickedUp' | 'delivered';
+export type DeliveryJobStatus = 'open' | 'accepted' | 'pickedUp' | 'delivered' | 'cancelled';
 
 /** Who is collecting an order and how far along it is. It carries no position: where a driver is stays with OnePondy. */
 export interface DeliveryProgress {
@@ -599,6 +599,7 @@ export interface DeliveryProgress {
   locationUpdatedAt: string | null;
 }
 
+/** One order in the restaurant's inbox. It never carries the customer's address or phone: OnePondy's own drivers deliver. */
 export interface PartnerOrderSummary {
   id: string;
   /** What every action must send back, so a stale page cannot act on an order that has changed. */
@@ -645,4 +646,104 @@ export interface DriverDetail {
   email: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- Administrators' view of food orders and deliveries (Phase 8, step 8.9) ---
+
+/** Why an order needs an administrator's eye: stuck for longer than expected. */
+export type OrderAttention =
+  'noDriver' | 'pickupOverdue' | 'deliveryOverdue' | 'kitchenOverdue' | 'refundOverdue';
+
+export interface AdminOrderSummary {
+  id: string;
+  version: number;
+  status: FoodOrderStatus;
+  restaurantName: string;
+  deliveryArea: FoodAreaCode;
+  itemCount: number;
+  totalAmount: number;
+  currency: string;
+  createdAt: string;
+  updatedAt: string;
+  deliveryStatus: DeliveryJobStatus | null;
+  driverFirstName: string | null;
+  attention: OrderAttention | null;
+}
+
+export interface AdminDriverPosition {
+  latitude: number;
+  longitude: number;
+  at: string;
+}
+
+export interface AdminDeliveryView {
+  jobId: string;
+  /** What "offer to other drivers" must send back, so a stale page cannot act on a delivery that has moved on. */
+  jobVersion: number;
+  status: DeliveryJobStatus;
+  driverUserId: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  vehicleType: VehicleType | null;
+  openedAt: string;
+  acceptedAt: string | null;
+  pickedUpAt: string | null;
+  deliveredAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  /** Only while the delivery is under way, and only once the driver has reported one. */
+  position: AdminDriverPosition | null;
+  canRelease: boolean;
+}
+
+export type OrderActor = 'customer' | 'partner' | 'admin' | 'system' | 'driver';
+
+export interface AdminFoodOrder {
+  id: string;
+  /** What "cancel" must send back. */
+  version: number;
+  businessId: string;
+  restaurantName: string;
+  fssaiLicenseNumber: string | null;
+  status: FoodOrderStatus;
+  deliveryArea: FoodAreaCode;
+  deliveryAddress: string;
+  deliveryNote: string | null;
+  contactPhone: string;
+  lines: FoodOrderLine[];
+  price: {
+    subtotal: number;
+    deliveryFee: number;
+    packagingFee: number;
+    taxAmount: number;
+    discountAmount: number;
+    totalAmount: number;
+    currency: string;
+  };
+  closedReason: string | null;
+  history: {
+    previousStatus: FoodOrderStatus | null;
+    status: FoodOrderStatus;
+    actorType: OrderActor;
+    reason: string | null;
+    at: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+  payment: { amount: number; currency: string; paidAt: string; reference: string } | null;
+  refunds: {
+    amount: number;
+    reason: RefundReason;
+    status: RefundStatus;
+    requestedAt: string;
+    processedAt: string | null;
+  }[];
+}
+
+export interface AdminOrderDetail {
+  order: AdminFoodOrder;
+  delivery: AdminDeliveryView | null;
+  attention: OrderAttention | null;
+  /** False once the order has arrived or closed. */
+  canCancel: boolean;
 }

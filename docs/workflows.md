@@ -867,7 +867,7 @@ per-listing commission.
 
 ---
 
-## 25. Food orders, drivers and delivery (Phase 8, steps 8.1 to 8.7)
+## 25. Food orders, drivers and delivery (Phase 8, steps 8.1 to 8.9)
 
 ### 25.1 States
 
@@ -996,9 +996,9 @@ The customer's order view shows the payment as a receipt and any refunds with th
 6. A driver cannot go off duty or edit their details while holding a delivery; suspending them returns an uncollected delivery to the pool.
 7. A restaurant sees who is collecting in its order inbox, without the customer's address or phone.
 
-### 25.10 Not built yet
+### 25.10 Not built yet (after 8.9: see §25b for what administrators can now do)
 
-Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, notifications about deliveries, administrators' view of deliveries and drivers (8.9), cash on delivery
+Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, notifications about deliveries and stuck orders, cash on delivery
 (8.8, only if approved), administrators' order monitoring (8.9).
 
 ---
@@ -1014,3 +1014,18 @@ Notifications about orders (so a restaurant learns of a new order only by lookin
 | Reviews and ratings, rides | Later phases. Food ordering: restaurants, menus, orders to the kitchen, paying for them (sandbox) and the customer app's screens are built (section 25); delivery is not. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |
+
+---
+
+## 25b. Watching food orders (step 8.9)
+
+Administrators open **Orders** in the console.
+
+1. **The list** shows every food order, newest first. Choose a status, or "Needs attention only". The banner above it counts orders that look stuck.
+2. **Needs attention** means an order has been in one stage longer than expected: no driver for 10 minutes, a driver who has not collected it for 30, out for delivery for 60, a kitchen 20 minutes late, a refund
+   pending for an hour. The limits are `Food:Attention:*`. It is a prompt to look, not a verdict.
+3. **An order's page** shows the delivery and the driver (name, vehicle, phone), where the driver last said they were (only while the delivery is under way; each look is written to the audit log), the
+   customer's address and phone, the dishes and price, any payment and refund, and the history.
+4. **Offer to other drivers** (only while a driver has the delivery but has not collected the food) takes it from them and shows it to every driver on duty again.
+5. **Cancel this order** (reason required; the customer sees it) closes the order and its delivery. A paid order is refunded in full when refunds are switched on; while they are off the page says so and nothing changes.
+6. Every action is audited, and a page that has gone stale is refused rather than acted on.
