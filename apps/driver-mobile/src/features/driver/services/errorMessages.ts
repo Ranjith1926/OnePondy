@@ -7,6 +7,12 @@ const knownCodes = [
   'driver_not_approved',
   'driver_not_applied',
   'driver_invalid_transition',
+  'driver_has_active_job',
+  'driver_not_available',
+  'job_taken',
+  'job_changed',
+  'job_not_found',
+  'job_invalid_transition',
 ] as const;
 
 type KnownCode = (typeof knownCodes)[number];

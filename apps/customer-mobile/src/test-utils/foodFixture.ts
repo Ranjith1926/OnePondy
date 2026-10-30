@@ -157,6 +157,7 @@ export function anOrder(overrides: Partial<OrderDetail> = {}): OrderDetail {
     updatedAt: '2026-10-30T10:05:00Z',
     payment: null,
     refunds: [],
+    delivery: null,
     ...overrides,
   };
 }

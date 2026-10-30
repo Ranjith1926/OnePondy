@@ -14,6 +14,8 @@ public sealed record DriverVersionBody(uint Version);
 
 public sealed record DriverReasonBody(uint Version, string? Reason);
 
+public sealed record LocationBody(double? Latitude, double? Longitude);
+
 /// <summary>
 /// Delivery drivers (spec Phase 8, step 8.6): a signed-in account applies and starts and ends shifts; administrators review. A driver
 /// is an ordinary account with an approved driver profile, so these routes need a sign-in and nothing more: what a person may do
@@ -27,6 +29,12 @@ public static class DriverEndpoints
         driver.MapGet("/me", GetMine);
         driver.MapPut("/me", SaveMine);
         driver.MapPost("/duty", SetDuty);
+        driver.MapGet("/jobs", GetJobs);
+        driver.MapPost("/jobs/{jobId:guid}/accept", AcceptJob);
+        driver.MapPost("/jobs/{jobId:guid}/release", ReleaseJob);
+        driver.MapPost("/jobs/{jobId:guid}/pickup", PickUpJob);
+        driver.MapPost("/jobs/{jobId:guid}/deliver", DeliverJob);
+        driver.MapPost("/jobs/{jobId:guid}/location", ShareLocation);
 
         var admin = app.MapGroup("/api/v1/admin/drivers").RequireAuthorization(StaffPolicies.Administration).WithTags("Console drivers");
         admin.MapGet("/", AdminList);
@@ -48,6 +56,27 @@ public static class DriverEndpoints
 
     private static async Task<IResult> SetDuty(DutyBody body, ClaimsPrincipal user, DriverService service, HttpContext httpContext, CancellationToken ct) =>
         EndpointResults.Ok(await service.SetDutyAsync(user.GetUserId(), body.OnDuty, body.Version, ct), httpContext);
+
+    private static async Task<IResult> GetJobs(ClaimsPrincipal user, DeliveryService service, CancellationToken ct) =>
+        Results.Ok(await service.GetMineAsync(user.GetUserId(), ct));
+
+    private static async Task<IResult> AcceptJob(Guid jobId, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
+        EndpointResults.Ok(await service.AcceptAsync(user.GetUserId(), jobId, ct), httpContext);
+
+    private static async Task<IResult> ReleaseJob(Guid jobId, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
+        EndpointResults.Ok(await service.ReleaseAsync(user.GetUserId(), jobId, ct), httpContext);
+
+    private static async Task<IResult> PickUpJob(Guid jobId, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
+        EndpointResults.Ok(await service.PickUpAsync(user.GetUserId(), jobId, ct), httpContext);
+
+    private static async Task<IResult> DeliverJob(Guid jobId, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
+        EndpointResults.Ok(await service.DeliverAsync(user.GetUserId(), jobId, ct), httpContext);
+
+    private static async Task<IResult> ShareLocation(Guid jobId, LocationBody body, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct)
+    {
+        var result = await service.RecordLocationAsync(user.GetUserId(), jobId, new LocationInput(body.Latitude, body.Longitude), ct);
+        return result.IsSuccess ? Results.NoContent() : ProblemResults.From(result.Error, httpContext);
+    }
 
     private static async Task<IResult> AdminList(string? status, int? page, int? pageSize, DriverService service, HttpContext httpContext, CancellationToken ct)
     {

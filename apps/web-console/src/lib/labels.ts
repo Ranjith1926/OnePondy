@@ -274,7 +274,7 @@ export const foodOrderStatusLabels: Record<FoodOrderStatus, string> = {
   awaitingPayment: 'Waiting for the customer to pay',
   confirmed: 'Confirmed',
   preparing: 'Being prepared',
-  readyForPickup: 'Ready, waiting for a driver',
+  readyForPickup: 'Ready for pickup',
   outForDelivery: 'Out for delivery',
   delivered: 'Delivered',
   rejected: 'Rejected',

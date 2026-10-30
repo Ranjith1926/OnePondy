@@ -233,3 +233,39 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
   showing in review / changes needed (with the reviewer's reason) / suspended / approved with the duty switch and an honest "no deliveries yet". English only, like the customer app.
 - **Not done in 8.6:** photo upload of licence and registration, delivery offers and the single-acceptance rule (8.7), any location collection (8.7, during a delivery only), push notifications to
   drivers, and a driver's earnings.
+
+**8.7 (delivery: offers, single acceptance, pickup and drop-off, location during a job only).** Flow in [workflows.md](workflows.md) §25.9.
+
+- **A `DeliveryJob` per order.** It opens when the restaurant marks the order ready, in the same save as that change (`OrderService.TransitionAsync`), and a cancelled order cancels its job in the
+  same save. It is a pool, not a per-driver offer: every approved driver on duty who holds no delivery sees the open jobs (oldest first, at most 20) and the first to accept gets it. Nothing is pushed to
+  drivers (no push in this step), so the list refreshes every 10 seconds while the app is open.
+- **Single acceptance is a database rule, not just a check.** (1) Two accepts load the same row version, so the second save fails and that driver is told `job_taken`. (2) A trigger refuses to give an
+  accepted job to a second driver by any write, and allows only the forward steps (open → accepted → picked up → delivered; accepted → open when released; cancelled from any live state); finished jobs
+  are frozen and nothing is deleted. (3) A unique index allows one live job per driver, so one driver pressing "accept" on two jobs at once gets exactly one (the other is told `driver_has_active_job`).
+  Proven by integration tests that fire four drivers at one job five times and one driver at two jobs three times.
+- **Privacy.** An offer shows the restaurant and its address, the area and the number of items, never the customer's address or phone: those arrive only after accepting. The customer and the restaurant
+  see the driver's **first name and vehicle** and how far the delivery has got, never coordinates.
+- **Location.** Collected by the driver app only while it holds a delivery (foreground, every 15 seconds or 25 metres), sent to `POST /driver/jobs/{id}/location`, and kept as the **latest position only** on the
+  job row. The database refuses to keep a position on a job that is not accepted or picked up, so it is erased when the job is delivered, released or cancelled. The customer is not shown it (there is no map
+  provider, decision D6), and there is no admin view of it yet (8.9). If the driver refuses location permission the delivery goes on without it.
+- **Driver account rules added:** a driver holding a delivery cannot go off duty or change their details (they give the delivery up first, which is allowed only before collecting); suspending a driver
+  returns a delivery they have not collected to the pool, and leaves a collected one with them for an administrator.
+- **Pickup and drop-off** move the order (`ready_for_pickup → out_for_delivery → delivered`, recorded in its history as the driver) and the job together in one save. A delivered order goes on its restaurant's
+  statement as before.
+- **Migration:** `AddDeliveryJobs` (one table with six checks, three indexes, the rule trigger, and a backfill that gives any order already ready for pickup its open job). Applied to a database holding
+  8.5 data with a waiting order (it got its job), rolled back and forward again. Apply it as `onepondy_app` like the others.
+- **Console:** the restaurant's inbox card says who is collecting ("Waiting for a driver to accept", "Ravi (scooter) is on the way to collect it", "Ravi has collected it"). **Customer app:** the order screen
+  says the same in the customer's words.
+- **Not done in 8.7, and known gaps:** push notifications to drivers, to restaurants and to customers about deliveries; an administrator's view of jobs and of where a driver is, and cancelling or reassigning a
+  stuck job (8.9: until then a driver who vanishes after collecting leaves the order out for delivery, and a job nobody takes stays open); a driver's earnings or any pay rule; a map for the customer
+  (D6); a tiny race between an administrator suspending a driver and that driver accepting at the same instant (they touch different rows, so the delivery could be held by a suspended driver until an
+  administrator acts); rate-limiting of position reports.
+- **Tests (8.7):** 32 new unit tests (opening, offers, the privacy of offers, accepting, one delivery per driver, collecting and delivering in order, giving up, position kept only while held and erased after,
+  bad positions, cancelling, the driver's own account rules, suspension), 6 new PostgreSQL integration tests (the full HTTP flow; four drivers racing for one job five times; one driver racing for two jobs three
+  times; cancellation; access control; the database refusing second owners, skipped steps, deletes, a second live job and stray positions). Whole suite on a fresh PostgreSQL 18 database: 755 unit, 9 architecture,
+  144 integration (6 live-gateway skipped), all passing. Console 87, customer app 336, driver app 130 (8 new). The customer app's full run needs `--testTimeout=30000` on a slow machine: three modal tests
+  exceed Jest's 5-second default when the machine is busy (they fail the same way on the previous commit and pass alone).
+- **Run for real on the emulator** (local API, throwaway PostgreSQL): the driver went on duty and saw the open delivery without the customer's address; the location permission was asked only when taking it; collecting
+  moved the order to out for delivery and showed the customer's address and phone; the customer's order showed the driver's first name and vehicle and no coordinates; handing over delivered the order and left no
+  position stored. **Not seen working end to end:** the phone's own position reaching the API. The emulator's GPS stopped producing fixes after the first one, so no report was sent from the app (the same request sent
+  directly to the endpoint worked, and the app's reporting is covered by its tests). This needs a run on a real phone.

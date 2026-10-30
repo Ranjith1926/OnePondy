@@ -22,6 +22,7 @@ import { PaymentPanel } from '../../payments/components/PaymentPanel';
 import { ReceiptSection } from '../../payments/components/ReceiptSection';
 import { usePayOrder } from '../../payments/hooks/usePayOrder';
 import type { OrderDetail } from '../api/foodApi';
+import { DeliveryLine } from '../components/DeliveryLine';
 import { PriceBreakdown } from '../components/PriceBreakdown';
 import { foodErrorMessageKey } from '../foodErrors';
 import { useCancelOrder, useOrder } from '../hooks/useFood';
@@ -113,6 +114,9 @@ export function OrderDetailScreen({ route }: Props) {
               : `food.order.hint.${data.status}`,
           )}
         </OPText>
+        {data.delivery && (data.status === 'readyForPickup' || data.status === 'outForDelivery') ? (
+          <DeliveryLine delivery={data.delivery} />
+        ) : null}
         {data.estimatedReadyAt &&
         (data.status === 'preparing' || data.status === 'readyForPickup') ? (
           <OPText>

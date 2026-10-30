@@ -66,7 +66,15 @@
         }
       ],
       "@react-native-vector-icons/lucide",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "OnePondy Driver shares your location with OnePondy only while you are on a delivery, so the delivery can be managed. It is not collected at any other time.",
+          "locationAlwaysAndWhenInUsePermission": false,
+          "locationAlwaysPermission": false
+        }
+      ]
     ]
   }
 }

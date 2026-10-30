@@ -4,7 +4,6 @@ import { StyleSheet, Switch, View } from 'react-native';
 
 import { Screen } from '../../../components/Screen';
 import {
-  EmptyState,
   InlineBanner,
   OPBadge,
   OPButton,
@@ -16,7 +15,9 @@ import {
 } from '../../../design-system';
 import { useSession } from '../../../session/SessionProvider';
 import type { DriverApprovalStatus, DriverProfile } from '../api/driverApi';
+import { JobsSection } from '../components/JobsSection';
 import { useDriverProfile, useSetDuty } from '../hooks/useDriver';
+import { useJobs } from '../hooks/useJobs';
 import { driverErrorMessageKey } from '../services/errorMessages';
 
 const statusTone: Record<DriverApprovalStatus, BadgeTone> = {
@@ -43,12 +44,19 @@ export function HomeScreen() {
   const query = useDriverProfile();
   const setDuty = useSetDuty();
   const profile = query.data;
+  // The same query the deliveries list uses, so while a delivery is held the duty switch can say why it cannot be turned off.
+  const holdsJob = useJobs(profile?.approvalStatus === 'approved').data?.current != null;
 
   if (!profile?.configured || !profile.approvalStatus) {
     return null;
   }
 
   const status = profile.approvalStatus;
+  // Off duty needs a free driver (the server refuses it otherwise), and on duty needs an approved one.
+  const dutyLocked =
+    setDuty.isPending ||
+    (!profile.isOnDuty && !profile.canGoOnDuty) ||
+    (profile.isOnDuty && holdsJob);
   const firstName = (profile.fullName ?? user?.displayName ?? '').split(' ')[0];
 
   return (
@@ -110,7 +118,8 @@ export function HomeScreen() {
               <Switch
                 value={profile.isOnDuty}
                 onValueChange={(onDuty) => setDuty.mutate({ onDuty, version: profile.version })}
-                disabled={setDuty.isPending || (!profile.isOnDuty && !profile.canGoOnDuty)}
+                disabled={dutyLocked}
+                accessibilityState={{ disabled: dutyLocked }}
                 accessibilityLabel={t('home.dutyLabel')}
                 trackColor={{ true: theme.colors.brand.primary, false: theme.colors.borderStrong }}
               />
@@ -123,14 +132,7 @@ export function HomeScreen() {
             <InlineBanner kind="error" message={t(driverErrorMessageKey(setDuty.error))} />
           ) : null}
 
-          <OPText variant="heading" accessibilityRole="header">
-            {t('home.jobsTitle')}
-          </OPText>
-          <EmptyState
-            icon={profile.isOnDuty ? 'bike' : 'moon'}
-            title={profile.isOnDuty ? t('home.noJobsOnTitle') : t('home.noJobsOffTitle')}
-            message={profile.isOnDuty ? t('home.noJobsOnMessage') : t('home.noJobsOffMessage')}
-          />
+          <JobsSection isOnDuty={profile.isOnDuty} />
         </>
       ) : null}
 

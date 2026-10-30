@@ -3,9 +3,11 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using OnePondy.Application.Bookings;
 using OnePondy.Application.Common;
+using OnePondy.Application.Delivery;
 using OnePondy.Application.Payments;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
+using OnePondy.Domain.Delivery;
 using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
 
@@ -182,6 +184,7 @@ public sealed partial class OrderService(
 
         var orders = await query.OrderByDescending(o => o.CreatedAt).Take(MaxListed).ToListAsync(cancellationToken);
         var lines = await LinesAsync(orders, cancellationToken);
+        var deliveries = await DeliveryProgress.ForOrdersAsync(db, [.. orders.Select(o => o.Id)], cancellationToken);
         return Result<IReadOnlyList<PartnerOrderSummary>>.Success(
         [
             .. orders.Select(o =>
@@ -198,7 +201,8 @@ public sealed partial class OrderService(
                     o.TotalAmount,
                     o.Currency,
                     o.DeliveryArea,
-                    o.CreatedAt);
+                    o.CreatedAt,
+                    deliveries.GetValueOrDefault(o.Id));
             }),
         ]);
     }
@@ -211,7 +215,7 @@ public sealed partial class OrderService(
         }
 
         var order = await Orders().AsNoTracking().SingleOrDefaultAsync(o => o.Id == id && o.BusinessId == businessId, cancellationToken);
-        return order is null ? OrderErrors.NotFound : ToPartnerDetail(order);
+        return order is null ? OrderErrors.NotFound : await ToPartnerDetailAsync(order, cancellationToken);
     }
 
     /// <summary>
@@ -386,7 +390,7 @@ public sealed partial class OrderService(
         }
 
         var failure = await TransitionAsync(order, expectedVersion, apply, cancellationToken, cancelReason);
-        return failure is null ? ToPartnerDetail(order) : failure;
+        return failure is null ? await ToPartnerDetailAsync(order, cancellationToken) : failure;
     }
 
     /// <summary>
@@ -443,6 +447,21 @@ public sealed partial class OrderService(
         for (var i = historyBefore; i < order.History.Count; i++)
         {
             db.MarkAdded(order.History[i]);
+        }
+
+        // Step 8.7: a ready order is put up for drivers in the same save, and a cancelled one takes its delivery with it (touching the
+        // job's row, so a driver accepting at that very moment collides with the cancellation instead of slipping through).
+        if (order.Status == FoodOrderStatus.ReadyForPickup)
+        {
+            db.DeliveryJobs.Add(DeliveryJob.Open(order.Id, now));
+        }
+        else if (order.Status is FoodOrderStatus.Cancelled or FoodOrderStatus.RefundPending)
+        {
+            var job = await db.DeliveryJobs.SingleOrDefaultAsync(j => j.FoodOrderId == order.Id, cancellationToken);
+            if (job is { Status: DeliveryJobStatus.Open or DeliveryJobStatus.Accepted or DeliveryJobStatus.PickedUp })
+            {
+                job.Cancel("The order was cancelled.", now);
+            }
         }
 
         if (order.Status is FoodOrderStatus.Cancelled or FoodOrderStatus.Rejected or FoodOrderStatus.Expired or FoodOrderStatus.Failed or FoodOrderStatus.RefundPending)
@@ -528,6 +547,7 @@ public sealed partial class OrderService(
             .OrderBy(a => a.UpdatedAt)
             .FirstOrDefaultAsync(cancellationToken);
         var orderRefunds = await db.Refunds.AsNoTracking().Where(r => r.FoodOrderId == order.Id).OrderBy(r => r.RequestedAt).ToListAsync(cancellationToken);
+        var delivery = (await DeliveryProgress.ForOrdersAsync(db, [order.Id], cancellationToken)).GetValueOrDefault(order.Id);
         return new OrderDetail(
             order.Id,
             order.Version,
@@ -550,10 +570,14 @@ public sealed partial class OrderService(
             order.CreatedAt,
             order.UpdatedAt,
             paid is null ? null : new PaymentView(paid.Amount, paid.Currency, paid.UpdatedAt, paid.ProviderPaymentId!),
-            [.. orderRefunds.Select(r => new RefundView(r.Amount, r.Reason, r.Status, r.RequestedAt, r.ProcessedAt))]);
+            [.. orderRefunds.Select(r => new RefundView(r.Amount, r.Reason, r.Status, r.RequestedAt, r.ProcessedAt))],
+            delivery);
     }
 
-    private static PartnerOrderDetail ToPartnerDetail(FoodOrder order) => new(
+    private async Task<PartnerOrderDetail> ToPartnerDetailAsync(FoodOrder order, CancellationToken cancellationToken) =>
+        ToPartnerDetail(order, (await DeliveryProgress.ForOrdersAsync(db, [order.Id], cancellationToken)).GetValueOrDefault(order.Id));
+
+    private static PartnerOrderDetail ToPartnerDetail(FoodOrder order, DeliveryProgressView? delivery) => new(
         order.Id,
         order.Version,
         order.Status,
@@ -566,7 +590,8 @@ public sealed partial class OrderService(
         order.ClosedReason,
         ToHistoryViews(order),
         order.CreatedAt,
-        order.UpdatedAt);
+        order.UpdatedAt,
+        delivery);
 
     private static OrderQuoteView ToQuoteView(Built built) => new(
         built.Restaurant.Business.Id,

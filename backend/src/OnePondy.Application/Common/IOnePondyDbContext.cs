@@ -77,6 +77,8 @@ public interface IOnePondyDbContext
 
     DbSet<DriverProfile> DriverProfiles { get; }
 
+    DbSet<DeliveryJob> DeliveryJobs { get; }
+
     DbSet<Settlement> Settlements { get; }
 
     DbSet<SettlementItem> SettlementItems { get; }

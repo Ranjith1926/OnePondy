@@ -136,7 +136,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Planning | `ItineraryService`, `SavedPlacesService`, `TripPlannerService` |
 | Partners | `BusinessService`, `ListingService`, `SavedListingsService` |
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
-| Delivery | `DriverService` (apply, edit, shifts, administrators' review) |
+| Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
 | Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
 | Notifications | `NotificationOutbox` (queues in the caller's transaction), `OutboxDispatcher`, `BookingReminders`, `NotificationRetention`, `DeviceService`, `IPushSender` |
@@ -455,6 +455,7 @@ administrator.
 | POST `/devices`, DELETE `/devices/{id}` | U | Register or remove this phone for push notifications. |
 | GET `/restaurants?area=`, `/restaurants/{id}`, `/restaurants/{id}/menu` | P | Open restaurants for an area and their menus (not gated by the module flag). |
 | GET/PUT `/driver/me`, POST `/driver/duty` | U | The signed-in account's driver application and shifts (step 8.6). `PUT` applies or changes details (needs the `version` once applied; a change by an approved driver sends the application for review again and ends the shift); `duty` goes on or off duty (only an approved driver can go on). |
+| GET `/driver/jobs`, POST `/driver/jobs/{id}/accept`, `/release`, `/pickup`, `/deliver`, `/location` | U (approved driver) | Step 8.7. `jobs` returns the driver's own delivery and, while free and on duty, the open ones (no customer address or phone). `accept` is first-come, one live delivery per driver; `release` only before collecting; `pickup` and `deliver` move the order too; `location` stores the latest position, only while the driver holds the job. |
 | POST `/food/quote` | U | Prices a cart from the menu: lines, tax per line, fees, total. |
 | POST/GET `/food/orders`, GET `/food/orders/{id}`, POST `/food/orders/{id}/cancel` | U (own order) | Place (needs `idempotencyKey` and `expectedTotal`), list, view (with the payment receipt and any refunds), cancel until cooking starts (a paid order is refunded in full, or refused while refunds are off). |
 | POST `/food/orders/{id}/payment`, POST `/food/orders/{id}/payment/refresh` | U (own order) | Start (or get the open) Razorpay order for an accepted order; "is it paid yet?" asks Razorpay and returns the order. Another customer's order is 404. |

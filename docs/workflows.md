@@ -867,7 +867,7 @@ per-listing commission.
 
 ---
 
-## 25. Food orders and drivers (Phase 8, steps 8.1 to 8.6)
+## 25. Food orders, drivers and delivery (Phase 8, steps 8.1 to 8.7)
 
 ### 25.1 States
 
@@ -981,11 +981,24 @@ The customer's order view shows the payment as a receipt and any refunds with th
    locks their profile; reinstating returns them *off* duty to start their own shift. An approved driver who changes their vehicle or licence goes back for review and off duty.
 4. Every change checks the version the person was looking at, so two devices or two administrators cannot overwrite each other. All review steps are in the audit log.
 5. **Account deletion** is refused while the driver is on duty (`driver_on_duty`) and removes the driver profile.
-6. **No location is collected** in this step. Delivery offers, accepting a job and location during a job are step 8.7; until then an on-duty driver sees "no deliveries yet".
+6. Location is collected only during a delivery (step 8.7, §25.9), never because a driver is on duty.
 
-### 25.9 Not built yet
+### 25.9 Delivering an order (step 8.7)
 
-Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, delivery offers, assignment and tracking (8.7), cash on delivery
+1. **The restaurant marks an order ready.** In the same save a delivery job opens (`open`). If the order is cancelled before it arrives, the job is cancelled with it and the driver's position is erased.
+2. **Drivers see open jobs.** Only approved drivers on duty who hold no delivery, in the driver app's home, refreshed every 10 seconds. An offer shows the restaurant, its address, the area and the number of
+   items: not where the customer lives.
+3. **A driver takes one** (`accept`). The first request wins; others are told "another driver took this first". The winner now sees the customer's address, note and phone, the restaurant's phone, and the dishes to
+   check in the bag. A driver can hold one delivery at a time, and can give it up (`release`) until they have collected it.
+4. **Collect** (`pickup`): the order becomes *out for delivery* (the customer is told, by name and vehicle, on their order screen). **Hand over** (`deliver`): the order becomes *delivered* and the job finishes.
+5. **Location**: while the driver holds the delivery the app reports its position every 15 seconds or 25 metres (foreground only, and only if the driver allows it). Only the latest is kept, and it is erased when
+   the delivery ends for any reason. Nobody is shown it yet.
+6. A driver cannot go off duty or edit their details while holding a delivery; suspending them returns an uncollected delivery to the pool.
+7. A restaurant sees who is collecting in its order inbox, without the customer's address or phone.
+
+### 25.10 Not built yet
+
+Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, notifications about deliveries, administrators' view of deliveries and drivers (8.9), cash on delivery
 (8.8, only if approved), administrators' order monitoring (8.9).
 
 ---

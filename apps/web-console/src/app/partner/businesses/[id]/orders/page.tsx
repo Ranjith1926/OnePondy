@@ -6,6 +6,7 @@ import { partnerApi } from '@/lib/api';
 import type { PartnerOrderSummary } from '@/lib/apiTypes';
 import {
   deadlineFor,
+  deliveryText,
   ordersForView,
   parseView,
   toneFor,
@@ -130,6 +131,7 @@ export default async function PartnerOrdersPage({
         <div className="flex flex-col gap-4">
           {orders.map((order) => {
             const deadline = deadlineFor(order);
+            const delivery = deliveryText(order);
             return (
               <Card key={order.id}>
                 <div className="flex flex-wrap items-start justify-between gap-4">
@@ -145,6 +147,7 @@ export default async function PartnerOrdersPage({
                       Placed {formatDateTime(order.createdAt)}
                       {deadline ? ` · ${deadline.label} ${formatDateTime(deadline.at)}` : ''}
                     </p>
+                    {delivery ? <p className="text-sm font-semibold">{delivery}</p> : null}
                   </div>
                   <span
                     className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap ${toneStyles[toneFor(order.status)]}`}

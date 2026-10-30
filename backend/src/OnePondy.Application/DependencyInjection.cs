@@ -65,6 +65,7 @@ public static class DependencyInjection
         services.AddScoped<OnePondy.Application.Food.OrderService>();
         services.AddScoped<OnePondy.Application.Food.FoodOrderExpiry>();
         services.AddScoped<OnePondy.Application.Delivery.DriverService>();
+        services.AddScoped<OnePondy.Application.Delivery.DeliveryService>();
         services.AddScoped<PaymentAdminService>();
         services.AddScoped<NotificationOutbox>();
         services.AddScoped<DeviceService>();

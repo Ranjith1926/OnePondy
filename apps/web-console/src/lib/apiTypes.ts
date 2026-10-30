@@ -589,6 +589,16 @@ export interface FoodOrderLine {
 }
 
 /** One order in the restaurant's inbox. It never carries the customer's address or phone: OnePondy's own drivers deliver. */
+export type DeliveryJobStatus = 'open' | 'accepted' | 'pickedUp' | 'delivered';
+
+/** Who is collecting an order and how far along it is. It carries no position: where a driver is stays with OnePondy. */
+export interface DeliveryProgress {
+  status: DeliveryJobStatus;
+  driverFirstName: string | null;
+  vehicleType: VehicleType | null;
+  locationUpdatedAt: string | null;
+}
+
 export interface PartnerOrderSummary {
   id: string;
   /** What every action must send back, so a stale page cannot act on an order that has changed. */
@@ -602,6 +612,8 @@ export interface PartnerOrderSummary {
   currency: string;
   deliveryArea: FoodAreaCode;
   createdAt: string;
+  /** Null until the order is ready for a driver. */
+  delivery: DeliveryProgress | null;
 }
 
 export type DriverApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';

@@ -662,6 +662,18 @@
         "failed": "The payment didn't go through.",
         "refundPending": "Your money is being returned in full.",
         "refunded": "Your money was returned in full."
+      },
+      "delivery": {
+        "open": "Looking for a driver to collect your order.",
+        "accepted": "{{name}} is on the way to the restaurant to collect your order.",
+        "acceptedUnnamed": "A driver is on the way to the restaurant to collect your order.",
+        "pickedUp": "{{name}} has your order and is on the way to you.",
+        "pickedUpUnnamed": "Your driver has your order and is on the way to you.",
+        "vehicle": {
+          "bicycle": "On a bicycle.",
+          "scooter": "On a scooter.",
+          "motorbike": "On a motorbike."
+        }
       }
     },
     "orders": {

@@ -23,6 +23,7 @@ function anOrder(status: FoodOrderStatus): PartnerOrderSummary {
     currency: 'INR',
     deliveryArea: 'whiteTown',
     createdAt: '2026-10-30T05:00:00Z',
+    delivery: null,
   };
 }
 

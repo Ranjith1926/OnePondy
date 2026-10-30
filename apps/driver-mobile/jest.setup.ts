@@ -29,6 +29,14 @@ jest.mock('expo-secure-store', () => {
   };
 });
 
+// Location is a native module with nothing behind it in Jest. Tests that care replace these.
+jest.mock('expo-location', () => ({
+  Accuracy: { Balanced: 3 },
+  getForegroundPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  requestForegroundPermissionsAsync: jest.fn(() => Promise.resolve({ status: 'granted' })),
+  watchPositionAsync: jest.fn(() => Promise.resolve({ remove: jest.fn() })),
+}));
+
 // No network in tests: anything a test does not mock answers 404 at once. Tests replace this as needed.
 globalThis.fetch = jest.fn(() =>
   Promise.resolve({ ok: false, status: 404, text: () => Promise.resolve('') }),

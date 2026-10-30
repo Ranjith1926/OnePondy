@@ -85,5 +85,10 @@ public static class DriverErrors
         ErrorKind.Conflict,
         "That licence number can't be used. If you think this is a mistake, contact support.");
 
+    public static readonly AppError HasActiveJob = new(
+        "driver_has_active_job",
+        ErrorKind.Conflict,
+        "Finish your delivery first, or give it up before collecting the food.");
+
     public static AppError InvalidTransition(string message) => new("driver_invalid_transition", ErrorKind.Conflict, message);
 }

@@ -671,6 +671,104 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Delivery.DeliveryJob", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("delivered_at");
+
+                    b.Property<Guid?>("DriverUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_user_id");
+
+                    b.Property<Guid>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
+
+                    b.Property<double?>("LastLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("last_latitude");
+
+                    b.Property<DateTimeOffset?>("LastLocationAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_location_at");
+
+                    b.Property<double?>("LastLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("last_longitude");
+
+                    b.Property<DateTimeOffset>("OpenedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("opened_at");
+
+                    b.Property<DateTimeOffset?>("PickedUpAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("picked_up_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_delivery_jobs");
+
+                    b.HasIndex("DriverUserId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_delivery_jobs_one_active_per_driver")
+                        .HasFilter("status IN ('accepted', 'picked_up')");
+
+                    b.HasIndex("FoodOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_delivery_jobs_order");
+
+                    b.HasIndex("Status", "OpenedAt")
+                        .HasDatabaseName("ix_delivery_jobs_status_opened");
+
+                    b.ToTable("delivery_jobs", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_delivery_job_driver", "(status = 'open' AND driver_user_id IS NULL) OR (status IN ('accepted', 'picked_up', 'delivered') AND driver_user_id IS NOT NULL) OR status = 'cancelled'");
+
+                            t.HasCheckConstraint("ck_delivery_job_location_complete", "(last_latitude IS NULL) = (last_longitude IS NULL) AND (last_latitude IS NULL) = (last_location_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_delivery_job_location_only_while_active", "status IN ('accepted', 'picked_up') OR (last_latitude IS NULL AND last_longitude IS NULL AND last_location_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_delivery_job_location_range", "(last_latitude IS NULL OR last_latitude BETWEEN -90 AND 90) AND (last_longitude IS NULL OR last_longitude BETWEEN -180 AND 180)");
+
+                            t.HasCheckConstraint("ck_delivery_job_status", "status IN ('open', 'accepted', 'picked_up', 'delivered', 'cancelled')");
+
+                            t.HasCheckConstraint("ck_delivery_job_times", "(status <> 'open' OR accepted_at IS NULL) AND (status NOT IN ('accepted', 'picked_up', 'delivered') OR accepted_at IS NOT NULL) AND (status NOT IN ('picked_up', 'delivered') OR picked_up_at IS NOT NULL) AND (status <> 'delivered' OR delivered_at IS NOT NULL) AND (status <> 'cancelled' OR cancelled_at IS NOT NULL)");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Delivery.DriverProfile", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -3163,6 +3261,22 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_module_flags_app_users_updated_by_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Delivery.DeliveryJob", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DriverUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_delivery_jobs_app_users_driver_user_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_delivery_jobs_food_orders_food_order_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Delivery.DriverProfile", b =>

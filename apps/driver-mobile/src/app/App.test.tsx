@@ -1,6 +1,12 @@
 import { fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
+import * as Location from 'expo-location';
 
-import type { DriverProfile } from '../features/driver/api/driverApi';
+import type {
+  DriverJobs,
+  DriverProfile,
+  JobDetail,
+  JobOffer,
+} from '../features/driver/api/driverApi';
 import type { SessionTokens } from '../features/auth/api/authApi';
 import { sessionManager } from '../features/auth/services/sessionManager';
 import { loadSession } from '../storage/sessionStorage';
@@ -86,7 +92,13 @@ describe('the driver app', () => {
 
   beforeEach(async () => {
     await sessionManager.clear();
-    routes = { 'POST /api/v1/auth/logout': () => ({ status: 204 }) };
+    routes = {
+      'POST /api/v1/auth/logout': () => ({ status: 204 }),
+      'GET /api/v1/driver/jobs': () => ({
+        status: 200,
+        body: { current: null, open: [], canAcceptJobs: true },
+      }),
+    };
     installFakeApi();
   });
 
@@ -374,13 +386,13 @@ describe('the driver app', () => {
       routes['POST /api/v1/driver/duty'] = () => ({ status: 200, body: onDuty });
 
       expect(await screen.findByText("You're off duty.")).toBeOnTheScreen();
-      expect(screen.getByText('Go on duty to be offered deliveries.')).toBeOnTheScreen();
+      expect(screen.getByText('Go on duty to see open deliveries.')).toBeOnTheScreen();
 
       fireEvent(screen.getByRole('switch', { name: 'On duty' }), 'valueChange', true);
 
       expect(await screen.findByText(/^You're on duty since /)).toBeOnTheScreen();
       expect(
-        screen.getByText("Delivery offers will appear here while you're on duty."),
+        screen.getByText("Open deliveries appear here while you're on duty."),
       ).toBeOnTheScreen();
       expect(requestsTo('POST /api/v1/driver/duty')[0].body).toEqual({ onDuty: true, version: 12 });
 
@@ -395,7 +407,7 @@ describe('the driver app', () => {
         onDuty: false,
         version: 13,
       });
-      expect(await screen.findByText('Go on duty to be offered deliveries.')).toBeOnTheScreen();
+      expect(await screen.findByText('Go on duty to see open deliveries.')).toBeOnTheScreen();
     });
 
     it('reloads and explains when the profile changed under the driver', async () => {
@@ -481,6 +493,206 @@ describe('the driver app', () => {
       await user.press(screen.getByRole('button', { name: 'Try again' }));
 
       expect(await screen.findByRole('switch', { name: 'On duty' })).toBeOnTheScreen();
+    });
+  });
+
+  describe('deliveries', () => {
+    const onDuty: DriverProfile = {
+      ...approved,
+      isOnDuty: true,
+      onDutySince: '2026-10-30T05:30:00Z',
+      version: 13,
+    };
+    const offer: JobOffer = {
+      id: 'job-1',
+      restaurantName: 'Spice Route',
+      restaurantAddress: '4 Rue Mahe, White Town',
+      deliveryArea: 'whiteTown',
+      itemCount: 3,
+      openedAt: '2026-10-30T05:40:00Z',
+    };
+    const held = (status: JobDetail['status']): JobDetail => ({
+      id: 'job-1',
+      status,
+      restaurantName: 'Spice Route',
+      restaurantAddress: '4 Rue Mahe, White Town',
+      restaurantPhone: '+914132000111',
+      deliveryArea: 'whiteTown',
+      deliveryAddress: '12 Rue Suffren, White Town',
+      deliveryNote: 'Ring the bell',
+      contactPhone: '+919876500001',
+      items: [
+        { name: 'Filter coffee', quantity: 1 },
+        { name: 'Masala dosa', quantity: 2 },
+      ],
+      acceptedAt: '2026-10-30T05:41:00Z',
+      pickedUpAt: status === 'pickedUp' ? '2026-10-30T05:55:00Z' : null,
+    });
+
+    let jobs: DriverJobs;
+    const watch = Location.watchPositionAsync as jest.Mock;
+    const getPermission = Location.getForegroundPermissionsAsync as jest.Mock;
+
+    beforeEach(() => {
+      jobs = { current: null, open: [offer], canAcceptJobs: true };
+      routes['GET /api/v1/driver/jobs'] = () => ({ status: 200, body: jobs });
+      routes['POST /api/v1/driver/jobs/job-1/location'] = () => ({ status: 204 });
+      watch.mockClear();
+      getPermission.mockClear();
+    });
+
+    it('lists open deliveries without the customers address or phone', async () => {
+      await launchSignedIn(onDuty);
+
+      expect(await screen.findByText('From Spice Route to White Town')).toBeOnTheScreen();
+      expect(screen.getByText('4 Rue Mahe, White Town')).toBeOnTheScreen();
+      expect(screen.getByText('3 items')).toBeOnTheScreen();
+      expect(screen.queryByText(/Suffren/)).not.toBeOnTheScreen();
+      // Nothing is collected from a driver who has no delivery.
+      expect(watch).not.toHaveBeenCalled();
+      expect(getPermission).not.toHaveBeenCalled();
+    });
+
+    it('takes a delivery, shows what to collect, then the customer after collecting, then finishes', async () => {
+      const user = userEvent.setup();
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/accept'] = () => {
+        jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+        return { status: 200, body: held('accepted') };
+      };
+      routes['POST /api/v1/driver/jobs/job-1/pickup'] = () => {
+        jobs = { current: held('pickedUp'), open: [], canAcceptJobs: true };
+        return { status: 200, body: held('pickedUp') };
+      };
+      routes['POST /api/v1/driver/jobs/job-1/deliver'] = () => {
+        jobs = { current: null, open: [], canAcceptJobs: true };
+        return { status: 200, body: { ...held('pickedUp'), status: 'delivered' } };
+      };
+
+      await user.press(await screen.findByRole('button', { name: 'Take this delivery' }));
+
+      expect(await screen.findByText('Collect from Spice Route')).toBeOnTheScreen();
+      expect(screen.getByText('2 × Masala dosa')).toBeOnTheScreen();
+      expect(screen.getByText('1 × Filter coffee')).toBeOnTheScreen();
+      // The customer's address and phone are not shown until the food is collected.
+      expect(screen.queryByText(/Suffren/)).not.toBeOnTheScreen();
+      expect(screen.queryByText(/9876500001/)).not.toBeOnTheScreen();
+
+      await user.press(screen.getByRole('button', { name: "I've collected the order" }));
+
+      expect(await screen.findByText('12 Rue Suffren, White Town')).toBeOnTheScreen();
+      expect(screen.getByText('Customer phone: +919876500001')).toBeOnTheScreen();
+      expect(screen.getByText('Note: Ring the bell')).toBeOnTheScreen();
+
+      await user.press(screen.getByRole('button', { name: "I've handed it over" }));
+
+      expect(await screen.findByText('No deliveries yet')).toBeOnTheScreen();
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/accept')).toHaveLength(1);
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/pickup')).toHaveLength(1);
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/deliver')).toHaveLength(1);
+    });
+
+    it('says so and shows what is true now when another driver was faster', async () => {
+      const user = userEvent.setup();
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/accept'] = () => {
+        jobs = { current: null, open: [], canAcceptJobs: true };
+        return { status: 409, body: { code: 'job_taken' } };
+      };
+
+      await user.press(await screen.findByRole('button', { name: 'Take this delivery' }));
+
+      expect(await screen.findByText('Another driver took this delivery first.')).toBeOnTheScreen();
+      await waitFor(() =>
+        expect(screen.queryByText('From Spice Route to White Town')).not.toBeOnTheScreen(),
+      );
+    });
+
+    it('lets the driver give a delivery up before collecting it', async () => {
+      const user = userEvent.setup();
+      jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/release'] = () => {
+        jobs = { current: null, open: [offer], canAcceptJobs: true };
+        return { status: 200, body: held('accepted') };
+      };
+
+      await user.press(await screen.findByRole('button', { name: 'Give this delivery up' }));
+
+      expect(await screen.findByText('From Spice Route to White Town')).toBeOnTheScreen();
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/release')).toHaveLength(1);
+    });
+
+    it('cannot be switched off duty while a delivery is held', async () => {
+      jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+
+      await screen.findByText('Collect from Spice Route');
+
+      await waitFor(() => expect(screen.getByRole('switch', { name: 'On duty' })).toBeDisabled());
+    });
+
+    it('shares the position only while a delivery is held, and stops when it ends', async () => {
+      const remove = jest.fn();
+      watch.mockImplementation(() => Promise.resolve({ remove }));
+      const user = userEvent.setup();
+      jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/pickup'] = () => ({
+        status: 200,
+        body: held('pickedUp'),
+      });
+      routes['POST /api/v1/driver/jobs/job-1/deliver'] = () => {
+        jobs = { current: null, open: [], canAcceptJobs: true };
+        return { status: 200, body: { ...held('pickedUp'), status: 'delivered' } };
+      };
+
+      expect(await screen.findByText(/your location is shared with OnePondy/)).toBeOnTheScreen();
+      await waitFor(() => expect(watch).toHaveBeenCalledTimes(1));
+      const report = watch.mock.calls[0][1] as (position: unknown) => void;
+      report({ coords: { latitude: 11.93, longitude: 79.83 } });
+
+      await waitFor(() =>
+        expect(requestsTo('POST /api/v1/driver/jobs/job-1/location')).toHaveLength(1),
+      );
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/location')[0].body).toEqual({
+        latitude: 11.93,
+        longitude: 79.83,
+      });
+
+      jobs = { current: held('pickedUp'), open: [], canAcceptJobs: true };
+      await user.press(screen.getByRole('button', { name: "I've collected the order" }));
+      await screen.findByRole('button', { name: "I've handed it over" });
+      // Still the same delivery, so still the one subscription.
+      expect(watch).toHaveBeenCalledTimes(1);
+      expect(remove).not.toHaveBeenCalled();
+
+      await user.press(screen.getByRole('button', { name: "I've handed it over" }));
+
+      await screen.findByText('No deliveries yet');
+      await waitFor(() => expect(remove).toHaveBeenCalledTimes(1));
+    });
+
+    it('carries on without sharing when the driver says no to location', async () => {
+      getPermission.mockResolvedValueOnce({ status: 'denied' });
+      (Location.requestForegroundPermissionsAsync as jest.Mock).mockResolvedValueOnce({
+        status: 'denied',
+      });
+      jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+
+      expect(await screen.findByText(/Location sharing is off/)).toBeOnTheScreen();
+      expect(watch).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: "I've collected the order" })).toBeOnTheScreen();
+    });
+
+    it('asks nothing of a driver who is off duty', async () => {
+      jobs = { current: null, open: [], canAcceptJobs: false };
+      await launchSignedIn(approved);
+
+      expect(await screen.findByText("You're off duty")).toBeOnTheScreen();
+      expect(screen.getByText('Go on duty to see open deliveries.')).toBeOnTheScreen();
+      expect(watch).not.toHaveBeenCalled();
     });
   });
 });

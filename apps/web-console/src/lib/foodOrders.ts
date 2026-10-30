@@ -1,4 +1,5 @@
 import type { FoodOrderStatus, PartnerOrderSummary } from './apiTypes';
+import { vehicleTypeLabels } from './labels';
 
 /** The restaurant's actions on an order. Each is one POST to `/orders/{id}/{step}` and carries the order's version. */
 export type OrderStep = 'accept' | 'reject' | 'preparing' | 'ready' | 'cancel';
@@ -119,6 +120,28 @@ export function ordersForView(
 /** How many orders are waiting for the restaurant to accept, for the heading. */
 export const waitingForYou = (orders: readonly PartnerOrderSummary[]): number =>
   orders.filter((order) => order.status === 'placed').length;
+
+/** What the kitchen should know about the delivery, in plain words; null while there is none to speak of. */
+export function deliveryText(order: PartnerOrderSummary): string | null {
+  const delivery = order.delivery;
+  if (!delivery) {
+    return null;
+  }
+  const who = delivery.driverFirstName ?? 'A driver';
+  const vehicle = delivery.vehicleType
+    ? ` (${vehicleTypeLabels[delivery.vehicleType].toLowerCase()})`
+    : '';
+  switch (delivery.status) {
+    case 'open':
+      return 'Waiting for a driver to accept';
+    case 'accepted':
+      return `${who}${vehicle} is on the way to collect it`;
+    case 'pickedUp':
+      return `${who} has collected it`;
+    case 'delivered':
+      return `Delivered by ${who}`;
+  }
+}
 
 export type OrderTone = 'info' | 'ok' | 'warn' | 'danger' | 'muted';
 

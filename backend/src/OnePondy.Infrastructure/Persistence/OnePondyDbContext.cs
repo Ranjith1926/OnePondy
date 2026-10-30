@@ -81,6 +81,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
 
     public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
 
+    public DbSet<DeliveryJob> DeliveryJobs => Set<DeliveryJob>();
+
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
     public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();

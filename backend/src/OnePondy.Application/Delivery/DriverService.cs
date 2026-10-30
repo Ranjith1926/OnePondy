@@ -65,6 +65,12 @@ public sealed partial class DriverService(IOnePondyDbContext db, IUserAccountSto
             return DriverErrors.Locked;
         }
 
+        // Changing details sends an approved driver back for review and off duty, which cannot happen in the middle of a delivery.
+        if (await HoldsJobAsync(userId, cancellationToken))
+        {
+            return DriverErrors.HasActiveJob;
+        }
+
         db.ExpectVersion(existing, input.Version.Value);
         var before = existing.ApprovalStatus;
         existing.Edit(content.Value, now);
@@ -96,6 +102,12 @@ public sealed partial class DriverService(IOnePondyDbContext db, IUserAccountSto
             return DriverErrors.NotApproved;
         }
 
+        // A driver who has taken a delivery finishes it (or gives it up before collecting) before going off duty.
+        if (!onDuty && await HoldsJobAsync(userId, cancellationToken))
+        {
+            return DriverErrors.HasActiveJob;
+        }
+
         db.ExpectVersion(profile, expectedVersion);
         if (onDuty)
         {
@@ -110,6 +122,11 @@ public sealed partial class DriverService(IOnePondyDbContext db, IUserAccountSto
     }
 
     /// <summary>Whether a driver may be offered jobs right now (approved and on duty). Nothing else makes a driver eligible.</summary>
+    private Task<bool> HoldsJobAsync(Guid userId, CancellationToken cancellationToken) =>
+        db.DeliveryJobs.AsNoTracking().AnyAsync(
+            j => j.DriverUserId == userId && (j.Status == DeliveryJobStatus.Accepted || j.Status == DeliveryJobStatus.PickedUp),
+            cancellationToken);
+
     public Task<bool> IsAvailableForJobsAsync(Guid userId, CancellationToken cancellationToken) =>
         db.DriverProfiles.AsNoTracking().AnyAsync(
             p => p.UserId == userId && p.ApprovalStatus == DriverApprovalStatus.Approved && p.IsOnDuty, cancellationToken);
@@ -196,6 +213,17 @@ public sealed partial class DriverService(IOnePondyDbContext db, IUserAccountSto
         catch (InvalidOperationException exception)
         {
             return DriverErrors.InvalidTransition(exception.Message);
+        }
+
+        // A suspended driver's delivery that has not been collected yet goes back to the other drivers, in the same save. One already
+        // collected stays with them: the food is in their hands, and an administrator decides what happens to it.
+        if (profile.ApprovalStatus == DriverApprovalStatus.Suspended)
+        {
+            var held = await db.DeliveryJobs.Where(j => j.DriverUserId == userId && j.Status == DeliveryJobStatus.Accepted).ToListAsync(cancellationToken);
+            foreach (var job in held)
+            {
+                job.Release(userId, time.GetUtcNow());
+            }
         }
 
         audit.Record(staffUserId, auditAction, AuditEntityTypes.Driver, userId, auditDetails);

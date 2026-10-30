@@ -1,5 +1,6 @@
 using OnePondy.Application.Bookings;
 using OnePondy.Application.Common;
+using OnePondy.Application.Delivery;
 using OnePondy.Domain.Food;
 
 namespace OnePondy.Application.Food;
@@ -132,7 +133,9 @@ public sealed record OrderDetail(
     DateTimeOffset UpdatedAt,
     /// <summary>The payment that confirmed the order, as a receipt; null while unpaid or when nothing was paid online.</summary>
     PaymentView? Payment,
-    IReadOnlyList<RefundView> Refunds);
+    IReadOnlyList<RefundView> Refunds,
+    /// <summary>How the delivery is going once the order is ready; null before that and after a cancelled delivery.</summary>
+    DeliveryProgressView? Delivery);
 
 public sealed record OrderSummary(
     Guid Id,
@@ -162,7 +165,9 @@ public sealed record PartnerOrderDetail(
     string? ClosedReason,
     IReadOnlyList<OrderHistoryView> History,
     DateTimeOffset CreatedAt,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    /// <summary>Who is collecting the order and how far along it is; null before the order is ready.</summary>
+    DeliveryProgressView? Delivery);
 
 /// <summary>
 /// One row of the restaurant's inbox. It carries the dishes (the kitchen needs them to cook) and the order's <c>Version</c>, which
@@ -180,7 +185,8 @@ public sealed record PartnerOrderSummary(
     decimal TotalAmount,
     string Currency,
     string DeliveryArea,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    DeliveryProgressView? Delivery);
 
 public static class OrderErrors
 {

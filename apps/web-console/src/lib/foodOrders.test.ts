@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { FoodOrderStatus, PartnerOrderSummary } from './apiTypes';
 import {
   deadlineFor,
+  deliveryText,
   isOpen,
   isOrderStep,
   openStatuses,
@@ -30,6 +31,7 @@ function anOrder(overrides: Partial<PartnerOrderSummary> = {}): PartnerOrderSumm
     currency: 'INR',
     deliveryArea: 'whiteTown',
     createdAt: '2026-10-30T05:00:00Z',
+    delivery: null,
     ...overrides,
   };
 }
@@ -185,5 +187,39 @@ describe('what an order looks like', () => {
     ).toEqual({ label: 'Ready by', at: '2026-10-30T05:30:00Z' });
     expect(deadlineFor(anOrder({ status: 'confirmed', expiresAt: null }))).toBeNull();
     expect(deadlineFor(anOrder({ status: 'delivered', expiresAt: null }))).toBeNull();
+  });
+});
+
+describe('what the kitchen is told about the delivery', () => {
+  const progress = (
+    status: 'open' | 'accepted' | 'pickedUp' | 'delivered',
+    driverFirstName: string | null = null,
+  ) => ({
+    status,
+    driverFirstName,
+    vehicleType: driverFirstName ? ('scooter' as const) : null,
+    locationUpdatedAt: null,
+  });
+
+  it('says nothing before the order is ready', () => {
+    expect(deliveryText(anOrder({ delivery: null }))).toBeNull();
+  });
+
+  it('says it is waiting while no driver has taken it', () => {
+    expect(deliveryText(anOrder({ delivery: progress('open') }))).toBe(
+      'Waiting for a driver to accept',
+    );
+  });
+
+  it('names the driver and vehicle on the way, then once they have it', () => {
+    expect(deliveryText(anOrder({ delivery: progress('accepted', 'Ravi') }))).toBe(
+      'Ravi (scooter) is on the way to collect it',
+    );
+    expect(deliveryText(anOrder({ delivery: progress('pickedUp', 'Ravi') }))).toBe(
+      'Ravi has collected it',
+    );
+    expect(deliveryText(anOrder({ delivery: progress('delivered', 'Ravi') }))).toBe(
+      'Delivered by Ravi',
+    );
   });
 });

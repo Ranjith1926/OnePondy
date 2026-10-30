@@ -207,4 +207,66 @@ describe('<OrderDetailScreen />', () => {
 
     expect(await screen.findByText('Waiting for the restaurant')).toBeOnTheScreen();
   });
+
+  describe('the delivery', () => {
+    it('says it is looking for a driver while nobody has taken the order', async () => {
+      ordered({
+        status: 'readyForPickup',
+        delivery: {
+          status: 'open',
+          driverFirstName: null,
+          vehicleType: null,
+          locationUpdatedAt: null,
+        },
+      });
+      await renderScreen();
+
+      expect(
+        await screen.findByText('Looking for a driver to collect your order.'),
+      ).toBeOnTheScreen();
+    });
+
+    it('names the driver and vehicle on the way to the restaurant', async () => {
+      ordered({
+        status: 'readyForPickup',
+        delivery: {
+          status: 'accepted',
+          driverFirstName: 'Ravi',
+          vehicleType: 'scooter',
+          locationUpdatedAt: null,
+        },
+      });
+      await renderScreen();
+
+      expect(
+        await screen.findByText('Ravi is on the way to the restaurant to collect your order.'),
+      ).toBeOnTheScreen();
+      expect(screen.getByText('On a scooter.')).toBeOnTheScreen();
+    });
+
+    it('says the driver has the order once it is on its way', async () => {
+      ordered({
+        status: 'outForDelivery',
+        delivery: {
+          status: 'pickedUp',
+          driverFirstName: 'Meena',
+          vehicleType: 'bicycle',
+          locationUpdatedAt: '2026-10-30T10:20:00Z',
+        },
+      });
+      await renderScreen();
+
+      expect(
+        await screen.findByText('Meena has your order and is on the way to you.'),
+      ).toBeOnTheScreen();
+      expect(screen.getByText('On a bicycle.')).toBeOnTheScreen();
+    });
+
+    it('shows nothing about a delivery before the order is ready or after it arrives', async () => {
+      ordered({ status: 'preparing', delivery: null });
+      await renderScreen();
+      expect(await screen.findByText('Being prepared', { exact: false })).toBeOnTheScreen();
+      expect(screen.queryByText(/Looking for a driver/)).not.toBeOnTheScreen();
+    });
+  });
 });

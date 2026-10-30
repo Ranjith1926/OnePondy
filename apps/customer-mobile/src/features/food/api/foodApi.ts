@@ -107,6 +107,16 @@ export interface OrderHistoryEntry {
   at: string;
 }
 
+export type DeliveryStatus = 'open' | 'accepted' | 'pickedUp' | 'delivered';
+
+/** How the delivery is going. It names the driver by first name and vehicle only, and carries no position. */
+export interface DeliveryProgress {
+  status: DeliveryStatus;
+  driverFirstName: string | null;
+  vehicleType: 'bicycle' | 'scooter' | 'motorbike' | null;
+  locationUpdatedAt: string | null;
+}
+
 export interface OrderDetail {
   id: string;
   version: number;
@@ -131,6 +141,8 @@ export interface OrderDetail {
   updatedAt: string;
   payment: PaymentReceipt | null;
   refunds: RefundInfo[];
+  /** Null until the order is ready for a driver. */
+  delivery: DeliveryProgress | null;
 }
 
 export interface OrderSummary {

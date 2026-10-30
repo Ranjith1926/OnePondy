@@ -1,7 +1,7 @@
 # OnePondy driver app
 
 React Native + Expo (SDK 58) app for OnePondy's delivery drivers (Phase 8, step 8.6): sign in with a mobile number, apply to deliver, see the
-review result, and go on and off duty. Delivery offers and tracking come in step 8.7. The product rules are in
+review result, go on and off duty, take a delivery, collect it and hand it over (step 8.7). The product rules are in
 [`../../docs/phase-8-plan.md`](../../docs/phase-8-plan.md) and workflow §25.8 of [`../../docs/workflows.md`](../../docs/workflows.md).
 
 Its design system, API client, session handling and test setup are a trimmed copy of the customer app's (`../customer-mobile`), so each app builds on its
@@ -40,5 +40,5 @@ generated):
 
 ## What it does not do yet
 
-Upload photos of licence or registration, receive delivery offers, collect location (step 8.7 will, during a delivery only), send or receive push
-notifications, show earnings, or offer Tamil and French.
+Upload photos of licence or registration, send or receive push notifications (offers appear by refreshing every 10 seconds), show earnings, or offer
+Tamil and French. Location is collected only while a delivery is held (foreground only, with permission) and is erased when the delivery ends.
