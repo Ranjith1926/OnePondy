@@ -671,6 +671,94 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Delivery.DriverProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("approval_status");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("full_name");
+
+                    b.Property<bool>("IsOnDuty")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_on_duty");
+
+                    b.Property<string>("LicenceNumber")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("licence_number");
+
+                    b.Property<DateTimeOffset?>("OnDutySince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("on_duty_since");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VehicleNumber")
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("vehicle_number");
+
+                    b.Property<string>("VehicleType")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("vehicle_type");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_driver_profiles");
+
+                    b.HasIndex("LicenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ux_driver_profiles_licence")
+                        .HasFilter("licence_number IS NOT NULL");
+
+                    b.HasIndex("ApprovalStatus", "IsOnDuty")
+                        .HasDatabaseName("ix_driver_profiles_status_duty");
+
+                    b.ToTable("driver_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_driver_approval_status", "approval_status IN ('pending', 'approved', 'rejected', 'suspended')");
+
+                            t.HasCheckConstraint("ck_driver_documents", "(vehicle_type = 'bicycle' AND vehicle_number IS NULL AND licence_number IS NULL) OR (vehicle_type <> 'bicycle' AND vehicle_number IS NOT NULL AND licence_number IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_driver_duty_requires_approval", "NOT is_on_duty OR approval_status = 'approved'");
+
+                            t.HasCheckConstraint("ck_driver_duty_since", "is_on_duty = (on_duty_since IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_driver_review_note", "approval_status NOT IN ('rejected', 'suspended') OR review_note IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_driver_vehicle_type", "vehicle_type IN ('bicycle', 'scooter', 'motorbike')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Food.FoodOrder", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3075,6 +3163,16 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("UpdatedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_module_flags_app_users_updated_by_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Delivery.DriverProfile", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("OnePondy.Domain.Delivery.DriverProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_driver_profiles_app_users_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Food.FoodOrder", b =>

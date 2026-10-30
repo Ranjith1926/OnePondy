@@ -17,6 +17,7 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
     public const string PartnerBookingsInProgress = "partner_bookings_in_progress";
     public const string CustomerFoodOrdersInProgress = "food_orders_in_progress";
     public const string PartnerFoodOrdersInProgress = "partner_food_orders_in_progress";
+    public const string DriverOnDuty = "driver_on_duty";
 
     private static readonly BookingStatus[] InProgress =
     [
@@ -65,6 +66,12 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
             && await db.FoodOrders.AsNoTracking().AnyAsync(o => ownedBusinessIds.Contains(o.BusinessId) && FoodInProgress.Contains(o.Status), cancellationToken))
         {
             blockers.Add(PartnerFoodOrdersInProgress);
+        }
+
+        // A driver on duty may be offered a job at any moment, so they go off duty first (jobs in progress add their own check in step 8.7).
+        if (await db.DriverProfiles.AsNoTracking().AnyAsync(p => p.UserId == userId && p.IsOnDuty, cancellationToken))
+        {
+            blockers.Add(DriverOnDuty);
         }
 
         return blockers;

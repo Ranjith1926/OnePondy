@@ -4,6 +4,7 @@ import type {
   BusinessDocumentKind,
   BusinessType,
   DayOfWeek,
+  DriverApprovalStatus,
   FoodAreaCode,
   FoodOrderStatus,
   ListingStatus,
@@ -16,6 +17,7 @@ import type {
   RefundReason,
   RefundStatus,
   SettlementStatus,
+  VehicleType,
   VerificationStatus,
   VisitorCategory,
 } from './apiTypes';
@@ -163,6 +165,19 @@ export const businessStatusLabels: Record<BusinessApprovalStatus, string> = {
   approved: 'Approved',
   rejected: 'Rejected',
   suspended: 'Suspended',
+};
+
+export const driverStatusLabels: Record<DriverApprovalStatus, string> = {
+  pending: 'Pending review',
+  approved: 'Approved',
+  rejected: 'Rejected',
+  suspended: 'Suspended',
+};
+
+export const vehicleTypeLabels: Record<VehicleType, string> = {
+  bicycle: 'Bicycle',
+  scooter: 'Scooter',
+  motorbike: 'Motorbike',
 };
 
 export const businessDocumentLabels: Record<BusinessDocumentKind, string> = {

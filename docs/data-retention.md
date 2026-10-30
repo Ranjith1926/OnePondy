@@ -68,6 +68,14 @@ The public page never reveals whether an account exists for a phone number or em
 | Notification log | 30 days | Type, status and Expo's ticket id. Never the message text. Removed by the Worker. |
 | Outbox messages | 30 days after they are finished | Holds only who the notification is for and which booking; removed by the Worker once no log row still refers to it. A message not sent within 24 hours is dropped, not delivered late. |
 
+## Delivery drivers (Phase 8, step 8.6)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| Driver profile (name, vehicle type, registration number, licence number, review status and note, on-duty flag) | Until the account is deleted | Deleted with the account (explicitly, because the account row is anonymised, not removed). A driver on duty cannot delete their account until they go off duty. Registration and licence numbers are shown only to the driver and to administrators, and one licence can be on one account only. The review note is the reason an administrator gave and is shown to the driver. |
+| Where a driver is | Not collected | Step 8.6 collects no location at all. Step 8.7 will collect it only during an active delivery and must delete it afterwards. |
+| Photos of licence or registration | Not collected | Uploading documents is not built; administrators compare the numbers with the originals by other means. |
+
 ## Logs
 
 Production never writes one-time codes to logs. Only a test or development server may do so

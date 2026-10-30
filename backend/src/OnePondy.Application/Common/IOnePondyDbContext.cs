@@ -5,6 +5,7 @@ using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Food;
 using OnePondy.Domain.Configuration;
+using OnePondy.Domain.Delivery;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
 using OnePondy.Domain.Listings;
@@ -73,6 +74,8 @@ public interface IOnePondyDbContext
     DbSet<FoodOrder> FoodOrders { get; }
 
     DbSet<FoodOrderLine> FoodOrderLines { get; }
+
+    DbSet<DriverProfile> DriverProfiles { get; }
 
     DbSet<Settlement> Settlements { get; }
 

@@ -603,3 +603,34 @@ export interface PartnerOrderSummary {
   deliveryArea: FoodAreaCode;
   createdAt: string;
 }
+
+export type DriverApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
+
+export type VehicleType = 'bicycle' | 'scooter' | 'motorbike';
+
+export interface DriverSummary {
+  userId: string;
+  fullName: string;
+  vehicleType: VehicleType;
+  approvalStatus: DriverApprovalStatus;
+  isOnDuty: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DriverDetail {
+  userId: string;
+  version: number;
+  fullName: string;
+  vehicleType: VehicleType;
+  vehicleNumber: string | null;
+  licenceNumber: string | null;
+  approvalStatus: DriverApprovalStatus;
+  reviewNote: string | null;
+  isOnDuty: boolean;
+  onDutySince: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

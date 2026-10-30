@@ -136,6 +136,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Planning | `ItineraryService`, `SavedPlacesService`, `TripPlannerService` |
 | Partners | `BusinessService`, `ListingService`, `SavedListingsService` |
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
+| Delivery | `DriverService` (apply, edit, shifts, administrators' review) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
 | Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
 | Notifications | `NotificationOutbox` (queues in the caller's transaction), `OutboxDispatcher`, `BookingReminders`, `NotificationRetention`, `DeviceService`, `IPushSender` |
@@ -437,6 +438,7 @@ administrator.
 | `/admin/config`, `/admin/config/modules/{key}`, `/admin/config/min-app-version` | S-R read, S-A write | Module flags and version gate. |
 | `/admin/staff` list, add, change role, remove; GET `/admin/audit` | S-A | Staff management and audit log. |
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
+| `/admin/drivers` list (`?status=`), get, `/{userId}/approve`, `/reject`, `/suspend`, `/reinstate` | S-A | Driver review (step 8.6). Reject and suspend need a reason; suspending ends the shift at once; every step is audited. |
 | `/admin/listings` list, get, publish, send-back, suspend, reinstate | S-A | Listing moderation. |
 | GET `/admin/payments`, `/admin/refunds` | S-A | Money in and out (no customer details). |
 | GET `/admin/payments/exceptions`, `/exceptions/open-count`, POST `/exceptions/{id}/resolve` | S-A | Reconciliation differences and their resolution. |
@@ -452,6 +454,7 @@ administrator.
 | POST `/bookings/{id}/payment`, POST `/bookings/{id}/payment/refresh` | U (own booking) | Start the gateway order; ask "is it paid yet?". |
 | POST `/devices`, DELETE `/devices/{id}` | U | Register or remove this phone for push notifications. |
 | GET `/restaurants?area=`, `/restaurants/{id}`, `/restaurants/{id}/menu` | P | Open restaurants for an area and their menus (not gated by the module flag). |
+| GET/PUT `/driver/me`, POST `/driver/duty` | U | The signed-in account's driver application and shifts (step 8.6). `PUT` applies or changes details (needs the `version` once applied; a change by an approved driver sends the application for review again and ends the shift); `duty` goes on or off duty (only an approved driver can go on). |
 | POST `/food/quote` | U | Prices a cart from the menu: lines, tax per line, fees, total. |
 | POST/GET `/food/orders`, GET `/food/orders/{id}`, POST `/food/orders/{id}/cancel` | U (own order) | Place (needs `idempotencyKey` and `expectedTotal`), list, view (with the payment receipt and any refunds), cancel until cooking starts (a paid order is refunded in full, or refused while refunds are off). |
 | POST `/food/orders/{id}/payment`, POST `/food/orders/{id}/payment/refresh` | U (own order) | Start (or get the open) Razorpay order for an accepted order; "is it paid yet?" asks Razorpay and returns the order. Another customer's order is 404. |

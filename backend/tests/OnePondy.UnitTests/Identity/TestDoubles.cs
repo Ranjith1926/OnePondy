@@ -11,6 +11,7 @@ using OnePondy.Domain.Audit;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Configuration;
+using OnePondy.Domain.Delivery;
 using OnePondy.Domain.Food;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Itineraries;
@@ -88,6 +89,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<FoodOrder> FoodOrders => Set<FoodOrder>();
 
     public DbSet<FoodOrderLine> FoodOrderLines => Set<FoodOrderLine>();
+
+    public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
 
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
@@ -216,6 +219,7 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<MenuCategory>().HasKey(c => c.Id);
         modelBuilder.Entity<MenuItem>().HasKey(i => i.Id);
         modelBuilder.Entity<FoodOrderLine>().HasKey(l => l.Id);
+        modelBuilder.Entity<DriverProfile>().HasKey(p => p.UserId);
         modelBuilder.Entity<FoodOrderStatusEntry>().HasKey(h => h.Id);
         modelBuilder.Entity<FoodOrder>(order =>
         {

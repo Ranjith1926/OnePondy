@@ -73,6 +73,7 @@ app.MapPaymentAdminEndpoints();
 app.MapSettlementEndpoints();
 app.MapFoodEndpoints();
 app.MapFoodOrderEndpoints();
+app.MapDriverEndpoints();
 app.MapDeviceEndpoints();
 
 app.Run();

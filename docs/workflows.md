@@ -867,7 +867,7 @@ per-listing commission.
 
 ---
 
-## 25. Food orders (Phase 8, steps 8.1 to 8.5)
+## 25. Food orders and drivers (Phase 8, steps 8.1 to 8.6)
 
 ### 25.1 States
 
@@ -970,9 +970,22 @@ The customer's order view shows the payment as a receipt and any refunds with th
    "Confirmed", never "Paid".
 6. Nothing in the app sends notifications about orders yet, so it does not ask for permission to.
 
-### 25.8 Not built yet
+### 25.8 Drivers (step 8.6)
 
-Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, the driver app and delivery (8.6 to 8.7), cash on delivery
+1. **Anyone who is signed in can apply** from the driver app (`apps/driver-mobile`, which signs in with a mobile number and a texted code like the customer app). The form takes a name,
+   the vehicle (bicycle, scooter, motorbike) and, for a motorised vehicle, the registration and licence numbers. Numbers are compared without case, spaces, hyphens or slashes, and a
+   licence can be on **one account only** (the database enforces it, so two applications racing for one licence cannot both win). No document photos are uploaded yet.
+2. **An administrator reviews** it in the console under **Drivers** (`/drivers`): approve, or reject with a reason the driver sees. A rejected driver corrects the details and the
+   application goes back to *in review*.
+3. **An approved driver goes on and off duty** with a switch. Only approved drivers can go on duty; being off duty is always allowed. **Suspending** a driver puts them off duty at once and
+   locks their profile; reinstating returns them *off* duty to start their own shift. An approved driver who changes their vehicle or licence goes back for review and off duty.
+4. Every change checks the version the person was looking at, so two devices or two administrators cannot overwrite each other. All review steps are in the audit log.
+5. **Account deletion** is refused while the driver is on duty (`driver_on_duty`) and removes the driver profile.
+6. **No location is collected** in this step. Delivery offers, accepting a job and location during a job are step 8.7; until then an on-duty driver sees "no deliveries yet".
+
+### 25.9 Not built yet
+
+Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, delivery offers, assignment and tracking (8.7), cash on delivery
 (8.8, only if approved), administrators' order monitoring (8.9).
 
 ---

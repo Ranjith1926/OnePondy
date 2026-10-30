@@ -219,3 +219,17 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
 - **Not done in 8.3:** push notifications about order payments and refunds, an administrator's cancel of a food order, the app's food checkout (8.4), any partial food refund,
   and a real-device Razorpay run for food (sandbox only, like bookings). **An independent multi-agent review of this diff did not run** (it hit the usage limit); the diff was
   self-reviewed against the Phase 7 invariants instead.
+
+**8.6 (drivers and the driver app).** Flow in [workflows.md](workflows.md) §25.8.
+
+- **Assumption:** the owner did not choose between a delivery operations plan and a simulated fleet, so this follows plan default F1: OnePondy's own drivers, assigned by the platform. A driver is an ordinary
+  account with an admin-approved `driver_profiles` row, not a new role. Nothing here depends on a real fleet.
+- **Backend:** `DriverProfile` (domain, with the status rules: apply, edit, approve, reject, suspend, reinstate, duty), `DriverService`, `/api/v1/driver/*` and `/api/v1/admin/drivers/*`, audit actions
+  `driver.applied|updated|approved|rejected|suspended|reinstated`. Optimistic versions (`xmin`) on every change. Account deletion removes the profile and is blocked while on duty (`driver_on_duty`).
+- **Migration:** `AddDriverProfiles` (one new table, with the checks listed in database-architecture.md and a unique licence index). Nothing existing is touched. Apply it as `onepondy_app` like the others.
+- **Console:** **Drivers** list (filter by status) and a driver page with approve, reject, suspend and reinstate (`apps/web-console/src/app/(console)/drivers`).
+- **Driver app (`apps/driver-mobile`, package `com.onepondy.driver`):** a copy, trimmed, of the customer app's design system, API client, session handling and test setup, so it builds and tests on its own.
+  Sharing these as a package between the two apps is a later refactor, not done here. Screens: phone sign-in and code, the application form (also used to change details), and a home screen
+  showing in review / changes needed (with the reviewer's reason) / suspended / approved with the duty switch and an honest "no deliveries yet". English only, like the customer app.
+- **Not done in 8.6:** photo upload of licence and registration, delivery offers and the single-acceptance rule (8.7), any location collection (8.7, during a delivery only), push notifications to
+  drivers, and a driver's earnings.

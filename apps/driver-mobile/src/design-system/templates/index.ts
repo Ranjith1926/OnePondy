@@ -1,0 +1,1 @@
+export { ModalScreenTemplate } from './ModalScreenTemplate';

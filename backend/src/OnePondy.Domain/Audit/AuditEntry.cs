@@ -60,6 +60,7 @@ public static class AuditEntityTypes
     public const string Restaurant = "restaurant";
     public const string MenuCategory = "menu_category";
     public const string MenuItem = "menu_item";
+    public const string Driver = "driver";
 }
 
 public static class AuditActions
@@ -106,4 +107,10 @@ public static class AuditActions
     public const string ListingSentBack = "listing.sent_back";
     public const string ListingSuspended = "listing.suspended";
     public const string ListingReinstated = "listing.reinstated";
+    public const string DriverApplied = "driver.applied";
+    public const string DriverUpdated = "driver.updated";
+    public const string DriverApproved = "driver.approved";
+    public const string DriverRejected = "driver.rejected";
+    public const string DriverSuspended = "driver.suspended";
+    public const string DriverReinstated = "driver.reinstated";
 }

@@ -435,6 +435,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 14 | `20261029130624_AddRestaurantsAndMenus` | `restaurant_profiles`, `restaurant_delivery_areas`, `menu_categories`, `menu_items`. |
 | 15 | `20261029152153_AddFoodOrders` | `food_orders`, `food_order_lines`, `food_order_status_history`; their immutability and sum-of-lines triggers. |
 | 16 | `20261029235224_AddFoodOrderPayments` | `food_order_id` on the payment, refund, ledger, statement-line and reconciliation tables, the exactly-one checks, the `delivery_fees` and `tax_payable` accounts, and the subject triggers. |
+| 17 | `20261030053514_AddDriverProfiles` | `driver_profiles` (one row per driver account) with checks: only an approved driver is on duty, "on duty since" exists exactly while on duty, a motorised vehicle has its registration and licence and a bicycle has neither, a rejection or suspension always has a note; a unique index on the licence number. |
 
 Rules for new migrations:
 

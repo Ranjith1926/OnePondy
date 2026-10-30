@@ -6,6 +6,7 @@ using OnePondy.Application.Common;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Configuration;
+using OnePondy.Domain.Delivery;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Itineraries;
@@ -77,6 +78,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<FoodOrder> FoodOrders => Set<FoodOrder>();
 
     public DbSet<FoodOrderLine> FoodOrderLines => Set<FoodOrderLine>();
+
+    public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
 
     public DbSet<Settlement> Settlements => Set<Settlement>();
 

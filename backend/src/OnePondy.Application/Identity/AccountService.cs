@@ -169,6 +169,8 @@ public sealed class AccountService(
         // Their phones stop receiving notifications the moment the account is deleted.
         db.DeviceTokens.RemoveRange(await db.DeviceTokens.Where(d => d.UserId == userId).ToListAsync(cancellationToken));
         db.Itineraries.RemoveRange(await db.Itineraries.Where(i => i.UserId == userId).ToListAsync(cancellationToken));
+        // A driver's name, licence and vehicle go with the account: nothing needs them once the person has left.
+        db.DriverProfiles.RemoveRange(await db.DriverProfiles.Where(p => p.UserId == userId).ToListAsync(cancellationToken));
 
         await db.SaveChangesAsync(cancellationToken);
         await accounts.AnonymizeAsync(userId, now, cancellationToken);

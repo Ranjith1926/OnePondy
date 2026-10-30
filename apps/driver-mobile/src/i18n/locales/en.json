@@ -1,0 +1,112 @@
+{
+  "common": {
+    "back": "Back",
+    "close": "Close",
+    "retry": "Try again",
+    "dismiss": "Dismiss"
+  },
+  "auth": {
+    "signInTitle": "Drive with OnePondy",
+    "signInIntro": "Sign in with your mobile number. We'll text you a one-time code, and if you're new, verifying it creates your account.",
+    "phoneLabel": "Mobile number",
+    "phoneHint": "SMS codes work with Indian mobile numbers.",
+    "sendCode": "Send code",
+    "smsNote": "We'll text you a 6-digit code. Standard SMS rates may apply.",
+    "sessionExpired": "You were signed out. Sign in again to continue.",
+    "verifyTitle": "Enter your code",
+    "verifyIntro": "We sent a 6-digit code to {{destination}}.",
+    "codeLabel": "6-digit code",
+    "verify": "Verify",
+    "resend": "Send a new code",
+    "resendIn": "Send a new code in {{seconds}}s",
+    "changeDestination": "Use a different number",
+    "validation": {
+      "phone": "Enter a 10-digit mobile number.",
+      "code": "Enter the 6-digit code."
+    },
+    "errors": {
+      "invalid_destination": "Check the number and try again.",
+      "unsupported_country": "SMS codes work with Indian mobile numbers.",
+      "too_many_requests": "You've asked for several codes. Wait a few minutes, then try again.",
+      "rate_limited": "Too many attempts from this device. Wait a minute, then try again.",
+      "codes_unavailable": "Sign-in codes are unavailable right now. Try again later.",
+      "delivery_unavailable": "We couldn't send a code right now. Try again later.",
+      "invalid_code": "That code isn't right. Check it and try again.",
+      "code_expired": "That code has expired. Request a new one.",
+      "too_many_attempts": "Too many incorrect codes. Request a new one.",
+      "offline": "You're offline. Check your connection and try again.",
+      "timeout": "This is taking too long. Check your connection and try again.",
+      "generic": "Something went wrong. Try again."
+    }
+  },
+  "driver": {
+    "loading": "Loading your driver account",
+    "loadErrorTitle": "Couldn't load your account",
+    "loadErrorMessage": "Check your connection and try again.",
+    "applyTitle": "Apply to deliver",
+    "editTitle": "Your details",
+    "applyIntro": "Tell us who you are and what you ride. OnePondy checks every application before a driver can go on duty.",
+    "nameLabel": "Full name",
+    "nameHint": "As it appears on your driving licence.",
+    "vehicleLabel": "Your vehicle",
+    "vehicle": {
+      "bicycle": "Bicycle",
+      "scooter": "Scooter",
+      "motorbike": "Motorbike"
+    },
+    "vehicleNumberLabel": "Vehicle registration number",
+    "vehicleNumberHint": "For example PY 01 AB 1234.",
+    "licenceLabel": "Driving licence number",
+    "licenceHint": "Each licence can be used on one account.",
+    "documentsNote": "Uploading photos of your documents isn't part of the app yet. Have your licence and registration ready in case OnePondy asks to see them.",
+    "reviewWarning": "Saving changes sends your details for review again, and you'll be off duty until they're approved.",
+    "submitApply": "Send application",
+    "submitEdit": "Save changes",
+    "validation": {
+      "name": "Enter your full name, 2 to 100 characters.",
+      "vehicleType": "Choose your vehicle.",
+      "vehicleNumber": "Enter the registration number, 4 to 12 letters and digits.",
+      "licenceNumber": "Enter the licence number, 8 to 20 letters and digits."
+    },
+    "errors": {
+      "driver_changed": "Your details changed on another device. We've loaded the latest, so check them and try again.",
+      "driver_locked": "Your account is suspended, so details can't be changed. Contact OnePondy support.",
+      "driver_licence_in_use": "That licence number can't be used. If you think this is a mistake, contact OnePondy support.",
+      "driver_not_approved": "You can go on duty once OnePondy has approved your application.",
+      "driver_not_applied": "Apply to deliver with OnePondy first.",
+      "driver_invalid_transition": "That isn't possible right now. Refresh and try again.",
+      "offline": "You're offline. Check your connection and try again.",
+      "timeout": "This is taking too long. Check your connection and try again.",
+      "generic": "Something went wrong. Try again."
+    }
+  },
+  "home": {
+    "greeting": "Hi, {{name}}",
+    "status": {
+      "pending": "In review",
+      "approved": "Approved",
+      "rejected": "Changes needed",
+      "suspended": "Suspended"
+    },
+    "pendingMessage": "OnePondy is reviewing your application. You can go on duty once it's approved. Check back here for the result.",
+    "checkStatus": "Check status",
+    "rejectedMessage": "Your application needs changes: {{reason}}",
+    "rejectedMessageNoReason": "Your application needs changes.",
+    "updateDetails": "Update your details",
+    "suspendedMessage": "Your driver account is suspended: {{reason}} Contact OnePondy support.",
+    "dutyTitle": "Duty",
+    "dutyLabel": "On duty",
+    "dutyOn": "You're on duty since {{time}}.",
+    "dutyOff": "You're off duty.",
+    "dutyExplainer": "While you're on duty, OnePondy can offer you deliveries. Your location isn't collected now; it's used only during a delivery.",
+    "jobsTitle": "Deliveries",
+    "noJobsOnTitle": "No deliveries yet",
+    "noJobsOnMessage": "Delivery offers will appear here while you're on duty.",
+    "noJobsOffTitle": "You're off duty",
+    "noJobsOffMessage": "Go on duty to be offered deliveries.",
+    "yourVehicle": "Your vehicle",
+    "vehicleSummary": "{{vehicle}} · {{number}}",
+    "editDetails": "Edit details",
+    "signOut": "Sign out"
+  }
+}
