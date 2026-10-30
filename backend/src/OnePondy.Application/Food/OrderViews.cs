@@ -164,11 +164,19 @@ public sealed record PartnerOrderDetail(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt);
 
+/// <summary>
+/// One row of the restaurant's inbox. It carries the dishes (the kitchen needs them to cook) and the order's <c>Version</c>, which
+/// every action must send back so a stale screen cannot act on an order that has since changed. Like the detail, it leaves out the
+/// customer's address and phone.
+/// </summary>
 public sealed record PartnerOrderSummary(
     Guid Id,
+    uint Version,
     FoodOrderStatus Status,
     DateTimeOffset? ExpiresAt,
+    DateTimeOffset? EstimatedReadyAt,
     int ItemCount,
+    IReadOnlyList<OrderLineView> Lines,
     decimal TotalAmount,
     string Currency,
     string DeliveryArea,

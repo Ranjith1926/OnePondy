@@ -394,7 +394,7 @@ the app, so it must never be secret.
 | 4 — Tourism discovery and itineraries | Done — places, saved places, itineraries, nearby sorting (decision D6: list only, no map SDK) |
 | 5 — AI trip planner | Done — behind `IItineraryPlanner`, Gemini implementation (decision D5, owner to confirm) |
 | 6 — Partner listings and booking engine | Done; payment was added in Phase 7 — see verification below |
-| 8 — Food ordering and the driver app | **In progress: steps 8.1 (restaurants and menus), 8.2 (orders and server-side pricing), 8.3 (paying for orders, sandbox) and 8.4 (the customer app's food screens) built**; the restaurant console inbox, delivery and the driver app follow — see `docs/phase-8-plan.md` |
+| 8 — Food ordering and the driver app | **In progress: steps 8.1 (restaurants and menus), 8.2 (orders and server-side pricing), 8.3 (paying for orders, sandbox), 8.4 (the customer app's food screens) and 8.5 (the restaurant's order inbox in the console) built**; delivery and the driver app follow — see `docs/phase-8-plan.md` |
 | 7 — Payments, ledger and notifications | **Built in sandbox (steps 7.1–7.9); live payments deliberately off** until the legal and tax review, D21/D22 sign-off and an end-to-end settlement check — see "Phase 7 verification" and `docs/phase-7-plan.md` |
 
 ### Phase 0 verification (2026-10-26)

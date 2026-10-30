@@ -2,14 +2,20 @@ import type { ReactNode } from 'react';
 
 import { Button } from '@/components/Button';
 import { Navigation, type NavItem } from '@/app/(console)/Navigation';
-import { requirePartnerUser } from '@/lib/session';
+import { getPartnerUser } from '@/lib/session';
 
 import { signOutPartner } from './actions';
 
 const items: NavItem[] = [{ href: '/partner', label: 'My businesses' }];
 
 export default async function PartnerLayout({ children }: { children: ReactNode }) {
-  const user = await requirePartnerUser();
+  // The sign-in page lives inside this layout, so a signed-out visitor must be allowed to see it: sending them to sign-in from here
+  // would send them to this very layout again, for ever. Everything else is still protected without the layout's help: the proxy
+  // turns a signed-out visitor away from every other partner page, and each page's own API calls redirect to sign-in with no session.
+  const user = await getPartnerUser();
+  if (!user) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen md:flex">

@@ -72,6 +72,11 @@ export default async function PartnerBusinessPage({ params }: { params: Promise<
 
       {business.businessType === 'restaurant' ? (
         <div className="mb-6 flex flex-wrap gap-3">
+          {business.approvalStatus === 'approved' ? (
+            <Link className={linkButton} href={`/partner/businesses/${business.id}/orders`}>
+              Orders
+            </Link>
+          ) : null}
           <Link className={linkButton} href={`/partner/businesses/${business.id}/restaurant`}>
             Restaurant
           </Link>

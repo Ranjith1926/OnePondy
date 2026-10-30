@@ -181,11 +181,25 @@ public sealed partial class OrderService(
         }
 
         var orders = await query.OrderByDescending(o => o.CreatedAt).Take(MaxListed).ToListAsync(cancellationToken);
-        var counts = await ItemCountsAsync(orders, cancellationToken);
+        var lines = await LinesAsync(orders, cancellationToken);
         return Result<IReadOnlyList<PartnerOrderSummary>>.Success(
         [
-            .. orders.Select(o => new PartnerOrderSummary(
-                o.Id, o.Status, o.ExpiresAt, counts.GetValueOrDefault(o.Id), o.TotalAmount, o.Currency, o.DeliveryArea, o.CreatedAt)),
+            .. orders.Select(o =>
+            {
+                var own = lines.GetValueOrDefault(o.Id) ?? [];
+                return new PartnerOrderSummary(
+                    o.Id,
+                    o.Version,
+                    o.Status,
+                    o.ExpiresAt,
+                    o.EstimatedReadyAt,
+                    own.Sum(l => l.Quantity),
+                    own,
+                    o.TotalAmount,
+                    o.Currency,
+                    o.DeliveryArea,
+                    o.CreatedAt);
+            }),
         ]);
     }
 
@@ -480,6 +494,24 @@ public sealed partial class OrderService(
         return rows.ToDictionary(r => r.OrderId, r => r.Count);
     }
 
+    /// <summary>The dishes of each order, by name (a line has no stored position, so any other order would change from one read to the next).</summary>
+    private async Task<Dictionary<Guid, List<OrderLineView>>> LinesAsync(List<FoodOrder> orders, CancellationToken cancellationToken)
+    {
+        var ids = orders.Select(o => o.Id).ToList();
+        var rows = await db.FoodOrderLines.AsNoTracking()
+            .Where(l => ids.Contains(l.OrderId))
+            .ToListAsync(cancellationToken);
+        return rows
+            .GroupBy(l => l.OrderId)
+            .ToDictionary(
+                g => g.Key,
+                g => g
+                    .OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(l => l.MenuItemId)
+                    .Select(l => new OrderLineView(l.MenuItemId, l.Name, l.IsVeg, l.UnitPrice, l.Quantity, l.TaxRatePercent, l.Subtotal, l.TaxAmount))
+                    .ToList());
+    }
+
     private async Task<Dictionary<Guid, string>> RestaurantNamesAsync(List<FoodOrder> orders, CancellationToken cancellationToken)
     {
         var ids = orders.Select(o => o.BusinessId).Distinct().ToList();
@@ -553,7 +585,12 @@ public sealed partial class OrderService(
             built.Price.Currency));
 
     private static IReadOnlyList<OrderLineView> ToLineViews(FoodOrder order) =>
-        [.. order.Lines.Select(l => new OrderLineView(l.MenuItemId, l.Name, l.IsVeg, l.UnitPrice, l.Quantity, l.TaxRatePercent, l.Subtotal, l.TaxAmount))];
+        [
+            .. order.Lines
+                .OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(l => l.MenuItemId)
+                .Select(l => new OrderLineView(l.MenuItemId, l.Name, l.IsVeg, l.UnitPrice, l.Quantity, l.TaxRatePercent, l.Subtotal, l.TaxAmount)),
+        ];
 
     private static OrderPriceView ToPriceView(FoodOrder order) =>
         new(order.Subtotal, order.DeliveryFee, order.PackagingFee, order.TaxAmount, order.DiscountAmount, order.TotalAmount, order.Currency);

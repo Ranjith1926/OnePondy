@@ -28,6 +28,16 @@ export async function changeBookingStatus(
     return { status: 'error', message: 'Unknown action.' };
   }
 
+  // The version of the booking the partner was looking at. Without a real one the API can only say the booking "changed".
+  const rawVersion = optional(form, 'version');
+  const version = rawVersion === null ? Number.NaN : Number(rawVersion);
+  if (!Number.isInteger(version) || version < 0) {
+    return {
+      status: 'error',
+      message: 'This booking is out of date. Reload the page and try again.',
+    };
+  }
+
   const reason = optional(form, 'reason');
   if (step === 'reject' && !reason) {
     return validationState({ reason: ['Tell the customer why.'] });
@@ -38,7 +48,7 @@ export async function changeBookingStatus(
       `/api/v1/partner/businesses/${businessId}/bookings/${id}/${step}`,
       {
         method: 'POST',
-        json: { version: Number(form.get('version')), reason },
+        json: { version, reason },
       },
     );
   } catch (error) {

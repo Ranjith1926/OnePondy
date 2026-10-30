@@ -203,7 +203,10 @@ public sealed partial class FoodOrderApiTests : IAsyncLifetime
 
         // The restaurant's inbox shows it, without the customer's address or phone.
         var inbox = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{shop.BusinessId}/orders?status=placed", shop.Owner));
-        Assert.Contains(inbox.EnumerateArray(), o => o.GetProperty("id").GetString() == id);
+        var inboxRow = inbox.EnumerateArray().Single(o => o.GetProperty("id").GetString() == id);
+        Assert.Equal(VersionOf(order), inboxRow.GetProperty("version").GetUInt32());
+        Assert.Equal(["Filter coffee", "Masala dosa"], inboxRow.GetProperty("lines").EnumerateArray().Select(l => l.GetProperty("name").GetString()));
+        Assert.DoesNotContain("Suffren", inboxRow.GetRawText());
         var asRestaurant = await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{shop.BusinessId}/orders/{id}", shop.Owner);
         var restaurantJson = await asRestaurant.Content.ReadAsStringAsync();
         Assert.DoesNotContain("Suffren", restaurantJson);

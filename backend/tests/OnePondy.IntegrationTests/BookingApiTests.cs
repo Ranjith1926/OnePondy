@@ -212,6 +212,16 @@ public sealed class BookingApiTests : IAsyncLifetime
         Assert.Single(pending.EnumerateArray());
         var confirmed = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{businessId}/bookings?status=confirmed", owner));
         Assert.Empty(confirmed.EnumerateArray());
+
+        // The inbox is what the console acts from, so each row must carry the version an action has to send back.
+        var row = Assert.Single(inbox.EnumerateArray());
+        var accepted = await ReadAsync(await SendAsync(
+            client,
+            HttpMethod.Post,
+            $"/api/v1/partner/businesses/{businessId}/bookings/{row.GetProperty("id").GetString()}/accept",
+            owner,
+            new { version = row.GetProperty("version").GetUInt32() }));
+        Assert.Equal("confirmed", accepted.GetProperty("status").GetString());
     }
 
     [DatabaseFact]

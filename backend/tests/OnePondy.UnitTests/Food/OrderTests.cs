@@ -315,9 +315,11 @@ public class OrderTests
         await _menu.UpdateItemAsync(shop.BusinessId, shop.Dosa, dosa.Version, _owner, new MenuItemInput(shop.Category, "Plain dosa", null, 999m, true, 18m, null), None);
         var again = (await _orders.GetMineAsync(order.Id, _buyer, None)).Value!;
 
-        Assert.Equal("Masala dosa", again.Lines[0].Name);
-        Assert.Equal(120m, again.Lines[0].UnitPrice);
-        Assert.Equal(5m, again.Lines[0].TaxRatePercent);
+        // Still the dish as it was ordered (not "Plain dosa", not ₹999, not 18% GST).
+        var dosaLine = Assert.Single(again.Lines, l => l.Name == "Masala dosa");
+        Assert.Equal(120m, dosaLine.UnitPrice);
+        Assert.Equal(5m, dosaLine.TaxRatePercent);
+        Assert.DoesNotContain(again.Lines, l => l.Name == "Plain dosa");
         Assert.Equal(DefaultTotal, again.Price.TotalAmount);
     }
 
@@ -366,6 +368,42 @@ public class OrderTests
         var inbox = await _orders.ListForBusinessAsync(shop.BusinessId, _owner, null, None);
         var row = Assert.Single(inbox.Value!);
         Assert.Equal(order.Id, row.Id);
+        Assert.DoesNotContain("Suffren", JsonSerializer.Serialize(row));
+        Assert.DoesNotContain("9876500001", JsonSerializer.Serialize(row));
+    }
+
+    [Fact]
+    public async Task An_inbox_row_shows_the_dishes_to_cook_and_the_version_an_action_must_send()
+    {
+        var shop = await OpenShopAsync();
+        await PlacedAsync(shop);
+
+        var row = Assert.Single((await _orders.ListForBusinessAsync(shop.BusinessId, _owner, null, None)).Value!);
+
+        // By name, so a kitchen ticket reads the same every time it is loaded.
+        Assert.Equal(["Filter coffee", "Masala dosa"], row.Lines.Select(l => l.Name));
+        Assert.Equal([1, 2], row.Lines.Select(l => l.Quantity));
+        Assert.Equal(3, row.ItemCount);
+        Assert.Equal(DefaultTotal, row.TotalAmount);
+
+        // The version on the row is the one the order is at, so acting with it works (and a made-up one does not).
+        var stale = await _orders.AcceptAsync(shop.BusinessId, row.Id, row.Version + 1, _owner, None);
+        Assert.Equal("order_changed", stale.Error!.Code);
+        var accepted = await _orders.AcceptAsync(shop.BusinessId, row.Id, row.Version, _owner, None);
+        Assert.Equal(FoodOrderStatus.Confirmed, accepted.Value!.Status);
+    }
+
+    [Fact]
+    public async Task The_inbox_shows_when_cooking_should_finish_once_it_has_started()
+    {
+        var shop = await OpenShopAsync();
+        var order = await PlacedAsync(shop);
+        var confirmed = (await _orders.AcceptAsync(shop.BusinessId, order.Id, order.Version, _owner, None)).Value!;
+        await _orders.StartPreparingAsync(shop.BusinessId, order.Id, confirmed.Version, _owner, None);
+
+        var row = Assert.Single((await _orders.ListForBusinessAsync(shop.BusinessId, _owner, FoodOrderStatus.Preparing, None)).Value!);
+
+        Assert.Equal(_b.Time.GetUtcNow().AddMinutes(25), row.EstimatedReadyAt);
     }
 
     [Fact]

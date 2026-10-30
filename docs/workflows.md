@@ -33,7 +33,7 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 22. [Reconciliation (Worker)](#22-reconciliation-worker)
 23. [Notifications (Expo push)](#23-notifications-expo-push)
 24. [Partner statements and payouts](#24-partner-statements-and-payouts)
-25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-84)
+25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-85)
 26. [Not built](#26-not-built)
 
 ---
@@ -867,7 +867,7 @@ per-listing commission.
 
 ---
 
-## 25. Food orders (Phase 8, steps 8.1 to 8.4)
+## 25. Food orders (Phase 8, steps 8.1 to 8.5)
 
 ### 25.1 States
 
@@ -903,6 +903,16 @@ restaurant or is on its way. Any other move is refused with `order_invalid_trans
 the customer's address or phone**: OnePondy's own drivers deliver (F1), so only the driver (step 8.7) will see them. Accept moves the order to
 `awaiting_payment` with a fresh window (`Food:PaymentWindow`, 10 minutes) while online payment is on, otherwise straight to `confirmed`. Starting to
 prepare sets the ready estimate from the restaurant's preparation time. Every action carries the order's `version`; a stale one gets `order_changed` (409).
+
+**In the console (step 8.5)** the inbox is **Orders** on an approved restaurant's page (`/partner/businesses/{id}/orders`). It shows the open orders by default, in two
+tiers: what needs the restaurant first (a new order, then confirmed, preparing, ready), and within each the one that has waited longest first; "All orders" and any single
+status are in the filter. Each card shows the dishes (by name, veg or not), the total, the area, when it was placed, and the one deadline that matters (respond by, the
+customer pays by, ready by). A banner says how many orders wait for the restaurant, and the page re-reads itself every 15 seconds while it is visible, so a new order
+appears without reloading (a half-typed reason survives the refresh). The buttons follow the status: a new order has **Accept** and **Reject**; one waiting for payment can
+be **withdrawn**; a confirmed one **Start preparing** or **Cancel**; a preparing one **Mark ready** or **Cancel**; a ready one can only be cancelled (a driver takes it from
+there, step 8.7). Reject, withdraw and cancel ask for a reason, which the customer is told. Each button sends the version of the card it is on, so if the order changed since
+the page was loaded (the customer cancelled, another tablet accepted it) the API refuses and the restaurant is told, instead of acting on something they have not seen.
+Cancelling a paid order is refused with a clear message while refunds are switched off (see §25.6).
 
 ### 25.4 Simultaneous actions
 
@@ -962,7 +972,7 @@ The customer's order view shows the payment as a receipt and any refunds with th
 
 ### 25.8 Not built yet
 
-Notifications about orders, an administrator's cancel of a food order, the console inbox (8.5), the driver app and delivery (8.6 to 8.7), cash on delivery
+Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, the driver app and delivery (8.6 to 8.7), cash on delivery
 (8.8, only if approved), administrators' order monitoring (8.9).
 
 ---

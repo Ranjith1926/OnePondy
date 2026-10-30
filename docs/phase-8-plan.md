@@ -117,6 +117,34 @@ Steps 8.1 and 8.2 need none of these answers. From 8.3 on, the defaults above ar
 - **Not done in 8.2:** paying for an order and refunds (8.3), push notifications about orders, a note to the kitchen (the order has a *delivery* note only), the app
   screens (8.4), the console inbox (8.5), the driver side (8.6 to 8.7), a discount or coupon (the column exists and is always 0).
 
+**8.5 (the restaurant's order inbox in the console).** Flow in [workflows.md](workflows.md) §25.3.
+
+- **Where:** **Orders** on an approved restaurant's page, `/partner/businesses/{id}/orders`. Open orders by default (a new order first, then the kitchen's stages, the longest-waiting
+  first within each), with "All orders" and each single status in the filter. A card shows the dishes, total, area, times and the one deadline that matters. A banner counts the
+  orders waiting for the restaurant, and the page refreshes itself every 15 seconds while visible, keeping a half-typed reason.
+- **Buttons by status** (`lib/foodOrders.ts`, which only decides what to *offer*; the API still checks every move): placed: Accept, Reject; awaiting payment: Withdraw; confirmed:
+  Start preparing, Cancel; preparing: Mark ready, Cancel; ready: Cancel only (the driver's step is 8.7). Reject, withdraw and cancel need a reason, which the customer is told.
+  Cancelling a paid order while `Payments:RefundsEnabled` is off shows the API's clear refusal.
+- **Backend change:** an inbox row (`PartnerOrderSummary`) now carries its **dishes** (the kitchen needs them) and its **`version`** and `estimatedReadyAt`. It still never carries the
+  customer's address or phone (tested). An order's dishes are now always listed **by name**: a line has no stored position and time-ordered GUIDs are not strictly ordered inside one
+  millisecond, so the order used to be arbitrary (the customer's app showed "coffee" before "dosa" for that reason).
+- **Three existing problems found and fixed on the way:**
+  1. **The console's Bookings inbox could never accept, reject, cancel or complete a booking.** The API refuses an action whose `version` is not the booking's current one, and the page
+     sent none (so 0). `BookingSummary` now carries `version`, the form sends it, and the action refuses to send a made-up one. (Found by reading how the food inbox should get its
+     version; it never showed in the tests, which call the API directly.)
+  2. **A signed-out partner could not reach the partner sign-in page.** The page sits inside `app/partner/layout.tsx`, which sent signed-out visitors to sign-in, that is, to itself,
+     for ever. Found by running the real console. The layout now shows the page alone to a signed-out visitor; everything else is still protected by the proxy and by each page's own API
+     calls.
+  3. An empty `version` field would have been read as 0 by the new action (`Number('')` is 0); a test caught it before it shipped, and an empty field is now refused.
+- **Run for real:** the API (throwaway PostgreSQL 18, scratch keys, no real SMS or gateway) and the production console build, driven by headless Edge over the DevTools protocol with a
+  session built from a real API sign-in: the business page showed the Orders button; the inbox listed six orders in their states; the restaurant's page held no customer address;
+  pressing **Accept** went through with the real version, redirected with "Order accepted.", the waiting count dropped from 4 to 3, and the order moved to "Waiting for the customer to pay".
+- **Not done:** a sound or notification when a new order arrives (only the 15-second refresh), a printable kitchen ticket, opening hours, per-dish sold-out toggling from the inbox,
+  and order history or revenue reports.
+- **Tests:** 46 new console tests (the rules for what each status offers, the inbox views and their order, the buttons per status, the server action's exact requests and refusals,
+  the bookings action's version, the partner layout) for 78 in all; 2 new backend unit tests (692) and extra assertions in two integration tests (128 pass, 6 live-gateway skipped);
+  the console's type-check, lint, formatting and production build are clean.
+
 **8.4 (the customer app's food screens).** Flow in [workflows.md](workflows.md) §25.7.
 
 - **Screens (`src/features/food`):** Restaurants (open ones for the picked area, no sign-in needed), a restaurant's menu with a cart, Checkout, and the order screen, all pushed

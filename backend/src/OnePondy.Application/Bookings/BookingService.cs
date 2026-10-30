@@ -483,7 +483,8 @@ public sealed class BookingService(IOnePondyDbContext db, TimeProvider time, IOp
         booking.GuestCount,
         booking.PriceSnapshot.TotalAmount,
         booking.PriceSnapshot.Currency,
-        booking.CreatedAt);
+        booking.CreatedAt,
+        booking.Version);
 
     private static BookingSlotView ToSlotView(BookingSlot bookingSlot, AvailabilitySlot slot) =>
         new(slot.Id, slot.StartAt, slot.EndAt, bookingSlot.Quantity);

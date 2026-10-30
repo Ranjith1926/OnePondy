@@ -5,6 +5,7 @@ import type {
   BusinessType,
   DayOfWeek,
   FoodAreaCode,
+  FoodOrderStatus,
   ListingStatus,
   ListingType,
   MediaLicence,
@@ -251,4 +252,20 @@ export const foodAreaLabels: Record<FoodAreaCode, string> = {
   reddiarpalayam: 'Reddiarpalayam',
   ariyankuppam: 'Ariyankuppam',
   villianur: 'Villianur',
+};
+
+export const foodOrderStatusLabels: Record<FoodOrderStatus, string> = {
+  placed: 'Waiting for you',
+  awaitingPayment: 'Waiting for the customer to pay',
+  confirmed: 'Confirmed',
+  preparing: 'Being prepared',
+  readyForPickup: 'Ready, waiting for a driver',
+  outForDelivery: 'Out for delivery',
+  delivered: 'Delivered',
+  rejected: 'Rejected',
+  cancelled: 'Cancelled',
+  expired: 'Expired',
+  failed: 'Payment failed',
+  refundPending: 'Refund in progress',
+  refunded: 'Refunded',
 };

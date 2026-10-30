@@ -28,6 +28,8 @@ function StepForm({
       <input type="hidden" name="businessId" value={businessId} />
       <input type="hidden" name="id" value={booking.id} />
       <input type="hidden" name="step" value={step} />
+      {/* The version the partner is looking at: the API refuses if the booking has moved on since. */}
+      <input type="hidden" name="version" value={booking.version} />
       {children}
     </form>
   );

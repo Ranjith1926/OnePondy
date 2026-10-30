@@ -357,6 +357,8 @@ export interface BookingSummary {
   totalAmount: number;
   currency: string;
   createdAt: string;
+  /** What an accept, reject, cancel or complete must send back, so a stale page cannot act on a booking that has changed. */
+  version: number;
 }
 
 export interface BookingSlotView {
@@ -556,4 +558,48 @@ export interface MenuCategory {
 
 export interface MenuView {
   categories: MenuCategory[];
+}
+
+// --- Food orders (Phase 8, the restaurant's inbox) ---
+
+export type FoodOrderStatus =
+  | 'placed'
+  | 'awaitingPayment'
+  | 'confirmed'
+  | 'preparing'
+  | 'readyForPickup'
+  | 'outForDelivery'
+  | 'delivered'
+  | 'rejected'
+  | 'cancelled'
+  | 'expired'
+  | 'failed'
+  | 'refundPending'
+  | 'refunded';
+
+export interface FoodOrderLine {
+  menuItemId: string;
+  name: string;
+  isVeg: boolean;
+  unitPrice: number;
+  quantity: number;
+  taxRatePercent: number;
+  subtotal: number;
+  taxAmount: number;
+}
+
+/** One order in the restaurant's inbox. It never carries the customer's address or phone: OnePondy's own drivers deliver. */
+export interface PartnerOrderSummary {
+  id: string;
+  /** What every action must send back, so a stale page cannot act on an order that has changed. */
+  version: number;
+  status: FoodOrderStatus;
+  expiresAt: string | null;
+  estimatedReadyAt: string | null;
+  itemCount: number;
+  lines: FoodOrderLine[];
+  totalAmount: number;
+  currency: string;
+  deliveryArea: FoodAreaCode;
+  createdAt: string;
 }

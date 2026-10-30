@@ -28,7 +28,9 @@ public sealed record BookingSummary(
     int GuestCount,
     decimal TotalAmount,
     string Currency,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    /// <summary>What a partner's accept, reject, cancel or complete must send back, so a stale screen cannot act on a booking that has since changed.</summary>
+    uint Version);
 
 public sealed record BookingDetail(
     Guid Id,

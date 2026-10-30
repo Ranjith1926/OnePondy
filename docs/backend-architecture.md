@@ -469,7 +469,7 @@ administrator.
 | `/partner/businesses/{id}/bookings` list, get, accept, reject, cancel, complete | O | Handle incoming bookings. |
 | `/partner/businesses/{id}/statements` list, get, `/{id}/csv` | O | Own approved and paid statements. |
 | `/partner/businesses/{id}/restaurant` get, put; `/menu` get; `/menu/categories`, `/menu/items` create, update, delete (categories), `/availability`, `/archive` | O | A restaurant's profile, areas and menu. |
-| `/partner/businesses/{id}/orders` list (`?status=`), get, accept, reject, preparing, ready, cancel | O | The restaurant's order inbox. Reject and cancel need a reason; every call takes the order's `version`. |
+| `/partner/businesses/{id}/orders` list (`?status=`), get, accept, reject, preparing, ready, cancel | O | The restaurant's order inbox. Reject and cancel need a reason; every call takes the order's `version`. Each list row carries its dishes (by name), `version` and `estimatedReadyAt`, so the console can act from the list alone; it never carries the customer's address or phone. |
 
 Update calls take the entity's `version`; a mismatch returns `409`.
 
