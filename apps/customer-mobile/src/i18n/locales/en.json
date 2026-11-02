@@ -668,6 +668,7 @@
         "failed": "The payment didn't go through.",
         "refundPending": "Your money is being returned in full.",
         "refunded": "Your money was returned in full.",
+        "placedCash": "The restaurant has a few minutes to accept. You'll pay {{amount}} in cash to the driver when it arrives.",
         "confirmedCash": "Confirmed. You'll pay {{amount}} in cash to the driver when it arrives.",
         "deliveredCash": "Delivered. You paid {{amount}} in cash. Enjoy your meal."
       },

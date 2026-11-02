@@ -103,6 +103,9 @@ export function OrderDetailScreen({ route }: Props) {
       return null;
     }
     const amount = formatMoney(o.price.totalAmount, o.price.currency);
+    if (o.status === 'placed') {
+      return t('food.order.hint.placedCash', { amount });
+    }
     if (o.status === 'confirmed') {
       return t('food.order.hint.confirmedCash', { amount });
     }

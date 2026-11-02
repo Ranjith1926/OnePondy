@@ -286,6 +286,18 @@ describe('<OrderDetailScreen />', () => {
       expect(screen.queryByText(/Paid and confirmed/)).not.toBeOnTheScreen();
     });
 
+    it('does not say "you\'ll pay once it does" while the restaurant has yet to answer', async () => {
+      ordered({ status: 'placed', paymentMethod: 'cashOnDelivery' });
+      await renderScreen();
+
+      expect(
+        await screen.findByText(
+          "The restaurant has a few minutes to accept. You'll pay ₹339.25 in cash to the driver when it arrives.",
+        ),
+      ).toBeOnTheScreen();
+      expect(screen.queryByText(/pay once it does/)).not.toBeOnTheScreen();
+    });
+
     it('shows no payment to make: nothing to pay online and no pay button', async () => {
       ordered({ status: 'confirmed', paymentMethod: 'cashOnDelivery' });
       await renderScreen();
