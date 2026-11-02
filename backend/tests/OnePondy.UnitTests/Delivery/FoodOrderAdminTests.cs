@@ -28,7 +28,7 @@ public class FoodOrderAdminTests
     {
         _admin = new FoodOrderAdminService(_h.Db, _h.Orders, _h.B.Accounts, _h.B.Audit, Options.Create(_h.Food), _h.B.Time);
         _drivers = new DriverService(_h.Db, _h.B.Accounts, _h.B.Audit, _h.B.Time);
-        _delivery = new DeliveryService(_h.Db, _h.B.Time);
+        _delivery = new DeliveryService(_h.Db, _h.B.Time, _h.Ledger, Options.Create(_h.Food));
         _h.OpenAsync().GetAwaiter().GetResult();
     }
 
@@ -209,7 +209,7 @@ public class FoodOrderAdminTests
         var job = await JobOfAsync(order);
         await _delivery.AcceptAsync(driver, job, None);
         await _delivery.PickUpAsync(driver, job, None);
-        await _delivery.DeliverAsync(driver, job, None);
+        await _delivery.DeliverAsync(driver, job, null, None);
         Pass(TimeSpan.FromDays(2));
 
         Assert.Null(await AttentionOfAsync(order));
@@ -271,7 +271,7 @@ public class FoodOrderAdminTests
         Assert.Equal(order.ToString(), entry.EntityId);
 
         await _delivery.PickUpAsync(driver, job, None);
-        await _delivery.DeliverAsync(driver, job, None);
+        await _delivery.DeliverAsync(driver, job, null, None);
         var after = (await _admin.GetAsync(order, Admin, None)).Value!.Delivery!;
 
         Assert.Null(after.Position);
@@ -381,7 +381,7 @@ public class FoodOrderAdminTests
         var job = await JobOfAsync(delivered);
         await _delivery.AcceptAsync(driver, job, None);
         await _delivery.PickUpAsync(driver, job, None);
-        await _delivery.DeliverAsync(driver, job, None);
+        await _delivery.DeliverAsync(driver, job, null, None);
 
         Assert.Equal("order_invalid_transition", (await _admin.CancelAsync(delivered, 0, "Too late", Admin, None)).Error!.Code);
 

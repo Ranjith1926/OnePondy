@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 
 import { driverApi, type JobDetail } from '../api/driverApi';
 
-export const jobKeys = { all: ['driver', 'jobs'] as const };
+export const jobKeys = { all: ['driver', 'jobs'] as const, cash: ['driver', 'cash'] as const };
 
 /** How often an approved driver's list of deliveries refreshes by itself while the app is open. */
 const REFRESH_MS = 10_000;
@@ -31,7 +31,30 @@ function useJobStep(step: (id: string) => Promise<JobDetail>) {
 export const useAcceptJob = () => useJobStep(driverApi.acceptJob);
 export const useReleaseJob = () => useJobStep(driverApi.releaseJob);
 export const usePickUpJob = () => useJobStep(driverApi.pickUpJob);
-export const useDeliverJob = () => useJobStep(driverApi.deliverJob);
+
+/** Hands the order over. For a cash order the driver confirms the cash they took; the cash they hold is then read again. */
+export function useDeliverJob() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, cashCollected }: { id: string; cashCollected?: number }) =>
+      driverApi.deliverJob(id, cashCollected),
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: jobKeys.all }),
+        queryClient.invalidateQueries({ queryKey: jobKeys.cash }),
+      ]),
+  });
+}
+
+/** The cash the driver holds for OnePondy. */
+export function useDriverCash(enabled: boolean) {
+  return useQuery({
+    queryKey: jobKeys.cash,
+    queryFn: driverApi.cash,
+    enabled,
+    refetchInterval: 30_000,
+  });
+}
 
 /** How often, and how far apart, the driver's position is reported while they hold a delivery. */
 const LOCATION_INTERVAL_MS = 15_000;

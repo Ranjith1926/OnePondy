@@ -41,4 +41,4 @@ generated):
 ## What it does not do yet
 
 Upload photos of licence or registration, send or receive push notifications (offers appear by refreshing every 10 seconds), show earnings, or offer
-Tamil and French. Location is collected only while a delivery is held (foreground only, with permission) and is erased when the delivery ends.
+Tamil and French. A cash on delivery order shows the cash to collect and asks the driver to confirm exactly that amount when handing over; the cash they hold for OnePondy is shown on the home screen. Location is collected only while a delivery is held (foreground only, with permission) and is erased when the delivery ends.

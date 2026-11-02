@@ -128,6 +128,7 @@ export function aQuote(overrides: Partial<OrderQuote> = {}): OrderQuote {
     minOrderAmount: 100,
     lines: orderLines,
     price: aPrice,
+    paymentOptions: { online: true, cashOnDelivery: false, cashOnDeliveryMaxAmount: 2000 },
     ...overrides,
   };
 }
@@ -158,6 +159,8 @@ export function anOrder(overrides: Partial<OrderDetail> = {}): OrderDetail {
     payment: null,
     refunds: [],
     delivery: null,
+    paymentMethod: 'online',
+    cashCollected: null,
     ...overrides,
   };
 }

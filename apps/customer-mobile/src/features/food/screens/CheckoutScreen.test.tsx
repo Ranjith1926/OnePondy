@@ -236,4 +236,124 @@ describe('<CheckoutScreen />', () => {
     expect(mockNavigate).toHaveBeenCalledWith('Restaurants');
     expect(quote).not.toHaveBeenCalled();
   });
+
+  describe('paying', () => {
+    const both = { online: true, cashOnDelivery: true, cashOnDeliveryMaxAmount: 2000 };
+
+    it('offers only online payment, and says nothing about cash, when cash is not available', async () => {
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+
+      expect(screen.queryByText('Cash on delivery')).not.toBeOnTheScreen();
+      expect(screen.queryByText('Pay online')).not.toBeOnTheScreen();
+      expect(screen.getByText(/only then are you charged/)).toBeOnTheScreen();
+    });
+
+    it('lets the customer choose between paying online and cash on delivery, starting with online', async () => {
+      quote.mockResolvedValue(aQuote({ paymentOptions: both }));
+      place.mockResolvedValue(anOrder({ status: 'placed' }));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      expect(screen.getByRole('button', { name: 'Pay online' })).toBeOnTheScreen();
+      expect(screen.getByText(/only then are you charged/)).toBeOnTheScreen();
+
+      await user.press(screen.getByTestId('place-order'));
+
+      expect(place.mock.calls[0][0].paymentMethod).toBe('online');
+    });
+
+    it('places a cash on delivery order, telling the customer what they will pay the driver', async () => {
+      quote.mockResolvedValue(aQuote({ paymentOptions: both }));
+      place.mockResolvedValue(anOrder({ status: 'placed', paymentMethod: 'cashOnDelivery' }));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      await user.press(screen.getByRole('button', { name: 'Cash on delivery' }));
+
+      expect(
+        screen.getByText(/You'll pay ₹339.25 in cash to the driver when your order arrives/),
+      ).toBeOnTheScreen();
+      expect(screen.queryByText(/only then are you charged/)).not.toBeOnTheScreen();
+
+      await user.press(screen.getByTestId('place-order'));
+
+      expect(place.mock.calls[0][0]).toMatchObject({
+        paymentMethod: 'cashOnDelivery',
+        expectedTotal: aPrice.totalAmount,
+      });
+    });
+
+    it('offers cash alone when online payment is not available, and the order can still be placed', async () => {
+      quote.mockResolvedValue(
+        aQuote({
+          paymentOptions: { online: false, cashOnDelivery: true, cashOnDeliveryMaxAmount: 2000 },
+        }),
+      );
+      place.mockResolvedValue(anOrder({ status: 'placed', paymentMethod: 'cashOnDelivery' }));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      expect(screen.queryByRole('button', { name: 'Pay online' })).not.toBeOnTheScreen();
+      expect(screen.getByText(/in cash to the driver/)).toBeOnTheScreen();
+      await user.press(screen.getByTestId('place-order'));
+
+      expect(place.mock.calls[0][0].paymentMethod).toBe('cashOnDelivery');
+    });
+
+    it('cannot place an order that has no way to be paid for', async () => {
+      quote.mockResolvedValue(
+        aQuote({
+          paymentOptions: { online: false, cashOnDelivery: false, cashOnDeliveryMaxAmount: 2000 },
+        }),
+      );
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      expect(screen.getByTestId('place-order')).toBeDisabled();
+    });
+
+    it('treats a different way of paying as a different attempt, so it never gets back an order made the other way', async () => {
+      quote.mockResolvedValue(aQuote({ paymentOptions: both }));
+      place.mockRejectedValue(new ApiError(503, 'http_503'));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      await user.press(screen.getByTestId('place-order'));
+      await screen.findByText('Something went wrong. Please try again.');
+      await user.press(screen.getByRole('button', { name: 'Cash on delivery' }));
+      await user.press(screen.getByTestId('place-order'));
+
+      expect(place.mock.calls[1][0].paymentMethod).toBe('cashOnDelivery');
+      expect(place.mock.calls[1][0].idempotencyKey).not.toBe(place.mock.calls[0][0].idempotencyKey);
+    });
+
+    it('says plainly when cash was refused by the server', async () => {
+      quote.mockResolvedValue(aQuote({ paymentOptions: both }));
+      place.mockRejectedValue(new ApiError(409, 'cash_on_delivery_unavailable'));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+      await user.press(screen.getByRole('button', { name: 'Cash on delivery' }));
+
+      await user.press(screen.getByTestId('place-order'));
+
+      expect(
+        await screen.findByText(
+          "Cash on delivery isn't available for this order. Pay online instead.",
+        ),
+      ).toBeOnTheScreen();
+    });
+  });
 });

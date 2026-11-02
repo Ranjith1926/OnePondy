@@ -89,6 +89,16 @@ export interface OrderPrice {
 }
 
 /** The server's price for a cart, with the whole breakdown, before the customer commits. */
+export type PaymentMethod = 'online' | 'cashOnDelivery';
+
+/** How this cart can be paid for right now. Both can be true; if neither is, the cart cannot be ordered. */
+export interface PaymentOptions {
+  online: boolean;
+  cashOnDelivery: boolean;
+  /** The largest order that can be paid in cash. */
+  cashOnDeliveryMaxAmount: number;
+}
+
 export interface OrderQuote {
   businessId: string;
   restaurantName: string;
@@ -97,6 +107,7 @@ export interface OrderQuote {
   minOrderAmount: number;
   lines: OrderLine[];
   price: OrderPrice;
+  paymentOptions: PaymentOptions;
 }
 
 export interface OrderHistoryEntry {
@@ -143,6 +154,9 @@ export interface OrderDetail {
   refunds: RefundInfo[];
   /** Null until the order is ready for a driver. */
   delivery: DeliveryProgress | null;
+  paymentMethod: PaymentMethod;
+  /** For cash on delivery: the cash the driver took at the door, once delivered. */
+  cashCollected: number | null;
 }
 
 export interface OrderSummary {
@@ -155,6 +169,7 @@ export interface OrderSummary {
   totalAmount: number;
   currency: string;
   createdAt: string;
+  paymentMethod: PaymentMethod;
 }
 
 export interface QuoteInput {
@@ -171,6 +186,8 @@ export interface PlaceOrderInput extends QuoteInput {
   contactPhone: string;
   /** The total the customer was shown; the server refuses if the menu changed since. */
   expectedTotal: number;
+  /** Left out, it is an online order. Cash on delivery is only accepted where the quote said it is offered. */
+  paymentMethod?: PaymentMethod;
 }
 
 export const foodApi = {

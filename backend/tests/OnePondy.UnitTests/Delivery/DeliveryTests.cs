@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using OnePondy.Application.Delivery;
 using OnePondy.Domain.Delivery;
 using OnePondy.Domain.Food;
@@ -23,7 +24,7 @@ public class DeliveryTests
     public DeliveryTests()
     {
         _drivers = new DriverService(_h.Db, _h.B.Accounts, _h.B.Audit, _h.B.Time);
-        _delivery = new DeliveryService(_h.Db, _h.B.Time);
+        _delivery = new DeliveryService(_h.Db, _h.B.Time, _h.Ledger, Options.Create(_h.Food));
         _h.OpenAsync(paymentsOn: false).GetAwaiter().GetResult();
     }
 
@@ -258,7 +259,7 @@ public class DeliveryTests
         var job = await TakenAsync(driver, order);
 
         Assert.Equal("job_not_found", (await _delivery.PickUpAsync(other, job, None)).Error!.Code);
-        Assert.Equal("job_not_found", (await _delivery.DeliverAsync(other, job, None)).Error!.Code);
+        Assert.Equal("job_not_found", (await _delivery.DeliverAsync(other, job, null, None)).Error!.Code);
         Assert.Equal("job_not_found", (await _delivery.ReleaseAsync(other, job, None)).Error!.Code);
         Assert.Equal(FoodOrderStatus.ReadyForPickup, await StatusOfAsync(order));
     }
@@ -272,7 +273,7 @@ public class DeliveryTests
         var job = await TakenAsync(driver, order);
         await _delivery.PickUpAsync(driver, job, None);
 
-        var delivered = (await _delivery.DeliverAsync(driver, job, None)).Value!;
+        var delivered = (await _delivery.DeliverAsync(driver, job, null, None)).Value!;
 
         Assert.Equal(DeliveryJobStatus.Delivered, delivered.Status);
         Assert.Equal(FoodOrderStatus.Delivered, await StatusOfAsync(order));
@@ -292,7 +293,7 @@ public class DeliveryTests
         var driver = await DriverOnDutyAsync();
         var job = await TakenAsync(driver, order);
 
-        Assert.Equal("job_invalid_transition", (await _delivery.DeliverAsync(driver, job, None)).Error!.Code);
+        Assert.Equal("job_invalid_transition", (await _delivery.DeliverAsync(driver, job, null, None)).Error!.Code);
         Assert.Equal(FoodOrderStatus.ReadyForPickup, await StatusOfAsync(order));
 
         await _delivery.PickUpAsync(driver, job, None);
@@ -344,7 +345,7 @@ public class DeliveryTests
         Assert.Equal(held.LastLocationAt, mine.Delivery!.LocationUpdatedAt);
 
         await _delivery.PickUpAsync(driver, job, None);
-        await _delivery.DeliverAsync(driver, job, None);
+        await _delivery.DeliverAsync(driver, job, null, None);
 
         var finished = await JobOfAsync(order);
         Assert.Null(finished.LastLatitude);

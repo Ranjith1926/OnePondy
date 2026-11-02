@@ -4,8 +4,8 @@ Audience: developers and operations. Scope: everything built through Phase 8 (ac
 tourism content, itineraries and AI planner, partner onboarding, listings, availability, the
 booking engine, Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
 push notifications and partner statements, and Phase 8: restaurants, food orders and their payment,
-delivery drivers, deliveries and administrators' order monitoring). Reviews, rides and cash on
-delivery are **not built** and are marked as such. Live payments are switched off by design until the go-live gate in
+delivery drivers, deliveries, cash on delivery and administrators' order monitoring). Reviews and rides are
+**not built** and are marked as such. Live payments are switched off by design until the go-live gate in
 [phase-7-plan.md](phase-7-plan.md) §9 is met.
 
 Related documents: [database-architecture.md](database-architecture.md),
@@ -137,7 +137,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Planning | `ItineraryService`, `SavedPlacesService`, `TripPlannerService` |
 | Partners | `BusinessService`, `ListingService`, `SavedListingsService` |
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
-| Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens), `FoodOrderAdminService` (administrators' list, detail, cancel, re-offer) with `OrderAttentionRules` |
+| Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens), `FoodOrderAdminService` (administrators' list, detail, cancel, re-offer) with `OrderAttentionRules`, `CashService` (the cash a driver holds and recording what they hand in) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
 | Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
 | Notifications | `NotificationOutbox` (queues in the caller's transaction), `OutboxDispatcher`, `BookingReminders`, `NotificationRetention`, `DeviceService`, `IPushSender` |
@@ -384,7 +384,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Ai:Gemini` | `ApiKey`, `Model`, `BaseUrl`, `Timeout` |
 | `Twilio` | `AccountSid`, `AuthToken`, and either `From` (`Auth:Otp:Delivery` = `Twilio`) or `VerifyServiceSid` (`TwilioVerify`). Development only; secrets, never committed. |
 | `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
-| `Food` | `RequireOnlinePayment` (default true: food can be priced, ordered and accepted only while the `payments` module is available; `false` allows the unpaid path for development), `Attention` (`NoDriverAfter` 10 min, `PickupOverdueAfter` 30, `DeliveryOverdueAfter` 60, `KitchenOverdueAfter` 20, `RefundOverdueAfter` 1 h: when the console flags an order), `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
+| `Food` | `CashOnDelivery` (`MaxOrderAmount` 2000: the largest order payable in cash; `MaxDriverCashHeld` 5000: a driver holding this much is given no more cash orders until they hand some in; cash is offered only while the `cashOnDelivery` module is on and the restaurant opts in), `RequireOnlinePayment` (default true: food can be priced, ordered and accepted only while the `payments` module is available; `false` allows the unpaid path for development), `Attention` (`NoDriverAfter` 10 min, `PickupOverdueAfter` 30, `DeliveryOverdueAfter` 60, `KitchenOverdueAfter` 20, `RefundOverdueAfter` 1 h: when the console flags an order), `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
 | `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
 | `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
 | `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
@@ -440,6 +440,7 @@ administrator.
 | `/admin/staff` list, add, change role, remove; GET `/admin/audit` | S-A | Staff management and audit log. |
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
 | `/admin/food-orders` list (`?status=`, `?needsAttention=true`), `/attention-count`, get, `/{id}/cancel`, `/{id}/release-delivery` | S-A | Order monitoring (step 8.9). Get returns the customer's address and phone and, while a delivery is under way, the driver's last position (each look is audited); cancel needs a reason and refunds a paid order in full when refunds are on; release only before the food is collected. |
+| `/admin/cash/drivers` list (`?onlyHolding=`), POST `/{driverUserId}/deposits` | S-A | The cash drivers hold (step 8.8) and recording cash handed in (never more than held; audited). |
 | `/admin/drivers` list (`?status=`), get, `/{userId}/approve`, `/reject`, `/suspend`, `/reinstate` | S-A | Driver review (step 8.6). Reject and suspend need a reason; suspending ends the shift at once; every step is audited. |
 | `/admin/listings` list, get, publish, send-back, suspend, reinstate | S-A | Listing moderation. |
 | GET `/admin/payments`, `/admin/refunds` | S-A | Money in and out (no customer details). |
@@ -457,7 +458,9 @@ administrator.
 | POST `/devices`, DELETE `/devices/{id}` | U | Register or remove this phone for push notifications. |
 | GET `/restaurants?area=`, `/restaurants/{id}`, `/restaurants/{id}/menu` | P | Open restaurants for an area and their menus (not gated by the module flag). |
 | GET/PUT `/driver/me`, POST `/driver/duty` | U | The signed-in account's driver application and shifts (step 8.6). `PUT` applies or changes details (needs the `version` once applied; a change by an approved driver sends the application for review again and ends the shift); `duty` goes on or off duty (only an approved driver can go on). |
+| GET `/driver/cash` | U (driver) | Cash the driver holds for OnePondy and the limit (step 8.8). |
 | GET `/driver/jobs`, POST `/driver/jobs/{id}/accept`, `/release`, `/pickup`, `/deliver`, `/location` | U (approved driver) | Step 8.7. `jobs` returns the driver's own delivery and, while free and on duty, the open ones (no customer address or phone). `accept` is first-come, one live delivery per driver; `release` only before collecting; `pickup` and `deliver` move the order too; `location` stores the latest position, only while the driver holds the job. |
+| POST `/food/quote` | U | (also) Returns `paymentOptions`: whether online payment and cash on delivery are available for this cart. A place request may carry `paymentMethod` (`online` or `cashOnDelivery`). |
 | POST `/food/quote` | U | Prices a cart from the menu: lines, tax per line, fees, total. |
 | POST/GET `/food/orders`, GET `/food/orders/{id}`, POST `/food/orders/{id}/cancel` | U (own order) | Place (needs `idempotencyKey` and `expectedTotal`), list, view (with the payment receipt and any refunds), cancel until cooking starts (a paid order is refunded in full, or refused while refunds are off). |
 | POST `/food/orders/{id}/payment`, POST `/food/orders/{id}/payment/refresh` | U (own order) | Start (or get the open) Razorpay order for an accepted order; "is it paid yet?" asks Razorpay and returns the order. Another customer's order is 404. |
@@ -499,6 +502,6 @@ yet).
 - Razorpay Route payouts (D21); GST and tax collected at source on commission.
 - Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
 - Reviews and ratings, rides.
-- **Phase 8 gaps:** cash on delivery (8.8, waiting for the owner); notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); reassigning a delivery to a chosen driver; a map for customers (D6). See
+- **Phase 8 gaps:** the legal and tax review of cash on delivery (it is built, off until an administrator switches it on); a daily cash report and alerts for cash held too long; banking the cash; notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); reassigning a delivery to a chosen driver; a map for customers (D6). See
   [phase-8-plan.md](phase-8-plan.md) §4 and the Phase 8 verification in the README.
 - A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.

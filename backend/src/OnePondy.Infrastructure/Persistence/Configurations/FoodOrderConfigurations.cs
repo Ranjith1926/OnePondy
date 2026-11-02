@@ -29,6 +29,15 @@ public sealed class FoodOrderConfiguration : IEntityTypeConfiguration<FoodOrder>
                 "ck_food_order_total",
                 "total_amount = subtotal + delivery_fee + packaging_fee + tax_amount - discount_amount");
             table.HasCheckConstraint("ck_food_order_prep_time", "prep_time_minutes > 0");
+            table.HasCheckConstraint("ck_food_order_payment_method", $"payment_method IN ({SnakeCaseEnum<PaymentMethod>.SqlList})");
+
+            // The cash a driver took is all three columns or none, only on a delivered cash on delivery order, and always exactly its total;
+            // and a delivered cash on delivery order always has it (nothing is delivered "on account").
+            table.HasCheckConstraint(
+                "ck_food_order_cash",
+                "((cash_collected IS NULL) = (cash_collected_at IS NULL)) AND ((cash_collected IS NULL) = (cash_collected_by IS NULL)) "
+                + "AND (cash_collected IS NULL OR (payment_method = 'cash_on_delivery' AND status = 'delivered' AND cash_collected = total_amount)) "
+                + "AND NOT (payment_method = 'cash_on_delivery' AND status = 'delivered' AND cash_collected IS NULL)");
         });
 
         builder.HasKey(o => o.Id);
@@ -39,6 +48,8 @@ public sealed class FoodOrderConfiguration : IEntityTypeConfiguration<FoodOrder>
         builder.Property(o => o.DeliveryAddress).HasMaxLength(OrderService.MaxAddressLength).IsRequired();
         builder.Property(o => o.DeliveryNote).HasMaxLength(OrderService.MaxNoteLength);
         builder.Property(o => o.ContactPhone).HasMaxLength(16).IsRequired();
+        builder.Property(o => o.PaymentMethod).HasConversion(SnakeCaseEnum<PaymentMethod>.Converter).HasMaxLength(24).HasDefaultValue(PaymentMethod.Online);
+        builder.Property(o => o.CashCollected).HasPrecision(12, 2);
         builder.Property(o => o.Currency).HasMaxLength(3).IsFixedLength();
         builder.Property(o => o.Subtotal).HasPrecision(12, 2);
         builder.Property(o => o.DeliveryFee).HasPrecision(12, 2);
@@ -50,6 +61,9 @@ public sealed class FoodOrderConfiguration : IEntityTypeConfiguration<FoodOrder>
         builder.Property(o => o.Version).IsRowVersion();
 
         builder.HasOne<Business>().WithMany().HasForeignKey(o => o.BusinessId).OnDelete(DeleteBehavior.Restrict);
+
+        // The driver who took the cash stays on the order as the record of who owed it (the account is anonymised, never deleted).
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(o => o.CashCollectedBy).OnDelete(DeleteBehavior.Restrict);
 
         // Orders outlive the customer's account, which is anonymised rather than deleted.
         builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(o => o.CustomerUserId).OnDelete(DeleteBehavior.Restrict);

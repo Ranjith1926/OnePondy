@@ -1,3 +1,4 @@
+using System.Data.Common;
 using Microsoft.EntityFrameworkCore;
 
 namespace OnePondy.Application.Common;
@@ -12,4 +13,23 @@ public static class WriteConflicts
 {
     public static bool Is(Exception exception) =>
         exception is DbUpdateException or InvalidOperationException { InnerException: DbUpdateException };
+
+    /// <summary>
+    /// Recognises a rule in the database (a trigger that raises an exception, SQLSTATE P0001) refusing a save. Rules that are checked when a
+    /// transaction commits surface as the database's own exception rather than as EF's <see cref="DbUpdateException"/>, so
+    /// <see cref="Is"/> does not see them. Only for a caller that knows what rule it is up against (such as a balance that must not go below
+    /// nothing), and can say so; anything else should still fail loudly.
+    /// </summary>
+    public static bool IsDatabaseRule(Exception exception)
+    {
+        for (var current = exception; current is not null; current = current.InnerException)
+        {
+            if (current is DbException { SqlState: "P0001" })
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

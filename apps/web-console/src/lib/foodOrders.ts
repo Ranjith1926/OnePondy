@@ -121,6 +121,13 @@ export function ordersForView(
 export const waitingForYou = (orders: readonly PartnerOrderSummary[]): number =>
   orders.filter((order) => order.status === 'placed').length;
 
+/** For a cash on delivery order, a line the kitchen can read: nothing is paid yet and the driver takes the cash. Null for an online order. */
+export function paymentText(order: PartnerOrderSummary): string | null {
+  return order.paymentMethod === 'cashOnDelivery'
+    ? 'Cash on delivery: the customer pays the driver, and OnePondy pays you your share.'
+    : null;
+}
+
 /** What the kitchen should know about the delivery, in plain words; null while there is none to speak of. */
 export function deliveryText(order: PartnerOrderSummary): string | null {
   const delivery = order.delivery;

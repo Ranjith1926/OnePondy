@@ -125,10 +125,10 @@ public sealed class FoodOrderHarness
         Assert.True(saved.IsSuccess, saved.Error?.Detail);
     }
 
-    public async Task<OrderDetail> PlacedAsync(string key = "order-1", Guid? customer = null)
+    public async Task<OrderDetail> PlacedAsync(string key = "order-1", Guid? customer = null, string? paymentMethod = null)
     {
         var input = new PlaceOrderInput(
-            key, BusinessId, "whiteTown", "12 Rue Suffren, White Town", null, "+919876500001", [new(_dosa, 2), new(_coffee, 1)], Total);
+            key, BusinessId, "whiteTown", "12 Rue Suffren, White Town", null, "+919876500001", [new(_dosa, 2), new(_coffee, 1)], Total, paymentMethod);
         var placed = await Orders.PlaceAsync(customer ?? Buyer, input, default);
         Assert.True(placed.IsSuccess, placed.Error?.Detail);
         return placed.Value!;

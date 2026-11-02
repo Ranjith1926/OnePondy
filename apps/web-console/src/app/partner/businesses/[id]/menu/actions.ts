@@ -55,6 +55,7 @@ export async function saveRestaurant(_previous: FormState, form: FormData): Prom
         prepTimeMinutes,
         minOrderAmount,
         isAcceptingOrders: form.get('isAcceptingOrders') === 'on',
+        acceptsCashOnDelivery: form.get('acceptsCashOnDelivery') === 'on',
         deliveryAreas: form.getAll('deliveryAreas').map(String),
         version: version && version > 0 ? version : null,
       },

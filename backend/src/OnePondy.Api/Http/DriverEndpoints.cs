@@ -16,6 +16,9 @@ public sealed record DriverReasonBody(uint Version, string? Reason);
 
 public sealed record LocationBody(double? Latitude, double? Longitude);
 
+/// <summary>For a cash on delivery order the driver confirms the cash they took; for an online order there is nothing to send.</summary>
+public sealed record DeliverBody(decimal? CashCollected);
+
 /// <summary>
 /// Delivery drivers (spec Phase 8, step 8.6): a signed-in account applies and starts and ends shifts; administrators review. A driver
 /// is an ordinary account with an approved driver profile, so these routes need a sign-in and nothing more: what a person may do
@@ -35,6 +38,7 @@ public static class DriverEndpoints
         driver.MapPost("/jobs/{jobId:guid}/pickup", PickUpJob);
         driver.MapPost("/jobs/{jobId:guid}/deliver", DeliverJob);
         driver.MapPost("/jobs/{jobId:guid}/location", ShareLocation);
+        driver.MapGet("/cash", GetCash);
 
         var admin = app.MapGroup("/api/v1/admin/drivers").RequireAuthorization(StaffPolicies.Administration).WithTags("Console drivers");
         admin.MapGet("/", AdminList);
@@ -69,8 +73,11 @@ public static class DriverEndpoints
     private static async Task<IResult> PickUpJob(Guid jobId, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
         EndpointResults.Ok(await service.PickUpAsync(user.GetUserId(), jobId, ct), httpContext);
 
-    private static async Task<IResult> DeliverJob(Guid jobId, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
-        EndpointResults.Ok(await service.DeliverAsync(user.GetUserId(), jobId, ct), httpContext);
+    private static async Task<IResult> DeliverJob(Guid jobId, DeliverBody? body, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct) =>
+        EndpointResults.Ok(await service.DeliverAsync(user.GetUserId(), jobId, body?.CashCollected, ct), httpContext);
+
+    private static async Task<IResult> GetCash(ClaimsPrincipal user, CashService service, CancellationToken ct) =>
+        Results.Ok(await service.GetMineAsync(user.GetUserId(), ct));
 
     private static async Task<IResult> ShareLocation(Guid jobId, LocationBody body, ClaimsPrincipal user, DeliveryService service, HttpContext httpContext, CancellationToken ct)
     {

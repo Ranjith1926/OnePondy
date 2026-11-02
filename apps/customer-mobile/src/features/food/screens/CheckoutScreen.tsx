@@ -25,6 +25,7 @@ import { cartLineInputs } from '../cart/cart';
 import { useCart } from '../cart/CartContext';
 import { PriceBreakdown } from '../components/PriceBreakdown';
 import { servedAreas, startingArea } from '../deliveryAreas';
+import type { PaymentMethod } from '../api/foodApi';
 import { fieldError, foodErrorMessageKey } from '../foodErrors';
 import { usePlaceOrder, useQuote } from '../hooks/useFood';
 
@@ -55,6 +56,7 @@ export function CheckoutScreen() {
   const [address, setAddress] = useState('');
   const [note, setNote] = useState('');
   const [phone, setPhone] = useState('');
+  const [chosenMethod, setChosenMethod] = useState<PaymentMethod | null>(null);
 
   const lines = cartLineInputs(cart);
   const quote = useQuote(restaurant?.businessId, area, lines);
@@ -107,19 +109,34 @@ export function CheckoutScreen() {
 
   const quoted = quote.data;
   const belowMinimum = quoted !== undefined && quoted.price.subtotal < quoted.minOrderAmount;
+
+  // What the server says can be used for this cart. The customer's choice stands only while it is still on offer; otherwise the one that is.
+  const options = quoted?.paymentOptions;
+  const offered = (method: PaymentMethod) =>
+    options !== undefined && (method === 'online' ? options.online : options.cashOnDelivery);
+  const method: PaymentMethod | null =
+    chosenMethod !== null && offered(chosenMethod)
+      ? chosenMethod
+      : offered('online')
+        ? 'online'
+        : offered('cashOnDelivery')
+          ? 'cashOnDelivery'
+          : null;
   const ready =
     quoted !== undefined &&
     !belowMinimum &&
+    method !== null &&
     area !== null &&
     address.trim().length > 0 &&
     phone.trim().length > 0;
 
   const submit = () => {
-    if (!quoted || area === null) {
+    if (!quoted || area === null || method === null) {
       return;
     }
 
-    const signature = JSON.stringify([restaurant.businessId, area, lines]);
+    // A different way of paying is a different attempt: the same key would hand back the order that was already made.
+    const signature = JSON.stringify([restaurant.businessId, area, lines, method]);
     if (attempt.current?.signature !== signature) {
       attempt.current = { signature, key: newIdempotencyKey() };
     }
@@ -134,6 +151,7 @@ export function CheckoutScreen() {
         contactPhone: phone.trim(),
         lines,
         expectedTotal: quoted.price.totalAmount,
+        paymentMethod: method,
       },
       {
         onSuccess: (order) => {
@@ -235,6 +253,35 @@ export function CheckoutScreen() {
           ) : null}
         </View>
 
+        {quoted && options && (options.online || options.cashOnDelivery) ? (
+          <View style={styles.section}>
+            <OPText variant="label" accessibilityRole="header">
+              {t('food.checkout.paymentTitle')}
+            </OPText>
+            {options.online && options.cashOnDelivery ? (
+              <View style={styles.chips}>
+                <OPChip
+                  label={t('food.checkout.method.online')}
+                  selected={method === 'online'}
+                  onPress={() => setChosenMethod('online')}
+                />
+                <OPChip
+                  label={t('food.checkout.method.cashOnDelivery')}
+                  selected={method === 'cashOnDelivery'}
+                  onPress={() => setChosenMethod('cashOnDelivery')}
+                />
+              </View>
+            ) : null}
+            <OPText variant="caption" tone="secondary">
+              {method === 'cashOnDelivery'
+                ? t('food.checkout.cashNote', {
+                    amount: formatMoney(quoted.price.totalAmount, quoted.price.currency),
+                  })
+                : t('food.checkout.payLater', { name: restaurant.name })}
+            </OPText>
+          </View>
+        ) : null}
+
         {belowMinimum && quoted ? (
           <InlineBanner
             kind="warning"
@@ -261,10 +308,6 @@ export function CheckoutScreen() {
             }
           />
         ) : null}
-
-        <OPText variant="caption" tone="secondary">
-          {t('food.checkout.payLater', { name: restaurant.name })}
-        </OPText>
       </ScrollView>
 
       <View style={[styles.inset, styles.footer]}>

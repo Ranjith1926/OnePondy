@@ -60,6 +60,9 @@ public sealed class RestaurantProfile
     /// <summary>The "open" switch. A new restaurant starts closed, so nothing is orderable until the partner decides.</summary>
     public bool IsAcceptingOrders { get; private set; }
 
+    /// <summary>Whether the restaurant takes cash on delivery as well as online payment. Opt-in: a new restaurant does not.</summary>
+    public bool AcceptsCashOnDelivery { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -67,14 +70,15 @@ public sealed class RestaurantProfile
     /// <summary>Optimistic concurrency token (PostgreSQL xmin).</summary>
     public uint Version { get; private set; }
 
-    public static RestaurantProfile Create(Guid businessId, int prepTimeMinutes, decimal minOrderAmount, bool isAcceptingOrders, DateTimeOffset now)
+    public static RestaurantProfile Create(
+        Guid businessId, int prepTimeMinutes, decimal minOrderAmount, bool isAcceptingOrders, bool acceptsCashOnDelivery, DateTimeOffset now)
     {
         var profile = new RestaurantProfile { BusinessId = businessId, CreatedAt = now };
-        profile.Update(prepTimeMinutes, minOrderAmount, isAcceptingOrders, now);
+        profile.Update(prepTimeMinutes, minOrderAmount, isAcceptingOrders, acceptsCashOnDelivery, now);
         return profile;
     }
 
-    public void Update(int prepTimeMinutes, decimal minOrderAmount, bool isAcceptingOrders, DateTimeOffset now)
+    public void Update(int prepTimeMinutes, decimal minOrderAmount, bool isAcceptingOrders, bool acceptsCashOnDelivery, DateTimeOffset now)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(prepTimeMinutes, MinPrepMinutes);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(prepTimeMinutes, MaxPrepMinutes);
@@ -84,6 +88,7 @@ public sealed class RestaurantProfile
         PrepTimeMinutes = prepTimeMinutes;
         MinOrderAmount = decimal.Round(minOrderAmount, 2, MidpointRounding.AwayFromZero);
         IsAcceptingOrders = isAcceptingOrders;
+        AcceptsCashOnDelivery = acceptsCashOnDelivery;
         UpdatedAt = now;
     }
 }

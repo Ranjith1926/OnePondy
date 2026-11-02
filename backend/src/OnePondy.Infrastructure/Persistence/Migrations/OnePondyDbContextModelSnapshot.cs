@@ -668,6 +668,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         {
                             Key = "payments",
                             Status = "coming_soon"
+                        },
+                        new
+                        {
+                            Key = "cashOnDelivery",
+                            Status = "coming_soon"
                         });
                 });
 
@@ -867,6 +872,19 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("business_id");
 
+                    b.Property<decimal?>("CashCollected")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("cash_collected");
+
+                    b.Property<DateTimeOffset?>("CashCollectedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cash_collected_at");
+
+                    b.Property<Guid?>("CashCollectedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cash_collected_by");
+
                     b.Property<string>("ClosedReason")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -939,6 +957,14 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("packaging_fee");
 
+                    b.Property<string>("PaymentMethod")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasDefaultValue("online")
+                        .HasColumnName("payment_method");
+
                     b.Property<int>("PrepTimeMinutes")
                         .HasColumnType("integer")
                         .HasColumnName("prep_time_minutes");
@@ -977,6 +1003,9 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.HasKey("Id")
                         .HasName("pk_food_orders");
 
+                    b.HasIndex("CashCollectedBy")
+                        .HasDatabaseName("ix_food_orders_cash_collected_by");
+
                     b.HasIndex("ExpiresAt")
                         .HasDatabaseName("ix_food_orders_expiry")
                         .HasFilter("status IN ('placed', 'awaiting_payment')");
@@ -998,7 +1027,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
                             t.HasCheckConstraint("ck_food_order_area", "delivery_area IN ('whiteTown', 'tamilQuarter', 'auroville', 'lawspet', 'muthialpet', 'reddiarpalayam', 'ariyankuppam', 'villianur')");
 
+                            t.HasCheckConstraint("ck_food_order_cash", "((cash_collected IS NULL) = (cash_collected_at IS NULL)) AND ((cash_collected IS NULL) = (cash_collected_by IS NULL)) AND (cash_collected IS NULL OR (payment_method = 'cash_on_delivery' AND status = 'delivered' AND cash_collected = total_amount)) AND NOT (payment_method = 'cash_on_delivery' AND status = 'delivered' AND cash_collected IS NULL)");
+
                             t.HasCheckConstraint("ck_food_order_hold", "status NOT IN ('placed', 'awaiting_payment') OR expires_at IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_food_order_payment_method", "payment_method IN ('online', 'cash_on_delivery')");
 
                             t.HasCheckConstraint("ck_food_order_prep_time", "prep_time_minutes > 0");
 
@@ -1292,6 +1325,12 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("BusinessId")
                         .HasColumnType("uuid")
                         .HasColumnName("business_id");
+
+                    b.Property<bool>("AcceptsCashOnDelivery")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("accepts_cash_on_delivery");
 
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -1852,6 +1891,60 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Payments.DriverCashDeposit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<decimal>("Amount")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("amount");
+
+                    b.Property<Guid>("DriverUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_user_id");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("note");
+
+                    b.Property<DateTimeOffset>("ReceivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("received_at");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by_user_id");
+
+                    b.Property<string>("Reference")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("reference");
+
+                    b.HasKey("Id")
+                        .HasName("pk_driver_cash_deposits");
+
+                    b.HasIndex("RecordedByUserId")
+                        .HasDatabaseName("ix_driver_cash_deposits_recorded_by_user_id");
+
+                    b.HasIndex("DriverUserId", "ReceivedAt")
+                        .HasDatabaseName("ix_driver_cash_deposits_driver");
+
+                    b.ToTable("driver_cash_deposits", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_driver_cash_deposit_amount", "amount > 0");
+
+                            t.HasCheckConstraint("ck_driver_cash_deposit_times", "received_at <= recorded_at");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Payments.GatewayEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1972,7 +2065,7 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
                     b.ToTable("ledger_entries", null, t =>
                         {
-                            t.HasCheckConstraint("ck_ledger_account", "account ~ '^(gateway_clearing|customer_refunds|platform_commission|delivery_fees|tax_payable|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
+                            t.HasCheckConstraint("ck_ledger_account", "account ~ '^(gateway_clearing|customer_refunds|platform_commission|delivery_fees|tax_payable|cash_received|(partner_payable|partner_paid|driver_cash):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
 
                             t.HasCheckConstraint("ck_ledger_amount", "amount <> 0");
 
@@ -3300,6 +3393,12 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
 
                     b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
                         .WithMany()
+                        .HasForeignKey("CashCollectedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_food_orders_app_users_cash_collected_by");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
                         .HasForeignKey("CustomerUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
@@ -3557,6 +3656,23 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_notification_log_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Payments.DriverCashDeposit", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DriverUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_driver_cash_deposits_app_users_driver_user_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RecordedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_driver_cash_deposits_app_users_recorded_by_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Payments.LedgerEntry", b =>

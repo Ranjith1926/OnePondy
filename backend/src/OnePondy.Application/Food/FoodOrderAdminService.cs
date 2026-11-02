@@ -197,7 +197,8 @@ public sealed class FoodOrderAdminService(
                     o.UpdatedAt,
                     job?.Status,
                     name?.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault(),
-                    OrderAttentionRules.For(o, job, limits, now));
+                    OrderAttentionRules.For(o, job, limits, now),
+                    o.PaymentMethod);
             }),
         ];
     }

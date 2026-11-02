@@ -1,5 +1,6 @@
 using OnePondy.Application.Common;
 using OnePondy.Domain.Delivery;
+using OnePondy.Domain.Food;
 
 namespace OnePondy.Application.Delivery;
 
@@ -16,7 +17,10 @@ public sealed record JobOfferView(
     string? RestaurantAddress,
     string DeliveryArea,
     int ItemCount,
-    DateTimeOffset OpenedAt);
+    DateTimeOffset OpenedAt,
+    PaymentMethod PaymentMethod,
+    /// <summary>For cash on delivery: the cash the driver will take at the door, so they can see what they are accepting.</summary>
+    decimal? CashToCollect);
 
 /// <summary>The driver's own delivery, with everything needed to collect and hand it over.</summary>
 public sealed record JobDetailView(
@@ -31,7 +35,10 @@ public sealed record JobDetailView(
     string ContactPhone,
     IReadOnlyList<JobItemView> Items,
     DateTimeOffset? AcceptedAt,
-    DateTimeOffset? PickedUpAt);
+    DateTimeOffset? PickedUpAt,
+    PaymentMethod PaymentMethod,
+    /// <summary>For cash on delivery: the exact cash to take at the door and confirm when handing over.</summary>
+    decimal? CashToCollect);
 
 /// <summary>
 /// The driver's jobs screen in one call: the delivery they hold (if any) and, while they are free and on duty, the open ones.
@@ -70,6 +77,11 @@ public static class DeliveryErrors
         "job_changed",
         ErrorKind.Conflict,
         "This delivery changed. Reload and try again.");
+
+    public static readonly AppError CashLimit = new(
+        "driver_cash_limit",
+        ErrorKind.Conflict,
+        "You are holding as much cash as you may. Hand it in to OnePondy before taking another cash order.");
 
     public static AppError InvalidTransition(string message) => new("job_invalid_transition", ErrorKind.Conflict, message);
 }

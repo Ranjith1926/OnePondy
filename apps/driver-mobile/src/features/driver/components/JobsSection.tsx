@@ -5,16 +5,19 @@ import {
   EmptyState,
   InlineBanner,
   LoadingState,
+  OPBadge,
   OPButton,
   OPText,
   useThemedStyles,
   type Theme,
 } from '../../../design-system';
 import type { JobDetail, JobOffer } from '../api/driverApi';
+import { formatMoney } from '../../../format';
 import { isAreaId } from '../areas';
 import {
   useAcceptJob,
   useDeliverJob,
+  useDriverCash,
   useJobs,
   usePickUpJob,
   useReleaseJob,
@@ -37,6 +40,7 @@ export function JobsSection({ isOnDuty }: { isOnDuty: boolean }) {
 
   return (
     <View style={styles.section}>
+      <CashHeld />
       {current ? (
         <ActiveJob job={current} />
       ) : (
@@ -97,7 +101,33 @@ function OfferCard({
       </OPText>
       {offer.restaurantAddress ? <OPText tone="secondary">{offer.restaurantAddress}</OPText> : null}
       <OPText tone="secondary">{t('jobs.offerItems', { count: offer.itemCount })}</OPText>
+      {offer.cashToCollect !== null ? (
+        <View style={styles.cashRow}>
+          <OPBadge label={t('jobs.cashBadge')} tone="warning" />
+          <OPText variant="bodyStrong">
+            {t('jobs.cashToCollect', { amount: formatMoney(offer.cashToCollect) })}
+          </OPText>
+        </View>
+      ) : null}
       <OPButton label={t('jobs.accept')} onPress={onAccept} loading={busy} fullWidth />
+    </View>
+  );
+}
+
+/** The cash the driver is holding for OnePondy, so they know what to hand in. Nothing is shown while they hold none. */
+function CashHeld() {
+  const { t } = useTranslation();
+  const styles = useThemedStyles(createStyles);
+  const cash = useDriverCash(true).data;
+  if (!cash || cash.held <= 0) {
+    return null;
+  }
+  return (
+    <View style={styles.card}>
+      <OPText variant="subheading">{t('jobs.cashHeld', { amount: formatMoney(cash.held) })}</OPText>
+      <OPText variant="caption" tone="secondary">
+        {t('jobs.cashHeldHint', { limit: formatMoney(cash.limit) })}
+      </OPText>
     </View>
   );
 }
@@ -111,6 +141,7 @@ function ActiveJob({ job }: { job: JobDetail }) {
   const { denied } = useShareLocation(job.id);
 
   const collecting = job.status === 'accepted';
+  const cashToCollect = job.cashToCollect;
   const error = pickUp.error ?? deliver.error ?? release.error;
   const busy = pickUp.isPending || deliver.isPending || release.isPending;
 
@@ -122,6 +153,12 @@ function ActiveJob({ job }: { job: JobDetail }) {
       <OPText variant="label" tone="secondary">
         {collecting ? t('jobs.stepCollect') : t('jobs.stepDeliver')}
       </OPText>
+      {cashToCollect !== null && collecting ? (
+        <InlineBanner
+          kind="info"
+          message={t('jobs.cashNote', { amount: formatMoney(cashToCollect) })}
+        />
+      ) : null}
 
       {collecting ? (
         <>
@@ -150,6 +187,13 @@ function ActiveJob({ job }: { job: JobDetail }) {
           </OPText>
           {job.deliveryNote ? <OPText>{t('jobs.note', { note: job.deliveryNote })}</OPText> : null}
           <OPText>{t('jobs.customerPhone', { phone: job.contactPhone })}</OPText>
+          {cashToCollect !== null ? (
+            <View style={styles.cashDue}>
+              <OPText variant="heading">
+                {t('jobs.collectCash', { amount: formatMoney(cashToCollect) })}
+              </OPText>
+            </View>
+          ) : null}
         </>
       )}
 
@@ -183,8 +227,12 @@ function ActiveJob({ job }: { job: JobDetail }) {
         </>
       ) : (
         <OPButton
-          label={t('jobs.delivered')}
-          onPress={() => deliver.mutate(job.id)}
+          label={
+            cashToCollect !== null
+              ? t('jobs.deliveredCash', { amount: formatMoney(cashToCollect) })
+              : t('jobs.delivered')
+          }
+          onPress={() => deliver.mutate({ id: job.id, cashCollected: cashToCollect ?? undefined })}
           loading={deliver.isPending}
           disabled={busy}
           fullWidth
@@ -199,6 +247,16 @@ const createStyles = (theme: Theme) =>
   StyleSheet.create({
     section: {
       gap: theme.spacing.md,
+    },
+    cashRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: theme.spacing.xs,
+    },
+    cashDue: {
+      padding: theme.spacing.sm,
+      borderRadius: theme.radii.md,
+      backgroundColor: theme.colors.warningContainer,
     },
     card: {
       gap: theme.spacing.xs,

@@ -37,6 +37,12 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
 
     public static string RefundKey(Guid refundId) => $"refund:{refundId}";
 
+    /// <summary>The event "the driver took the cash for this order at the door".</summary>
+    public static string CashKey(Guid foodOrderId) => $"cash:{foodOrderId}";
+
+    /// <summary>The event "an administrator recorded cash received from a driver".</summary>
+    public static string CashDepositKey(Guid depositId) => $"cash-deposit:{depositId}";
+
     /// <summary>The platform's share of a payment, to the paisa. Provisional rate until the commission is agreed (spec D21).</summary>
     public static decimal CommissionFor(decimal amount, decimal percent) =>
         Math.Round(amount * percent / 100m, 2, MidpointRounding.AwayFromZero);
@@ -84,6 +90,48 @@ public sealed class LedgerService(IOnePondyDbContext db, TimeProvider time, IOpt
         AddForOrder(transaction, LedgerAccounts.PartnerPayable(order.BusinessId), -partner, order.Id, "Restaurant share", now);
         AddForOrder(transaction, LedgerAccounts.DeliveryFees, -order.DeliveryFee, order.Id, "Delivery fee", now);
         AddForOrder(transaction, LedgerAccounts.TaxPayable, -order.TaxAmount, order.Id, "GST collected", now);
+    }
+
+    /// <summary>
+    /// A cash on delivery order was handed over and the driver took the cash (step 8.8). The split is exactly that of an online payment, the
+    /// difference being where the money is: with the driver (<c>driver_cash:{driver}</c>, a debit that stays until they hand the cash in)
+    /// rather than at the gateway. Nothing is posted when an order is only placed or accepted, because nothing has been paid yet.
+    /// </summary>
+    public async Task PostFoodCashAsync(FoodOrder order, CancellationToken cancellationToken)
+    {
+        if (order.PaymentMethod != PaymentMethod.CashOnDelivery || order.CashCollected != order.TotalAmount || order.CashCollectedBy is not { } driver)
+        {
+            throw new InvalidOperationException("Only a cash on delivery order whose full total was collected can be posted.");
+        }
+
+        var transaction = TransactionId(CashKey(order.Id));
+        if (await AlreadyPostedAsync(transaction, cancellationToken))
+        {
+            return;
+        }
+
+        var commission = CommissionFor(order.Subtotal - order.DiscountAmount, options.Value.CommissionPercent);
+        var partner = order.TotalAmount - commission - order.DeliveryFee - order.TaxAmount;
+        var now = time.GetUtcNow();
+        AddForOrder(transaction, LedgerAccounts.DriverCash(driver), order.TotalAmount, order.Id, "Cash collected by the driver", now);
+        AddForOrder(transaction, LedgerAccounts.PlatformCommission, -commission, order.Id, "Commission", now);
+        AddForOrder(transaction, LedgerAccounts.PartnerPayable(order.BusinessId), -partner, order.Id, "Restaurant share", now);
+        AddForOrder(transaction, LedgerAccounts.DeliveryFees, -order.DeliveryFee, order.Id, "Delivery fee", now);
+        AddForOrder(transaction, LedgerAccounts.TaxPayable, -order.TaxAmount, order.Id, "GST collected", now);
+    }
+
+    /// <summary>A driver handed cash in: it leaves their account and becomes cash OnePondy has received. Neither line is about one order.</summary>
+    public async Task PostCashDepositAsync(DriverCashDeposit deposit, CancellationToken cancellationToken)
+    {
+        var transaction = TransactionId(CashDepositKey(deposit.Id));
+        if (await AlreadyPostedAsync(transaction, cancellationToken))
+        {
+            return;
+        }
+
+        var now = time.GetUtcNow();
+        Add(transaction, LedgerAccounts.CashReceived, deposit.Amount, null, "Cash received from a driver", now);
+        Add(transaction, LedgerAccounts.DriverCash(deposit.DriverUserId), -deposit.Amount, null, "Cash handed in", now);
     }
 
     /// <summary>A payment no booking wants: held for the customer until it is refunded.</summary>

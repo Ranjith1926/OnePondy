@@ -83,7 +83,8 @@
       "job_taken": "Another driver took this delivery first.",
       "job_changed": "This delivery changed. We've loaded the latest.",
       "job_not_found": "That delivery isn't available any more.",
-      "job_invalid_transition": "That step isn't possible right now. We've loaded the latest."
+      "job_invalid_transition": "That step isn't possible right now. We've loaded the latest.",
+      "driver_cash_limit": "You are holding as much cash as you may. Hand it in to OnePondy before taking another cash order."
     }
   },
   "home": {
@@ -137,7 +138,14 @@
     "release": "Give this delivery up",
     "releaseHint": "Only before you've collected the food. It goes back to the other drivers.",
     "locationNote": "While you have this delivery, your location is shared with OnePondy. It stops when you hand the order over, and isn't collected at any other time.",
-    "locationOff": "Location sharing is off. You can still complete this delivery; allow location in your phone's settings to share it."
+    "locationOff": "Location sharing is off. You can still complete this delivery; allow location in your phone's settings to share it.",
+    "cashBadge": "Cash",
+    "cashToCollect": "Collect {{amount}} in cash",
+    "cashNote": "Cash on delivery: you will collect {{amount}} from the customer at the door.",
+    "collectCash": "Collect {{amount}} in cash from the customer",
+    "deliveredCash": "I've collected {{amount}} and handed it over",
+    "cashHeld": "You're holding {{amount}} in cash for OnePondy.",
+    "cashHeldHint": "Hand it in to OnePondy. Once you hold {{limit}}, you won't be offered more cash orders until you do."
   },
   "areas": {
     "puducherry": "Puducherry",

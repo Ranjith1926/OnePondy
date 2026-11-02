@@ -5,6 +5,7 @@ import {
   deadlineFor,
   deliveryText,
   isOpen,
+  paymentText,
   isOrderStep,
   openStatuses,
   ordersForView,
@@ -32,6 +33,7 @@ function anOrder(overrides: Partial<PartnerOrderSummary> = {}): PartnerOrderSumm
     deliveryArea: 'whiteTown',
     createdAt: '2026-10-30T05:00:00Z',
     delivery: null,
+    paymentMethod: 'online',
     ...overrides,
   };
 }
@@ -220,6 +222,18 @@ describe('what the kitchen is told about the delivery', () => {
     );
     expect(deliveryText(anOrder({ delivery: progress('delivered', 'Ravi') }))).toBe(
       'Delivered by Ravi',
+    );
+  });
+});
+
+describe('what the kitchen is told about payment', () => {
+  it('says nothing for an order paid online', () => {
+    expect(paymentText(anOrder({ paymentMethod: 'online' }))).toBeNull();
+  });
+
+  it('says the customer pays the driver for a cash on delivery order, and that the restaurant is still paid', () => {
+    expect(paymentText(anOrder({ paymentMethod: 'cashOnDelivery' }))).toBe(
+      'Cash on delivery: the customer pays the driver, and OnePondy pays you your share.',
     );
   });
 });

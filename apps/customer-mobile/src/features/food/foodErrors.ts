@@ -9,6 +9,7 @@ const knownCodes = [
   'order_price_changed',
   'food_not_available',
   'food_payment_unavailable',
+  'cash_on_delivery_unavailable',
   'restaurant_not_found',
   'restaurant_not_taking_orders',
   'restaurant_area_not_served',

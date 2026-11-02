@@ -394,7 +394,7 @@ the app, so it must never be secret.
 | 4 — Tourism discovery and itineraries | Done — places, saved places, itineraries, nearby sorting (decision D6: list only, no map SDK) |
 | 5 — AI trip planner | Done — behind `IItineraryPlanner`, Gemini implementation (decision D5, owner to confirm) |
 | 6 — Partner listings and booking engine | Done; payment was added in Phase 7 — see verification below |
-| 8 — Food ordering and the driver app | **In progress: steps 8.1 (restaurants and menus), 8.2 (orders and server-side pricing), 8.3 (paying for orders, sandbox), 8.4 (the customer app's food screens), 8.5 (the restaurant's order inbox in the console), 8.6 (drivers: applying, review in the console, the new driver app with sign-in, onboarding and duty), 8.7 (delivery: open jobs, one driver accepts, pickup and drop-off, location only during a delivery) and 8.9 (administrators watch orders and deliveries; food orders in the customer history view) built; cash on delivery (8.8) not built** — see `docs/phase-8-plan.md` |
+| 8 — Food ordering and the driver app | **In progress: steps 8.1 (restaurants and menus), 8.2 (orders and server-side pricing), 8.3 (paying for orders, sandbox), 8.4 (the customer app's food screens), 8.5 (the restaurant's order inbox in the console), 8.6 (drivers: applying, review in the console, the new driver app with sign-in, onboarding and duty), 8.7 (delivery: open jobs, one driver accepts, pickup and drop-off, location only during a delivery), 8.8 (cash on delivery, with the cash drivers hold) and 8.9 (administrators watch orders and deliveries; food orders in the customer history view) built** — see `docs/phase-8-plan.md` |
 | 7 — Payments, ledger and notifications | **Built in sandbox (steps 7.1–7.9); live payments deliberately off** until the legal and tax review, D21/D22 sign-off and an end-to-end settlement check — see "Phase 7 verification" and `docs/phase-7-plan.md` |
 
 ### Phase 0 verification (2026-10-26)
@@ -583,8 +583,8 @@ Known limitations:
 
 ### Phase 8 verification (2026-10-30)
 
-Phase 8 is built as steps 8.1 to 8.7 and 8.9 (plan and as-built notes: `docs/phase-8-plan.md`). **Cash on delivery (8.8) is not built**: it waits for the owner's decision (F2). Online payment for food
-runs in **sandbox only**, on the Phase 7 machinery, and the `food` module flag stays off in any real environment.
+Phase 8 is built as steps 8.1 to 8.10 (plan and as-built notes: `docs/phase-8-plan.md`). **Cash on delivery (8.8) was added on 2026-11-02**, after the owner chose to offer both ways of paying; it is off until an administrator
+switches the `cashOnDelivery` module on and **needs the legal and tax review before real use**. Online payment for food runs in **sandbox only**, on the Phase 7 machinery, and the `food` module flag stays off in any real environment.
 
 | Acceptance criterion (spec §10, Phase 8) | Result |
 |---|---|
@@ -606,10 +606,12 @@ Known limitations:
 
 - **Not run on a real phone.** The Razorpay checkout for food, and the driver app's own GPS reaching the API, have not been seen. The emulator's GPS stopped after one fix, so no position report was sent from the
   app (the endpoint accepts the same request, and the app's reporting is covered by its tests).
-- **Open owner decisions:** the delivery operations plan (the drivers were built as OnePondy's own, assigned by the platform, F1); cash on delivery (F2); the GST treatment (F3); and the commission, delivery and
+- **Open owner decisions:** the delivery operations plan (the drivers were built as OnePondy's own, assigned by the platform, F1); the legal and tax review of cash on delivery and the cash limits (₹2000 an order, ₹5000 held by a driver); the GST treatment (F3); and the commission, delivery and
   packaging fees and the food refund rule (F4, F7, F8 with D21 and D22).
-- **Food needs online payment (2026-11-02).** Food can be priced, ordered and accepted only while the `payments` module is available (`Food:RequireOnlinePayment`, on by default), so no order is confirmed unpaid.
-  To order food locally without Razorpay, run the API with `Food__RequireOnlinePayment=false`.
+- **Food needs a way to pay (2026-11-02).** Food can be priced, ordered and accepted only if the customer can pay: online while the `payments` module is available (`Food:RequireOnlinePayment`, on by default), or cash on delivery
+  where it is offered, so no order is confirmed with nothing paid and no cash to come. To order food locally without Razorpay or cash, run the API with `Food__RequireOnlinePayment=false`.
+- **Cash on delivery is built but not exercised on a real phone or with real cash.** The cash a driver holds is tracked in the ledger and reduced only by an administrator recording cash handed in; there is no daily cash report, no alert for
+  cash held for long, and nothing that records banking it.
 - **No notifications** about orders, deliveries or stuck orders to anyone. Drivers see new deliveries by the app refreshing every 10 seconds; administrators and restaurants learn by opening the console, which does not
   refresh by itself (the restaurant's inbox does).
 - **Drivers' documents are not uploaded:** an administrator compares the licence and registration numbers with the originals by other means. There is no driver earnings or pay rule, no map for the customer (D6), and no
@@ -617,7 +619,7 @@ Known limitations:
 - **Personal data stays on an order after its customer deletes their account:** the delivery address, note and contact phone are not scrubbed (the order is a financial record). Needs a decision on blanking
   them, and when; see `docs/data-retention.md`.
 - **Migrations to apply** to the shared development database as `onepondy_app`, after the Phase 7 ones: `AddRestaurantsAndMenus`, `AddFoodOrders`, `AddFoodOrderPayments`, `AddDriverProfiles`, `AddDeliveryJobs`,
-  `ExtendCustomerHistoryAndAdminRefundReason`.
+  `ExtendCustomerHistoryAndAdminRefundReason`, `AddCashOnDelivery`.
 - **The independent multi-agent review of the diffs did not run** (it hit the usage limit at 8.3); each step was self-reviewed against the guardrails in the plan instead.
 - Building the driver app on Windows fails in the C++ step because of the 260-character path limit; the workaround is in `apps/driver-mobile/README.md`.
 - **Secrets to rotate** (unchanged): the Twilio auth token and the Razorpay test secret.

@@ -86,7 +86,7 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
         var profile = await db.RestaurantProfiles.SingleOrDefaultAsync(p => p.BusinessId == businessId, cancellationToken);
         if (profile is null)
         {
-            profile = RestaurantProfile.Create(businessId, input.PrepTimeMinutes, input.MinOrderAmount, input.IsAcceptingOrders, now);
+            profile = RestaurantProfile.Create(businessId, input.PrepTimeMinutes, input.MinOrderAmount, input.IsAcceptingOrders, input.AcceptsCashOnDelivery ?? false, now);
             db.RestaurantProfiles.Add(profile);
         }
         else
@@ -97,7 +97,7 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
             }
 
             db.ExpectVersion(profile, version);
-            profile.Update(input.PrepTimeMinutes, input.MinOrderAmount, input.IsAcceptingOrders, now);
+            profile.Update(input.PrepTimeMinutes, input.MinOrderAmount, input.IsAcceptingOrders, input.AcceptsCashOnDelivery ?? profile.AcceptsCashOnDelivery, now);
         }
 
         var existing = await db.RestaurantDeliveryAreas.Where(a => a.BusinessId == businessId).ToListAsync(cancellationToken);
@@ -112,7 +112,7 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
             AuditActions.RestaurantUpdated,
             AuditEntityTypes.Restaurant,
             businessId,
-            new { input.PrepTimeMinutes, input.MinOrderAmount, input.IsAcceptingOrders, areas });
+            new { input.PrepTimeMinutes, input.MinOrderAmount, input.IsAcceptingOrders, acceptsCashOnDelivery = profile.AcceptsCashOnDelivery, areas });
 
         try
         {
@@ -218,11 +218,12 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
             profile.MinOrderAmount,
             profile.IsAcceptingOrders,
             areas.GetValueOrDefault(profile.BusinessId, []),
+            profile.AcceptsCashOnDelivery,
             profile.Version);
     }
 
     private static RestaurantProfileView NotConfigured(Guid businessId) =>
-        new(false, businessId, 30, 0m, false, [], 0);
+        new(false, businessId, 30, 0m, false, [], false, 0);
 
     private static PublicRestaurant ToPublic(Business business, RestaurantProfile profile, IReadOnlyList<string> areas) => new(
         business.Id,

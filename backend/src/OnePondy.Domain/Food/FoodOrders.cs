@@ -21,6 +21,16 @@ public enum FoodOrderStatus
     Refunded = 13,
 }
 
+/// <summary>How the customer pays. Chosen at checkout; cash on delivery is only offered where a restaurant and OnePondy allow it.</summary>
+public enum PaymentMethod
+{
+    /// <summary>Through the payment gateway, after the restaurant accepts.</summary>
+    Online = 1,
+
+    /// <summary>In cash to the driver at the door. Nothing is paid until then, so there is nothing to refund before delivery.</summary>
+    CashOnDelivery = 2,
+}
+
 /// <summary>Who caused an order status change.</summary>
 public enum FoodOrderActorType
 {
@@ -127,6 +137,16 @@ public sealed class FoodOrder
 
     public string ContactPhone { get; private set; } = string.Empty;
 
+    public PaymentMethod PaymentMethod { get; private set; } = PaymentMethod.Online;
+
+    /// <summary>For cash on delivery: the cash the driver confirmed taking at the door, always exactly the total. Empty until delivered, and for online orders.</summary>
+    public decimal? CashCollected { get; private set; }
+
+    public DateTimeOffset? CashCollectedAt { get; private set; }
+
+    /// <summary>The driver who took the cash, and so the one who owes it to OnePondy until they hand it in.</summary>
+    public Guid? CashCollectedBy { get; private set; }
+
     /// <summary>The restaurant's preparation time when the order was placed, in minutes.</summary>
     public int PrepTimeMinutes { get; private set; }
 
@@ -175,7 +195,8 @@ public sealed class FoodOrder
         int prepTimeMinutes,
         OrderPrice price,
         DateTimeOffset now,
-        TimeSpan acceptWindow)
+        TimeSpan acceptWindow,
+        PaymentMethod paymentMethod = PaymentMethod.Online)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(idempotencyKey);
         ArgumentOutOfRangeException.ThrowIfGreaterThan(idempotencyKey.Length, MaxKeyLength);
@@ -197,6 +218,7 @@ public sealed class FoodOrder
             DeliveryAddress = delivery.Address,
             DeliveryNote = delivery.Note,
             ContactPhone = delivery.ContactPhone,
+            PaymentMethod = paymentMethod,
             PrepTimeMinutes = prepTimeMinutes,
             Currency = price.Currency,
             Subtotal = price.Subtotal,
@@ -258,9 +280,32 @@ public sealed class FoodOrder
     public void PickUp(Guid driverUserId, DateTimeOffset now) =>
         Move(FoodOrderStatus.OutForDelivery, FoodOrderActorType.Driver, driverUserId, null, now, FoodOrderStatus.ReadyForPickup);
 
-    /// <summary>The driver handed it over (step 8.7).</summary>
-    public void Deliver(Guid driverUserId, DateTimeOffset now) =>
+    /// <summary>
+    /// The driver handed it over (step 8.7). For cash on delivery the driver also confirms the cash they took, which must be exactly the total
+    /// (a driver cannot settle for less, and the customer is not charged more); an online order has no cash to confirm.
+    /// </summary>
+    public void Deliver(Guid driverUserId, DateTimeOffset now, decimal? cashCollected = null)
+    {
+        if (PaymentMethod == PaymentMethod.CashOnDelivery)
+        {
+            if (cashCollected != TotalAmount)
+            {
+                throw new InvalidOperationException($"This is a cash on delivery order: confirm the {TotalAmount:0.00} collected.");
+            }
+        }
+        else if (cashCollected is not null)
+        {
+            throw new InvalidOperationException("This order was paid online, so there is no cash to collect.");
+        }
+
         Move(FoodOrderStatus.Delivered, FoodOrderActorType.Driver, driverUserId, null, now, FoodOrderStatus.OutForDelivery);
+        if (PaymentMethod == PaymentMethod.CashOnDelivery)
+        {
+            CashCollected = cashCollected;
+            CashCollectedAt = now;
+            CashCollectedBy = driverUserId;
+        }
+    }
 
     /// <summary>
     /// A cancellation. The customer may cancel until the restaurant starts preparing; the restaurant may cancel a confirmed order

@@ -79,6 +79,8 @@ public interface IOnePondyDbContext
 
     DbSet<DeliveryJob> DeliveryJobs { get; }
 
+    DbSet<DriverCashDeposit> DriverCashDeposits { get; }
+
     DbSet<Settlement> Settlements { get; }
 
     DbSet<SettlementItem> SettlementItems { get; }

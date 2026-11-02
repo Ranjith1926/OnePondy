@@ -17,8 +17,14 @@ public static class ModuleKeys
     /// <summary>Food ordering. Placing an order needs it to be available; browsing restaurants does not.</summary>
     public const string Food = "food";
 
+    /// <summary>
+    /// Cash on delivery for food. Off until an administrator switches it on (it needs the legal review, spec section 21); even then a restaurant must
+    /// opt in, and the customer chooses at checkout.
+    /// </summary>
+    public const string CashOnDelivery = "cashOnDelivery";
+
     public static readonly IReadOnlyList<string> All =
-        [Food, "rides", "stays", "activities", "tripPlanner", "notifications", "support", Payments];
+        [Food, "rides", "stays", "activities", "tripPlanner", "notifications", "support", Payments, CashOnDelivery];
 
     public static bool IsKnown(string key) => All.Contains(key);
 }

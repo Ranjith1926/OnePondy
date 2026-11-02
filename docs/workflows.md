@@ -867,7 +867,7 @@ per-listing commission.
 
 ---
 
-## 25. Food orders, drivers and delivery (Phase 8, steps 8.1 to 8.9)
+## 25. Food orders, drivers and delivery (Phase 8, steps 8.1 to 8.9, with cash on delivery)
 
 ### 25.1 States
 
@@ -886,7 +886,7 @@ restaurant or is on its way. Any other move is refused with `order_invalid_trans
 
 ### 25.2 Pricing and placing (`POST /food/quote`, `POST /food/orders`)
 
-Food needs online payment: while the `payments` module is not available (and `Food:RequireOnlinePayment` is on, as it is by default) a cart cannot be priced or ordered, and a restaurant cannot accept an order, with the error `food_payment_unavailable`.
+Food needs a way to pay. Online payment is offered while the `payments` module is available (and `Food:RequireOnlinePayment` is on, as it is by default); cash on delivery is offered where section 25.11 says. A cart with neither cannot be priced or ordered, and a restaurant cannot accept an online order while online payment is unavailable, with the error `food_payment_unavailable`.
 
 1. The app sends the restaurant, the delivery area (a specific area, not the whole city) and dishes with quantities. **It never sends a price.**
 2. The server checks: the restaurant is open, approved, active and serves the area (the same rule the browse screens use); every dish is on *that*
@@ -1011,10 +1011,20 @@ Administrators open **Orders** in the console.
 5. **Cancel this order** (reason required; the customer sees it) closes the order and its delivery. A paid order is refunded in full when refunds are switched on; while they are off the page says so and nothing changes.
 6. Every action is audited, and a page that has gone stale is refused rather than acted on.
 
-### 25.11 Not built yet
+### 25.11 Cash on delivery (step 8.8)
 
-Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, notifications about deliveries and stuck orders, cash on delivery
-(8.8, only if approved), administrators' order monitoring (8.9).
+1. **Offered when all three hold:** an administrator has switched the `cashOnDelivery` module on, the restaurant has ticked **Accept cash on delivery**, and the order is within the cash limit (default ₹2000).
+2. **The customer chooses** at checkout (online is the default). A cash order is placed like any other; when the restaurant accepts it, it is **confirmed at once**: there is no payment to wait for.
+3. **The driver** sees "Cash" and the amount on the offer and on the job. At the door they take the cash and press "I've collected ₹X and handed it over"; the server accepts that only for exactly the total.
+4. **Delivering posts the money:** the restaurant's share, OnePondy's commission, the delivery fee and the GST are booked as for an online payment, and the cash sits in the driver's own account as theirs to hand in. The order goes on the
+   restaurant's statement as usual.
+5. **Handing the cash in:** an administrator opens **Cash**, finds the driver, and records the amount received (with a receipt or bank reference if there is one). It cannot exceed what the driver holds, and is audited.
+6. **A driver at their limit** (default ₹5000) is not given another cash order until they hand some in. A driver holding cash cannot delete their account.
+7. **Cancelling** a cash order before delivery refunds nothing (nothing was paid). If the customer is not there, the driver cannot finish the delivery; an administrator cancels the order (section 25.10).
+
+### 25.12 Not built yet
+
+Notifications about orders (so a restaurant learns of a new order only by looking at the inbox), an administrator's cancel of a food order, notifications about deliveries and stuck orders, a daily cash report and alerts for cash held too long, and banking the cash that is handed in.
 
 ---
 
@@ -1026,7 +1036,7 @@ Notifications about orders (so a restaurant learns of a new order only by lookin
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Reviews and ratings, rides | Later phases. Food ordering is built end to end except cash on delivery (section 25): restaurants, menus, orders, paying for them (sandbox), drivers and deliveries, and administrators' monitoring. |
-| Cash on delivery; notifications about orders and deliveries; driver document upload | Not built (Phase 8 gaps: see section 25.11 and phase-8-plan.md §4). Cash on delivery waits for the owner's decision (F2). |
+| Reviews and ratings, rides | Later phases. Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
+| Notifications about orders and deliveries; a daily cash report; driver document upload | Not built (Phase 8 gaps: see section 25.12 and phase-8-plan.md §4). Cash on delivery is built (section 25.11) but needs the legal and tax review before real use. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

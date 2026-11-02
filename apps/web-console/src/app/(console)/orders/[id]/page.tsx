@@ -13,6 +13,7 @@ import {
   formatDateTime,
   formatMoney,
   orderActorLabels,
+  paymentMethodLabels,
   refundReasonLabels,
   refundStatusLabels,
   vehicleTypeLabels,
@@ -203,7 +204,14 @@ export default async function OrderPage({
           </Card>
 
           <Card title="Payment and refunds">
-            {order.payment ? (
+            <p className="mb-2 text-sm font-semibold">{paymentMethodLabels[order.paymentMethod]}</p>
+            {order.paymentMethod === 'cashOnDelivery' ? (
+              <p className="text-sm">
+                {order.cashCollected !== null
+                  ? `The driver took ${formatMoney(order.cashCollected, order.price.currency)} in cash at the door. They hold it for OnePondy until they hand it in (see Cash).`
+                  : `The driver will take ${formatMoney(order.price.totalAmount, order.price.currency)} in cash at the door.`}
+              </p>
+            ) : order.payment ? (
               <p className="text-sm">
                 Paid {formatMoney(order.payment.amount, order.payment.currency)} on{' '}
                 {formatDateTime(order.payment.paidAt)}{' '}

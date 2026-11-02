@@ -126,7 +126,7 @@ public sealed class LedgerEntryConfiguration : IEntityTypeConfiguration<LedgerEn
             table.HasCheckConstraint("ck_ledger_amount", "amount <> 0");
             table.HasCheckConstraint(
                 "ck_ledger_account",
-                "account ~ '^(gateway_clearing|customer_refunds|platform_commission|delivery_fees|tax_payable|(partner_payable|partner_paid):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
+                "account ~ '^(gateway_clearing|customer_refunds|platform_commission|delivery_fees|tax_payable|cash_received|(partner_payable|partner_paid|driver_cash):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'");
             table.HasCheckConstraint("ck_ledger_subject", "num_nonnulls(booking_id, food_order_id) <= 1");
         });
 
@@ -319,5 +319,30 @@ public sealed class ReconciliationExceptionConfiguration : IEntityTypeConfigurat
         // Each problem is recorded once, whatever its status, so a resolved one is never re-opened and a repeat is only counted.
         builder.HasIndex(e => e.Fingerprint).IsUnique().HasDatabaseName("ux_reconciliation_fingerprint");
         builder.HasIndex(e => new { e.Status, e.LastSeenAt }).IsDescending(false, true).HasDatabaseName("ix_reconciliation_status_seen");
+    }
+}
+
+// Cash a driver handed in (spec Phase 8, step 8.8). Never edited or removed (a trigger in the migration refuses it).
+public sealed class DriverCashDepositConfiguration : IEntityTypeConfiguration<DriverCashDeposit>
+{
+    public void Configure(EntityTypeBuilder<DriverCashDeposit> builder)
+    {
+        builder.ToTable("driver_cash_deposits", table =>
+        {
+            table.HasCheckConstraint("ck_driver_cash_deposit_amount", "amount > 0");
+            table.HasCheckConstraint("ck_driver_cash_deposit_times", "received_at <= recorded_at");
+        });
+
+        builder.HasKey(d => d.Id);
+        builder.Property(d => d.Id).ValueGeneratedNever();
+        builder.Property(d => d.Amount).HasPrecision(12, 2);
+        builder.Property(d => d.Reference).HasMaxLength(DriverCashDeposit.MaxReferenceLength);
+        builder.Property(d => d.Note).HasMaxLength(DriverCashDeposit.MaxNoteLength);
+
+        // Accounts are anonymised, never deleted, so a deposit always keeps its driver and the administrator who took it.
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(d => d.DriverUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<ApplicationUser>().WithMany().HasForeignKey(d => d.RecordedByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        builder.HasIndex(d => new { d.DriverUserId, d.ReceivedAt }).HasDatabaseName("ix_driver_cash_deposits_driver");
     }
 }

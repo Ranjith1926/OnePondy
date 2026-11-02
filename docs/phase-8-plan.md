@@ -1,6 +1,6 @@
 # Phase 8 plan: food ordering and the driver app
 
-Status: **built through 8.7 and 8.9; 8.8 (cash on delivery) not built, waiting for the owner (F2); 8.10 (this documentation pass) done 2026-10-30.** Proposed 2026-10-29. Steps were built one at a time and reported, as in Phase 7. Nothing here switches on real money:
+Status: **built: 8.1 to 8.10, including 8.8 (cash on delivery, added 2026-11-02 after the owner chose to offer both cash on delivery and online payment); 8.10 (the documentation pass) done 2026-10-30 and extended for 8.8.** Proposed 2026-10-29. Steps were built one at a time and reported, as in Phase 7. Nothing here switches on real money:
 online payment for food stays in sandbox until the Phase 7 go-live gate is met, and the `food` module flag stays `coming_soon`
 until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and decisions D3, D13, D21, D22.
 
@@ -9,7 +9,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | # | Question | Proposed default (what is built unless you say otherwise) | Why it matters |
 |---|---|---|---|
 | F1 | Who delivers? | OnePondy delivery partners through the driver app, assigned by the platform. Restaurants do not deliver themselves in v1. | Decides the whole driver app and assignment design. Needs the **delivery operations plan** the spec lists as a dependency: who the drivers are, how they are paid, insurance, hours. |
-| F2 | Cash on delivery | Per restaurant, opt-in, **off** by default, behind a setting; includes reconciling cash the driver collected (step 8.8). | Cash needs a driver cash ledger and daily reconciliation, and legal sign-off. |
+| F2 | Cash on delivery | **Approved 2026-11-02: offer both cash on delivery and online payment. Built (8.8).** Off until an administrator switches the `cashOnDelivery` module on; each restaurant opts in (default off); the customer chooses at checkout; limits on the order and on what a driver may hold. **It still needs the legal and tax review before real use** (spec section 21). |
 | F3 | GST on restaurant orders | Tax is calculated per item from a configurable rate (provisional 5%) and recorded separately from the price on every order line; nothing is invoiced. The spec makes the platform liable for GST on restaurant services (CGST §9(5)). | The rate and treatment need your tax adviser. The schema keeps tax apart so changing it never rewrites history. |
 | F4 | Fees | A flat delivery fee and a packaging fee, both settings, both shown before the customer pays. No platform fee yet. | Customer price transparency (Consumer Protection E-Commerce Rules). |
 | F5 | Service areas | Named areas (the same list the app uses: White Town, Auroville, ...), not map polygons (D6: no map provider). A restaurant lists the areas it delivers to; `puducherry` means the whole city. | Matches the app's area picker; polygons wait for a map decision. |
@@ -42,7 +42,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | 8.5 | Partner console: order inbox with accept, reject and preparation states, and the restaurant and menu pages | Console tests and build |
 | 8.6 | Driver app (new Expo app in `apps/driver-mobile`): sign-in, onboarding, duty status, assignment | App tests; run on the phone |
 | 8.7 | Delivery assignment and customer tracking: offers, single-acceptance rule, pickup and drop-off, location only during an active job | Race test: two drivers accept at once, exactly one wins |
-| 8.8 | Cash on delivery and cash reconciliation (only if F2 is approved) | Ledger balances; cash collected reconciles |
+| 8.8 | Cash on delivery and cash reconciliation (F2 approved 2026-11-02: both ways of paying) | Ledger balances; cash collected reconciles. **Built.** |
 | 8.9 | Admin order monitoring; extend the customer history view with food orders | Console and view tests |
 | 8.10 | Docs: architecture, database and workflow documents, spec rows | Reviewed |
 
@@ -52,7 +52,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 |---|---|---|
 | F1 | Delivery operations plan | **Not provided.** Built as the default: OnePondy's own drivers, assigned by the platform, with no real fleet behind it. A real launch needs the plan (who the drivers are, pay, insurance, hours). |
 | F2 | Cash on delivery | **Not decided.** Step 8.8 is not built. Until it is, food needs online payment (next row), so no order can be confirmed unpaid in a default setup. |
-| (new) | Require the `payments` module for food orders | **Done (2026-11-02, the recommended option; the owner chose it when asked).** Food can be priced and ordered, and an order accepted, only while the `payments` module is available (`Food:RequireOnlinePayment`, on by default). Revisit if cash on delivery (F2) is approved. |
+| (new) | Food needs a way to pay | **Done (2026-11-02).** Food can be priced and ordered, and an order accepted, only if the customer has a way to pay: online while the `payments` module is available (`Food:RequireOnlinePayment`, on by default), or cash on delivery where it is offered. Never confirmed with nothing paid and no cash to come. |
 | F3 | GST treatment | **Not confirmed.** Tax is calculated per line at a provisional 5% and booked separately; fees carry no tax. Needs the tax adviser. |
 | F4 | Fees | Built on the defaults (delivery 30, packaging 10). Not confirmed. |
 | F5, F6 | Areas, accept-then-pay | Built on the defaults. Not objected to. |
@@ -296,15 +296,15 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
   took it and reported a position, the order page showed the driver, their phone and the position; "Offer to other drivers" reopened it; "Cancel this order" with a reason cancelled the order and its delivery;
   the audit log held all three entries.
 - **Not done in 8.9:** push notifications about stuck orders (an administrator learns only by opening the console; nothing refreshes by itself), reassigning a delivery to a chosen driver (it is offered to all),
-  an administrator marking an order delivered, a map, an administrators' view of a driver's past positions (none are kept), and an order-level support note. Cash on delivery (8.8) is still not built.
+  an administrator marking an order delivered, a map, an administrators' view of a driver's past positions (none are kept), and an order-level support note.
 
 **8.10 (documentation).** This pass brought every document up to the end of Phase 8: the architecture document (scope, endpoints, services, settings, what is not built), the database document (migrations 14 to 19 and
 the tables they add), the workflow document (§25 in full, and the not-built table), the data-retention document (restaurant, order, driver, delivery and position data), the README (status and a Phase 8
 verification against the six acceptance criteria) and this plan (where the decisions stand). The functional specification itself was not edited: it states requirements, and none changed.
 
 **What is left before Phase 8 could go live** (nothing here is a code defect; it is the work the owner and the business must do or decide):
-the owner decisions above (cash on delivery, the delivery operations plan, tax, fees); a decision on blanking an order's delivery address and phone after its customer deletes their account (they are kept today); a real delivery team and its operations plan; a run of the food checkout and the driver app on real phones; push notifications for orders and deliveries (so nobody has to watch a screen);
-driver document upload and review; cash on delivery if approved; the legal and tax review; the Phase 7 go-live gate. Phase 9 (transport) builds on the driver app and on the delivery job pattern but needs its own
+the owner decisions above (the delivery operations plan, tax, fees) and the legal and tax review of cash on delivery; a decision on blanking an order's delivery address and phone after its customer deletes their account (they are kept today); a real delivery team and its operations plan; a run of the food checkout and the driver app on real phones; push notifications for orders and deliveries (so nobody has to watch a screen);
+driver document upload and review; the legal and tax review; the Phase 7 go-live gate. Phase 9 (transport) builds on the driver app and on the delivery job pattern but needs its own
 licensing and safety work first.
 
 **Food needs online payment (after 8.10, 2026-11-02).** Until now, with the `payments` module off, an accepted food order was confirmed with nothing paid, and nothing but the app's wording said so. Now:
@@ -312,9 +312,41 @@ licensing and safety work first.
 - `Food:RequireOnlinePayment` (default **true**). While it is on and the `payments` module is not available, a cart **cannot be priced** and an order **cannot be placed** (`food_payment_unavailable`, 409), and a
   restaurant **cannot accept** an order that was placed earlier: it waits for its deadline and expires, and the customer is never charged. Everything else is unchanged, including with payment available.
 - The customer app shows "Food can only be ordered while online payment is available, and it isn't right now." The restaurant's inbox shows the API's message when an accept is refused.
-- **Turning it off** (`Food__RequireOnlinePayment=false`) brings back the unpaid path, for development and for tests that exercise it. It is not a way to take cash: cash on delivery (8.8) is not built. A local run
-  that wants to order food without Razorpay needs this setting.
+- **Turning it off** (`Food__RequireOnlinePayment=false`) brings back the unpaid path, for development and for tests that exercise it. It is not a way to take cash (that is cash on delivery, step 8.8, which is accounted for properly). A
+  local run that wants to order food without Razorpay and without cash on delivery needs this setting.
 - Tests: 5 new unit tests (the default, refusing a quote and a place, working as before with payment on, refusing an accept after payment goes away and then expiring, the setting off), 1 new integration test (a
   second host with the rule on refuses a quote and a place over HTTP, and the same order is placed on the host without it). The existing food fixtures set the rule off, because they are about ordering mechanics and
   switch payment on where they need it. Unit 781, integration 148 (6 skipped), customer app 336 with its new error mapping, all passing.
 - **Not verified:** this was not run on the emulator; it is a server rule with an error message, and the message is covered by a customer app test.
+
+**8.8 (cash on delivery and the cash drivers hold).** Flow in [workflows.md](workflows.md) §25.11. Added 2026-11-02 after the owner chose to offer **both** ways of paying.
+
+- **How cash is offered.** Three things must all be true: an administrator has switched the new `cashOnDelivery` module on (it starts off, in the console's Configuration), the restaurant has opted in
+  (**Accept cash on delivery** in its restaurant settings, default off), and the order is no more than `Food:CashOnDelivery:MaxOrderAmount` (default ₹2000). The quote says what is available
+  (`paymentOptions: online, cashOnDelivery`), the customer chooses at checkout (online is the default), and the server checks the choice again when the order is placed. A cart with neither way
+  available cannot be ordered (`food_payment_unavailable`).
+- **The order.** `payment_method` on the order (`online` by default, so every existing order is online). A cash order is **confirmed the moment the restaurant accepts it** (nothing is paid online, so
+  nothing waits for payment), even while online payment is unavailable. Cancelling it before delivery refunds nothing, because nothing was paid.
+- **At the door.** The driver's offer and job show it is a cash order and the exact amount to collect. The hand-over step asks the driver to **confirm the cash they took, which must be exactly the total**
+  (the server refuses anything else, and the app sends exactly the amount shown). That confirmation is stored on the order (`cash_collected`, when, and by which driver; the database checks it is the total, only
+  on a delivered cash order, and that a delivered cash order always has it).
+- **The books.** Delivering a cash order posts, in the same save, the same five lines as an online payment (commission on the dishes, the restaurant's share, the delivery fee, the GST) but the debit is the
+  driver's own account, `driver_cash:{driver}`: the driver now **owes OnePondy that cash**. The restaurant is owed its share and the order goes on its statement exactly as an online order does, whether or not the driver
+  has handed the cash in yet. When an administrator records cash handed in (**Cash** in the console), a second transaction moves the amount from the driver's account to `cash_received`. A driver's balance is
+  simply the sum of their account, so it cannot be edited away: it falls only by a recorded, audited deposit.
+- **Rules the database enforces, not only the application:** deposits are never edited or deleted (trigger); a driver's cash account can never go below nothing, checked at commit under a lock on the account, so two
+  administrators recording the same cash at the same moment cannot both succeed (the second is told the balance changed); ledger account names are checked (the new accounts are in the list); the cash columns on an order
+  are all-or-none and only valid on a delivered cash order for exactly its total.
+- **Limits that bound the risk.** A driver already holding `Food:CashOnDelivery:MaxDriverCashHeld` (default ₹5000) is not given another cash order until they hand some in (`driver_cash_limit`); an order above the
+  cash limit must be paid online. A driver holding cash cannot delete their account (`driver_holds_cash`). The driver app shows what they hold and the limit.
+- **Console.** The restaurant's settings carry the opt-in; its inbox says plainly that a cash order is paid to the driver and that OnePondy pays the restaurant its share. Administrators see the payment method on
+  every order and what was collected, and a new **Cash** page lists who holds cash (largest first, with the last time they took some and handed some in) with a form to record cash received (the amount starts as
+  everything held; a receipt or bank reference and a note are optional).
+- **Customer app.** Checkout offers "Pay online" and "Cash on delivery" when both are available, and says what will be paid to the driver; the order screen says what will be owed, then what was paid in cash, and never
+  "paid" before the driver has the cash. A different way of paying is a different attempt (a new idempotency key), so a retry never returns an order made the other way.
+- **Migration:** `AddCashOnDelivery` (columns on orders and restaurants, the deposits table with its triggers, the widened ledger account check, the non-negative balance trigger, and the `cashOnDelivery` module
+  flag row, off). Existing rows are all online and unchanged. Applied to a database holding earlier data, rolled back and forward again (see the checks below).
+- **Not done in 8.8, and known gaps:** a driver being given change or a customer paying less than the total (the driver confirms the exact total, nothing else); a cash order's refund after delivery (support handles it, as for any delivered
+  order); a daily cash reconciliation report or alerts for a driver who holds cash for long (an administrator reads the Cash page; `last took cash` and `last handed in` are shown for the purpose); banking the cash
+  (`cash_received` is the account to bank from, but nothing records the bank deposit); a customer who is not there when the driver arrives (the driver cannot complete the delivery without the cash, and an administrator
+  cancels the order); and **the legal and tax review**, which must happen before real use. Raising the limit changes the risk the owner takes on.

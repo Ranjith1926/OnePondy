@@ -90,6 +90,23 @@ export function RestaurantForm({ profile }: { profile: RestaurantProfile }) {
           </span>
         </label>
 
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="acceptsCashOnDelivery"
+            defaultChecked={profile.acceptsCashOnDelivery}
+            className="mt-0.5 size-4"
+          />
+          <span>
+            <span className="font-semibold">Accept cash on delivery</span>
+            <span className="block text-muted">
+              Customers can then choose to pay the driver in cash. OnePondy pays you your share of
+              the order as it does for online payments. It only shows to customers once OnePondy has
+              switched cash on delivery on, and only for orders up to its limit.
+            </span>
+          </span>
+        </label>
+
         <div>
           <SubmitButton pendingLabel="Saving…">Save</SubmitButton>
         </div>

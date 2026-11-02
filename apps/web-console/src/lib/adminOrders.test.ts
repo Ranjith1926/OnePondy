@@ -1,12 +1,20 @@
 import { describe, expect, it } from 'vitest';
 
-import type { DeliveryJobStatus, FoodOrderStatus, OrderActor, OrderAttention } from './apiTypes';
+import type {
+  DeliveryJobStatus,
+  FoodOrderStatus,
+  OrderActor,
+  OrderAttention,
+  PaymentMethod,
+} from './apiTypes';
 import {
   adminOrderStatusLabels,
   attentionLabels,
   deliveryStatusLabels,
   foodOrderStatusLabels,
+  moduleLabels,
   orderActorLabels,
+  paymentMethodLabels,
 } from './labels';
 
 // The API's enums are listed here by hand: a value the console has no label for would show as blank.
@@ -40,5 +48,15 @@ describe('administrators’ order labels', () => {
     const actors: OrderActor[] = ['customer', 'partner', 'admin', 'system', 'driver'];
     expect(Object.keys(deliveryStatusLabels).sort()).toEqual([...states].sort());
     expect(Object.keys(orderActorLabels).sort()).toEqual([...actors].sort());
+  });
+
+  it('has a label for both ways of paying', () => {
+    const methods: PaymentMethod[] = ['online', 'cashOnDelivery'];
+    expect(Object.keys(paymentMethodLabels).sort()).toEqual([...methods].sort());
+  });
+
+  it('names the cash on delivery switch and online payment in the module list', () => {
+    expect(moduleLabels.cashOnDelivery).toBe('Cash on delivery');
+    expect(moduleLabels.payments).toBe('Online payment');
   });
 });

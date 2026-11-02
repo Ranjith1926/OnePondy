@@ -83,6 +83,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
 
     public DbSet<DeliveryJob> DeliveryJobs => Set<DeliveryJob>();
 
+    public DbSet<DriverCashDeposit> DriverCashDeposits => Set<DriverCashDeposit>();
+
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
     public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();

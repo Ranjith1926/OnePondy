@@ -3,6 +3,7 @@ using OnePondy.Application.Common;
 using OnePondy.Application.Identity;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Food;
+using OnePondy.Domain.Payments;
 
 namespace OnePondy.Application.Bookings;
 
@@ -18,6 +19,7 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
     public const string CustomerFoodOrdersInProgress = "food_orders_in_progress";
     public const string PartnerFoodOrdersInProgress = "partner_food_orders_in_progress";
     public const string DriverOnDuty = "driver_on_duty";
+    public const string DriverHoldsCash = "driver_holds_cash";
 
     private static readonly BookingStatus[] InProgress =
     [
@@ -72,6 +74,15 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
         if (await db.DriverProfiles.AsNoTracking().AnyAsync(p => p.UserId == userId && p.IsOnDuty, cancellationToken))
         {
             blockers.Add(DriverOnDuty);
+        }
+
+        // Cash a driver collected for OnePondy is theirs to hand in before their account goes (step 8.8).
+        var held = await db.LedgerEntries.AsNoTracking()
+            .Where(e => e.Account == LedgerAccounts.DriverCash(userId))
+            .SumAsync(e => e.Amount, cancellationToken);
+        if (held > 0m)
+        {
+            blockers.Add(DriverHoldsCash);
         }
 
         return blockers;

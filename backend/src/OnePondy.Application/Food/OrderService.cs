@@ -40,13 +40,15 @@ public sealed partial class OrderService(
     /// <summary>Prices a cart without placing it, so the app can show the full breakdown before the customer commits.</summary>
     public async Task<Result<OrderQuoteView>> QuoteAsync(QuoteInput input, CancellationToken cancellationToken)
     {
-        if (food.Value.RequireOnlinePayment && !await PaymentsOpenAsync(cancellationToken))
+        var built = await BuildAsync(input.BusinessId, input.Area, input.Lines, cancellationToken);
+        if (!built.IsSuccess)
         {
-            return OrderErrors.PaymentUnavailable;
+            return built.Error;
         }
 
-        var built = await BuildAsync(input.BusinessId, input.Area, input.Lines, cancellationToken);
-        return built.IsSuccess ? ToQuoteView(built.Value) : built.Error;
+        // Nothing can be ordered unless the customer has some way to pay: online (while payment is available) or cash on delivery.
+        var options = await PaymentOptionsAsync(built.Value.Restaurant.Profile, built.Value.Price.TotalAmount, cancellationToken);
+        return options.Online || options.CashOnDelivery ? ToQuoteView(built.Value, options) : OrderErrors.PaymentUnavailable;
     }
 
     public async Task<Result<OrderDetail>> PlaceAsync(Guid customerUserId, PlaceOrderInput input, CancellationToken cancellationToken)
@@ -70,12 +72,14 @@ public sealed partial class OrderService(
             return OrderErrors.ModuleOff;
         }
 
-        if (food.Value.RequireOnlinePayment && !await PaymentsOpenAsync(cancellationToken))
+        var errors = new FieldErrors();
+        var method = PaymentMethod.Online;
+        if (!string.IsNullOrWhiteSpace(input.PaymentMethod)
+            && !(Enum.TryParse(input.PaymentMethod.Trim(), ignoreCase: true, out method) && Enum.IsDefined(method)))
         {
-            return OrderErrors.PaymentUnavailable;
+            errors.Add("paymentMethod", "Choose online payment or cash on delivery.");
         }
 
-        var errors = new FieldErrors();
         var address = errors.Required("address", input.Address, MaxAddressLength);
         var note = errors.Optional("note", input.Note, MaxNoteLength);
         var phone = (input.ContactPhone ?? string.Empty).Replace(" ", string.Empty).Replace("-", string.Empty);
@@ -100,9 +104,20 @@ public sealed partial class OrderService(
             return built.Error;
         }
 
+        var options = await PaymentOptionsAsync(built.Value.Restaurant.Profile, built.Value.Price.TotalAmount, cancellationToken);
         if (input.ExpectedTotal != built.Value.Price.TotalAmount)
         {
-            return OrderErrors.PriceChanged(ToQuoteView(built.Value));
+            return OrderErrors.PriceChanged(ToQuoteView(built.Value, options));
+        }
+
+        if (method == PaymentMethod.Online && !options.Online)
+        {
+            return OrderErrors.PaymentUnavailable;
+        }
+
+        if (method == PaymentMethod.CashOnDelivery && !options.CashOnDelivery)
+        {
+            return OrderErrors.CashUnavailable;
         }
 
         var now = time.GetUtcNow();
@@ -114,7 +129,8 @@ public sealed partial class OrderService(
             built.Value.Restaurant.Profile.PrepTimeMinutes,
             built.Value.Price,
             now,
-            food.Value.AcceptWindow);
+            food.Value.AcceptWindow,
+            method);
         db.FoodOrders.Add(order);
 
         try
@@ -149,7 +165,7 @@ public sealed partial class OrderService(
         return
         [
             .. orders.Select(o => new OrderSummary(
-                o.Id, o.BusinessId, names[o.BusinessId], o.Status, o.ExpiresAt, counts.GetValueOrDefault(o.Id), o.TotalAmount, o.Currency, o.CreatedAt)),
+                o.Id, o.BusinessId, names[o.BusinessId], o.Status, o.ExpiresAt, counts.GetValueOrDefault(o.Id), o.TotalAmount, o.Currency, o.CreatedAt, o.PaymentMethod)),
         ];
     }
 
@@ -212,7 +228,8 @@ public sealed partial class OrderService(
                     o.Currency,
                     o.DeliveryArea,
                     o.CreatedAt,
-                    deliveries.GetValueOrDefault(o.Id));
+                    deliveries.GetValueOrDefault(o.Id),
+                    o.PaymentMethod);
             }),
         ]);
     }
@@ -234,18 +251,29 @@ public sealed partial class OrderService(
     /// </summary>
     public async Task<Result<PartnerOrderDetail>> AcceptAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, CancellationToken cancellationToken)
     {
+        // A cash on delivery order is paid at the door, so accepting it confirms it at once; an online order is paid after it is accepted.
+        var method = await db.FoodOrders.AsNoTracking()
+            .Where(o => o.Id == id && o.BusinessId == businessId)
+            .Select(o => (PaymentMethod?)o.PaymentMethod)
+            .SingleOrDefaultAsync(cancellationToken);
+        var online = method != PaymentMethod.CashOnDelivery;
         var paymentsOpen = await PaymentsOpenAsync(cancellationToken);
 
-        // An order placed while payment was available must not be accepted into a state where nothing can be paid: it waits and expires
-        // instead, and the customer is never charged.
-        if (food.Value.RequireOnlinePayment && !paymentsOpen)
+        // An online order placed while payment was available must not be accepted into a state where nothing can be paid: it waits and
+        // expires instead, and the customer is never charged.
+        if (online && food.Value.RequireOnlinePayment && !paymentsOpen)
         {
             return OrderErrors.PaymentUnavailable;
         }
 
         var window = food.Value.PaymentWindow;
         return await ForBusinessAsync(
-            businessId, id, expectedVersion, ownerUserId, o => o.Accept(ownerUserId, time.GetUtcNow(), paymentsOpen && o.TotalAmount > 0m, window), cancellationToken);
+            businessId,
+            id,
+            expectedVersion,
+            ownerUserId,
+            o => o.Accept(ownerUserId, time.GetUtcNow(), online && paymentsOpen && o.TotalAmount > 0m, window),
+            cancellationToken);
     }
 
     public Task<Result<PartnerOrderDetail>> RejectAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, string? reason, CancellationToken cancellationToken)
@@ -348,6 +376,21 @@ public sealed partial class OrderService(
 
     private Task<bool> PaymentsOpenAsync(CancellationToken cancellationToken) =>
         db.ModuleFlags.AsNoTracking().AnyAsync(f => f.Key == ModuleKeys.Payments && f.Status == ModuleStatus.Available, cancellationToken);
+
+    /// <summary>
+    /// How a cart can be paid for. Online is offered while payment is available (or when the rule that food needs it is switched off, for
+    /// development). Cash on delivery needs the module on, the restaurant to have opted in, and the order to be within the cash limit.
+    /// </summary>
+    private async Task<PaymentOptionsView> PaymentOptionsAsync(RestaurantProfile profile, decimal total, CancellationToken cancellationToken)
+    {
+        var online = !food.Value.RequireOnlinePayment || await PaymentsOpenAsync(cancellationToken);
+        var max = food.Value.CashOnDelivery.MaxOrderAmount;
+        var cash = profile.AcceptsCashOnDelivery
+            && total <= max
+            && await db.ModuleFlags.AsNoTracking()
+                .AnyAsync(f => f.Key == ModuleKeys.CashOnDelivery && f.Status == ModuleStatus.Available, cancellationToken);
+        return new PaymentOptionsView(online, cash, max);
+    }
 
     private IQueryable<FoodOrder> Orders() => db.FoodOrders.Include(o => o.Lines).Include(o => o.History);
 
@@ -638,7 +681,9 @@ public sealed partial class OrderService(
             order.UpdatedAt,
             paid is null ? null : new PaymentView(paid.Amount, paid.Currency, paid.UpdatedAt, paid.ProviderPaymentId!),
             [.. orderRefunds.Select(r => new RefundView(r.Amount, r.Reason, r.Status, r.RequestedAt, r.ProcessedAt))],
-            delivery);
+            delivery,
+            order.PaymentMethod,
+            order.CashCollected);
     }
 
     private async Task<PartnerOrderDetail> ToPartnerDetailAsync(FoodOrder order, CancellationToken cancellationToken) =>
@@ -658,9 +703,10 @@ public sealed partial class OrderService(
         ToHistoryViews(order),
         order.CreatedAt,
         order.UpdatedAt,
-        delivery);
+        delivery,
+        order.PaymentMethod);
 
-    private static OrderQuoteView ToQuoteView(Built built) => new(
+    private static OrderQuoteView ToQuoteView(Built built, PaymentOptionsView options) => new(
         built.Restaurant.Business.Id,
         built.Restaurant.Business.Name,
         built.Area,
@@ -674,7 +720,8 @@ public sealed partial class OrderService(
             built.Price.TaxAmount,
             built.Price.DiscountAmount,
             built.Price.TotalAmount,
-            built.Price.Currency));
+            built.Price.Currency),
+        options);
 
     private static IReadOnlyList<OrderLineView> ToLineViews(FoodOrder order) =>
         [

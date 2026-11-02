@@ -24,6 +24,7 @@ function anOrder(status: FoodOrderStatus): PartnerOrderSummary {
     deliveryArea: 'whiteTown',
     createdAt: '2026-10-30T05:00:00Z',
     delivery: null,
+    paymentMethod: 'online',
   };
 }
 

@@ -78,6 +78,14 @@ The public page never reveals whether an account exists for a phone number or em
 | Payments, refunds and ledger lines for orders | No end date decided | The same Phase 7 records and rules as for bookings (see below); a food order's refund is always in full. |
 | What a restaurant sees of an order | Not stored separately | The restaurant's views leave out the customer's address and phone, in the API and in the console. Only OnePondy's drivers (after they take a delivery) and administrators see them. |
 
+## Cash on delivery (Phase 8, step 8.8)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| How an order was paid, and the cash a driver took for it (amount, when, which driver) | With the order; no end date decided | Part of the order record, linked to the anonymised customer and driver rows. The ledger lines it posted follow the same rule as other ledger entries (append-only, no end date decided). |
+| Cash deposits (cash a driver handed in: amount, when, receipt or bank reference, note, which administrator recorded it) | No end date decided | Financial records, never edited or deleted (a trigger refuses it). A mistake is answered with a note, not an edit. |
+| A driver's cash balance | Computed from the ledger | Not stored separately. A driver holding cash cannot delete their account. |
+
 ## Delivery drivers (Phase 8, step 8.6)
 
 | Data | Kept for | Notes |

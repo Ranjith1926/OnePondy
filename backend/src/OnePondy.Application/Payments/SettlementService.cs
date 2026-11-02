@@ -515,6 +515,14 @@ public sealed class SettlementService(IOnePondyDbContext db, LedgerService ledge
                 .Select(a => LedgerService.TransactionId(LedgerService.CaptureKey(a.Id)))
                 .Where(t => mine.Any(e => e.TransactionId == t && e.Account == partnerAccount))
                 .ToHashSet();
+
+            // A cash on delivery order is "paid" by the driver taking the cash, which posts its own transaction with the same split.
+            var cash = LedgerService.TransactionId(LedgerService.CashKey(order.Id));
+            if (mine.Any(e => e.TransactionId == cash && e.Account == partnerAccount))
+            {
+                paying.Add(cash);
+            }
+
             var partnerOwed = -mine.Where(e => e.Account == partnerAccount).Sum(e => e.Amount);
             if (paying.Count == 0 && partnerOwed == 0m)
             {

@@ -35,6 +35,21 @@ public sealed class FoodOptions
 
     /// <summary>How long an order may sit in each stage before the administrators' list flags it as needing attention (step 8.9).</summary>
     public AttentionOptions Attention { get; set; } = new();
+
+    /// <summary>Limits on cash on delivery (step 8.8). Whether it is offered at all is decided by the `cashOnDelivery` module and each restaurant's opt-in.</summary>
+    public CashOnDeliveryOptions CashOnDelivery { get; set; } = new();
+}
+
+public sealed class CashOnDeliveryOptions
+{
+    /// <summary>The largest order that can be paid in cash. A larger one must be paid online.</summary>
+    public decimal MaxOrderAmount { get; set; } = 2000m;
+
+    /// <summary>
+    /// The most cash one driver may hold before handing it in. A driver at the limit is not given another cash order until they do, so what
+    /// OnePondy trusts any one person with stays bounded.
+    /// </summary>
+    public decimal MaxDriverCashHeld { get; set; } = 5000m;
 }
 
 public sealed class AttentionOptions
@@ -75,6 +90,12 @@ public static class FoodOptionsGuard
             throw new InvalidOperationException("Food:DeliveryFee and Food:PackagingFee must each be between 0 and 500.");
         }
 
+        var cash = options.CashOnDelivery;
+        if (cash.MaxOrderAmount is < 100m or > 100_000m || cash.MaxDriverCashHeld < cash.MaxOrderAmount || cash.MaxDriverCashHeld > 1_000_000m)
+        {
+            throw new InvalidOperationException("Food:CashOnDelivery:MaxOrderAmount must be 100 to 100000, and MaxDriverCashHeld at least that and at most 1000000.");
+        }
+
         var attention = options.Attention;
         TimeSpan[] limits = [attention.NoDriverAfter, attention.PickupOverdueAfter, attention.DeliveryOverdueAfter, attention.KitchenOverdueAfter, attention.RefundOverdueAfter];
         if (limits.Any(l => l < TimeSpan.FromMinutes(1) || l > TimeSpan.FromDays(1)))
@@ -107,7 +128,9 @@ public sealed record PlaceOrderInput(
     string? Note,
     string? ContactPhone,
     IReadOnlyList<OrderLineInput> Lines,
-    decimal? ExpectedTotal);
+    decimal? ExpectedTotal,
+    /// <summary>"online" (the default) or "cashOnDelivery". Cash is only accepted where the restaurant and OnePondy offer it.</summary>
+    string? PaymentMethod = null);
 
 public sealed record OrderLineView(
     Guid MenuItemId,
@@ -135,7 +158,11 @@ public sealed record OrderQuoteView(
     int PrepTimeMinutes,
     decimal MinOrderAmount,
     IReadOnlyList<OrderLineView> Lines,
-    OrderPriceView Price);
+    OrderPriceView Price,
+    PaymentOptionsView PaymentOptions);
+
+/// <summary>How this cart can be paid for right now. Both can be true; if neither is, it cannot be ordered at all.</summary>
+public sealed record PaymentOptionsView(bool Online, bool CashOnDelivery, decimal CashOnDeliveryMaxAmount);
 
 public sealed record OrderHistoryView(
     FoodOrderStatus? PreviousStatus,
@@ -170,7 +197,10 @@ public sealed record OrderDetail(
     PaymentView? Payment,
     IReadOnlyList<RefundView> Refunds,
     /// <summary>How the delivery is going once the order is ready; null before that and after a cancelled delivery.</summary>
-    DeliveryProgressView? Delivery);
+    DeliveryProgressView? Delivery,
+    PaymentMethod PaymentMethod,
+    /// <summary>For cash on delivery: the cash the driver confirmed taking, once delivered.</summary>
+    decimal? CashCollected);
 
 public sealed record OrderSummary(
     Guid Id,
@@ -181,7 +211,8 @@ public sealed record OrderSummary(
     int ItemCount,
     decimal TotalAmount,
     string Currency,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    PaymentMethod PaymentMethod);
 
 /// <summary>
 /// An order as the restaurant sees it. The customer's address and phone are left out on purpose: in v1 OnePondy's own drivers
@@ -202,7 +233,8 @@ public sealed record PartnerOrderDetail(
     DateTimeOffset CreatedAt,
     DateTimeOffset UpdatedAt,
     /// <summary>Who is collecting the order and how far along it is; null before the order is ready.</summary>
-    DeliveryProgressView? Delivery);
+    DeliveryProgressView? Delivery,
+    PaymentMethod PaymentMethod);
 
 /// <summary>
 /// One row of the restaurant's inbox. It carries the dishes (the kitchen needs them to cook) and the order's <c>Version</c>, which
@@ -221,7 +253,8 @@ public sealed record PartnerOrderSummary(
     string Currency,
     string DeliveryArea,
     DateTimeOffset CreatedAt,
-    DeliveryProgressView? Delivery);
+    DeliveryProgressView? Delivery,
+    PaymentMethod PaymentMethod);
 
 public static class OrderErrors
 {
@@ -236,6 +269,11 @@ public static class OrderErrors
         "food_payment_unavailable",
         ErrorKind.Conflict,
         "Food can only be ordered while online payment is available, and it isn't right now. Please try again later.");
+
+    public static readonly AppError CashUnavailable = new(
+        "cash_on_delivery_unavailable",
+        ErrorKind.Conflict,
+        "Cash on delivery isn't available for this order. Pay online instead.");
 
     public static readonly AppError RestaurantClosed = new(
         "restaurant_not_taking_orders",

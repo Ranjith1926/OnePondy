@@ -30,6 +30,8 @@ export interface DriverDetails {
   version?: number;
 }
 
+export type PaymentMethod = 'online' | 'cashOnDelivery';
+
 export type JobStatus = 'open' | 'accepted' | 'pickedUp' | 'delivered' | 'cancelled';
 
 /** An open delivery. It shows the area only: the customer's address and phone come once the driver has taken it. */
@@ -40,6 +42,9 @@ export interface JobOffer {
   deliveryArea: string;
   itemCount: number;
   openedAt: string;
+  paymentMethod: PaymentMethod;
+  /** For cash on delivery: the cash the driver will take at the door. */
+  cashToCollect: number | null;
 }
 
 /** The driver's own delivery, with what they need to collect and hand it over. */
@@ -56,6 +61,18 @@ export interface JobDetail {
   items: { name: string; quantity: number }[];
   acceptedAt: string | null;
   pickedUpAt: string | null;
+  paymentMethod: PaymentMethod;
+  /** For cash on delivery: the exact cash to take at the door and confirm when handing over. */
+  cashToCollect: number | null;
+}
+
+/** Cash the driver has collected for OnePondy and not yet handed in. */
+export interface DriverCash {
+  held: number;
+  /** Past this much, no further cash orders are offered until some is handed in. */
+  limit: number;
+  lastCollectedAt: string | null;
+  lastDepositAt: string | null;
 }
 
 export interface DriverJobs {
@@ -82,8 +99,15 @@ export const driverApi = {
   pickUpJob: (id: string) =>
     apiRequest<JobDetail>(`/api/v1/driver/jobs/${id}/pickup`, { method: 'POST', auth: true }),
 
-  deliverJob: (id: string) =>
-    apiRequest<JobDetail>(`/api/v1/driver/jobs/${id}/deliver`, { method: 'POST', auth: true }),
+  /** For a cash on delivery order, `cashCollected` is the exact cash taken; an online order sends nothing. */
+  deliverJob: (id: string, cashCollected?: number) =>
+    apiRequest<JobDetail>(`/api/v1/driver/jobs/${id}/deliver`, {
+      method: 'POST',
+      body: cashCollected === undefined ? undefined : { cashCollected },
+      auth: true,
+    }),
+
+  cash: () => apiRequest<DriverCash>('/api/v1/driver/cash', { auth: true }),
 
   shareLocation: (id: string, latitude: number, longitude: number) =>
     apiRequest<void>(`/api/v1/driver/jobs/${id}/location`, {

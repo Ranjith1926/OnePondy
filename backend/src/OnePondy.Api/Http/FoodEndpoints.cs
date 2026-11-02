@@ -5,7 +5,8 @@ using OnePondy.Application.Identity;
 
 namespace OnePondy.Api.Http;
 
-public sealed record SaveRestaurantBody(int PrepTimeMinutes, decimal MinOrderAmount, bool IsAcceptingOrders, string[]? DeliveryAreas, uint? Version);
+public sealed record SaveRestaurantBody(
+    int PrepTimeMinutes, decimal MinOrderAmount, bool IsAcceptingOrders, string[]? DeliveryAreas, uint? Version, bool? AcceptsCashOnDelivery = null);
 
 public sealed record MenuCategoryBody(string? Name, int? Position, uint? Version);
 
@@ -49,7 +50,9 @@ public static class FoodEndpoints
         Guid businessId, SaveRestaurantBody body, ClaimsPrincipal user, RestaurantService service, HttpContext httpContext, CancellationToken ct) =>
         EndpointResults.Ok(
             await service.SaveMineAsync(
-                businessId, user.GetUserId(), new RestaurantInput(body.PrepTimeMinutes, body.MinOrderAmount, body.IsAcceptingOrders, body.DeliveryAreas, body.Version), ct),
+                businessId, user.GetUserId(), new RestaurantInput(
+                    body.PrepTimeMinutes, body.MinOrderAmount, body.IsAcceptingOrders, body.DeliveryAreas, body.Version, body.AcceptsCashOnDelivery),
+                ct),
             httpContext);
 
     private static async Task<IResult> GetMenu(

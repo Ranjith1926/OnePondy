@@ -12,6 +12,7 @@ import type {
   ListingType,
   MediaLicence,
   OrderActor,
+  PaymentMethod,
   OrderAttention,
   ModuleStatus,
   PaymentAttemptStatus,
@@ -71,6 +72,8 @@ export const moduleLabels: Record<string, string> = {
   tripPlanner: 'Trip planner',
   notifications: 'Notifications',
   support: 'Help and support',
+  payments: 'Online payment',
+  cashOnDelivery: 'Cash on delivery',
 };
 
 export const days: DayOfWeek[] = [
@@ -301,6 +304,11 @@ export const deliveryStatusLabels: Record<DeliveryJobStatus, string> = {
   pickedUp: 'Out for delivery',
   delivered: 'Delivered',
   cancelled: 'Cancelled',
+};
+
+export const paymentMethodLabels: Record<PaymentMethod, string> = {
+  online: 'Paid online',
+  cashOnDelivery: 'Cash on delivery',
 };
 
 export const attentionLabels: Record<OrderAttention, string> = {

@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
+using OnePondy.Application.Food;
+using OnePondy.Application.Payments;
 using OnePondy.Domain.Delivery;
 using OnePondy.Domain.Food;
 
@@ -12,7 +15,7 @@ namespace OnePondy.Application.Delivery;
 /// was taken. A driver holds one job at a time (a unique index). The driver's position is accepted only for their own active job,
 /// kept as the latest only, and erased when the job ends.
 /// </summary>
-public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
+public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time, LedgerService ledger, IOptions<FoodOptions> food)
 {
     /// <summary>The most open jobs shown to a driver at once, oldest first.</summary>
     public const int MaxOffers = 20;
@@ -76,6 +79,13 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
             return DeliveryErrors.Changed;
         }
 
+        // A driver already holding as much cash as they may is not given another cash order until they hand some in (step 8.8).
+        if (order.PaymentMethod == PaymentMethod.CashOnDelivery
+            && await DriverCashBook.HeldAsync(db, driverUserId, cancellationToken) + order.TotalAmount > food.Value.CashOnDelivery.MaxDriverCashHeld)
+        {
+            return DeliveryErrors.CashLimit;
+        }
+
         job.Accept(driverUserId, time.GetUtcNow());
         var saved = await SaveAsync(job, DeliveryErrors.Taken, cancellationToken);
         if (saved.IsSuccess || saved.Error != DeliveryErrors.Taken)
@@ -101,14 +111,43 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
             order => order.PickUp(driverUserId, time.GetUtcNow()),
             cancellationToken);
 
-    /// <summary>The driver handed it over: the job and the order are finished, and the driver's position is erased.</summary>
-    public Task<Result<JobDetailView>> DeliverAsync(Guid driverUserId, Guid jobId, CancellationToken cancellationToken) =>
-        MineAsync(
+    /// <summary>
+    /// The driver handed it over: the job and the order are finished, and the driver's position is erased. For cash on delivery the driver
+    /// confirms the cash they took, which must be exactly the total; the cash is then posted to the ledger as theirs to hand in, in the same
+    /// save. An online order has no cash to confirm.
+    /// </summary>
+    public async Task<Result<JobDetailView>> DeliverAsync(Guid driverUserId, Guid jobId, decimal? cashCollected, CancellationToken cancellationToken)
+    {
+        var job = await db.DeliveryJobs.AsNoTracking().SingleOrDefaultAsync(j => j.Id == jobId && j.DriverUserId == driverUserId, cancellationToken);
+        if (job is null)
+        {
+            return DeliveryErrors.NotFound;
+        }
+
+        var order = await db.FoodOrders.AsNoTracking().SingleAsync(o => o.Id == job.FoodOrderId, cancellationToken);
+        var errors = new FieldErrors();
+        if (order.PaymentMethod == PaymentMethod.CashOnDelivery && cashCollected != order.TotalAmount)
+        {
+            errors.Add("cashCollected", $"Confirm the exact cash you collected: ₹{order.TotalAmount:0.00}.");
+        }
+        else if (order.PaymentMethod != PaymentMethod.CashOnDelivery && cashCollected is not null)
+        {
+            errors.Add("cashCollected", "This order was paid online, so there is no cash to collect.");
+        }
+
+        if (errors.Any)
+        {
+            return errors.ToError();
+        }
+
+        return await MineAsync(
             driverUserId,
             jobId,
-            job => job.Deliver(driverUserId, time.GetUtcNow()),
-            order => order.Deliver(driverUserId, time.GetUtcNow()),
-            cancellationToken);
+            j => j.Deliver(driverUserId, time.GetUtcNow()),
+            o => o.Deliver(driverUserId, time.GetUtcNow(), cashCollected),
+            cancellationToken,
+            afterOrderStep: o => o.PaymentMethod == PaymentMethod.CashOnDelivery ? ledger.PostFoodCashAsync(o, cancellationToken) : Task.CompletedTask);
+    }
 
     /// <summary>Stores the driver's latest position, only while they hold the job.</summary>
     public async Task<Result<bool>> RecordLocationAsync(Guid driverUserId, Guid jobId, LocationInput input, CancellationToken cancellationToken)
@@ -165,7 +204,8 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
         Guid jobId,
         Action<DeliveryJob> jobStep,
         Action<FoodOrder>? orderStep,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Func<FoodOrder, Task>? afterOrderStep = null)
     {
         var job = await db.DeliveryJobs.SingleOrDefaultAsync(j => j.Id == jobId && j.DriverUserId == driverUserId, cancellationToken);
         if (job is null)
@@ -187,6 +227,10 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
             if (order is not null)
             {
                 orderStep!(order);
+                if (afterOrderStep is not null)
+                {
+                    await afterOrderStep(order);
+                }
             }
         }
         catch (InvalidOperationException exception)
@@ -254,7 +298,15 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
             {
                 var order = orders[j.FoodOrderId];
                 var business = businesses[order.BusinessId];
-                return new JobOfferView(j.Id, business.Name, business.Address, order.DeliveryArea, counts.GetValueOrDefault(order.Id), j.OpenedAt);
+                return new JobOfferView(
+                    j.Id,
+                    business.Name,
+                    business.Address,
+                    order.DeliveryArea,
+                    counts.GetValueOrDefault(order.Id),
+                    j.OpenedAt,
+                    order.PaymentMethod,
+                    order.PaymentMethod == PaymentMethod.CashOnDelivery ? order.TotalAmount : null);
             }),
         ];
     }
@@ -276,7 +328,9 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time)
             order.ContactPhone,
             [.. items.OrderBy(l => l.Name, StringComparer.OrdinalIgnoreCase).Select(l => new JobItemView(l.Name, l.Quantity))],
             job.AcceptedAt,
-            job.PickedUpAt);
+            job.PickedUpAt,
+            order.PaymentMethod,
+            order.PaymentMethod == PaymentMethod.CashOnDelivery ? order.TotalAmount : null);
     }
 }
 

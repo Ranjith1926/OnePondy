@@ -19,7 +19,8 @@ public sealed record PlaceOrderBody(
     string? Note,
     string? ContactPhone,
     IReadOnlyList<OrderLineBody>? Lines,
-    decimal? ExpectedTotal);
+    decimal? ExpectedTotal,
+    string? PaymentMethod = null);
 
 public sealed record OrderVersionBody(uint Version);
 
@@ -74,7 +75,15 @@ public static class FoodOrderEndpoints
         }
 
         var input = new PlaceOrderInput(
-            body.IdempotencyKey, body.BusinessId, body.Area, body.Address, body.Note, body.ContactPhone, ToLines(body.Lines), body.ExpectedTotal);
+            body.IdempotencyKey,
+            body.BusinessId,
+            body.Area,
+            body.Address,
+            body.Note,
+            body.ContactPhone,
+            ToLines(body.Lines),
+            body.ExpectedTotal,
+            body.PaymentMethod);
         var result = await service.PlaceAsync(user.GetUserId(), input, ct);
         return result.IsSuccess
             ? Results.Created($"/api/v1/food/orders/{result.Value.Id}", result.Value)

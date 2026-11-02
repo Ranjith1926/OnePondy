@@ -22,6 +22,7 @@ public sealed class RestaurantProfileConfiguration : IEntityTypeConfiguration<Re
         builder.HasKey(p => p.BusinessId);
         builder.Property(p => p.BusinessId).ValueGeneratedNever();
         builder.Property(p => p.MinOrderAmount).HasPrecision(12, 2);
+        builder.Property(p => p.AcceptsCashOnDelivery).HasDefaultValue(false);
         builder.Property(p => p.Version).IsRowVersion();
 
         builder.HasOne<Business>().WithOne().HasForeignKey<RestaurantProfile>(p => p.BusinessId).OnDelete(DeleteBehavior.Restrict);

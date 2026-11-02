@@ -524,6 +524,8 @@ export type FoodAreaCode =
   | 'ariyankuppam'
   | 'villianur';
 
+export type PaymentMethod = 'online' | 'cashOnDelivery';
+
 export interface RestaurantProfile {
   configured: boolean;
   businessId: string;
@@ -531,6 +533,8 @@ export interface RestaurantProfile {
   minOrderAmount: number;
   isAcceptingOrders: boolean;
   deliveryAreas: FoodAreaCode[];
+  /** Whether the restaurant takes cash on delivery too. Customers see it only once OnePondy has switched cash on delivery on. */
+  acceptsCashOnDelivery: boolean;
   version: number;
 }
 
@@ -615,6 +619,7 @@ export interface PartnerOrderSummary {
   createdAt: string;
   /** Null until the order is ready for a driver. */
   delivery: DeliveryProgress | null;
+  paymentMethod: PaymentMethod;
 }
 
 export type DriverApprovalStatus = 'pending' | 'approved' | 'rejected' | 'suspended';
@@ -668,6 +673,7 @@ export interface AdminOrderSummary {
   deliveryStatus: DeliveryJobStatus | null;
   driverFirstName: string | null;
   attention: OrderAttention | null;
+  paymentMethod: PaymentMethod;
 }
 
 export interface AdminDriverPosition {
@@ -731,6 +737,9 @@ export interface AdminFoodOrder {
   createdAt: string;
   updatedAt: string;
   payment: { amount: number; currency: string; paidAt: string; reference: string } | null;
+  paymentMethod: PaymentMethod;
+  /** For cash on delivery: the cash the driver took, once delivered. */
+  cashCollected: number | null;
   refunds: {
     amount: number;
     reason: RefundReason;
@@ -746,4 +755,16 @@ export interface AdminOrderDetail {
   attention: OrderAttention | null;
   /** False once the order has arrived or closed. */
   canCancel: boolean;
+}
+
+// --- Cash on delivery's cash (Phase 8, step 8.8) ---
+
+/** One driver's cash: what they hold for OnePondy, and when they last took some and last handed some in. */
+export interface DriverCashRow {
+  driverUserId: string;
+  driverName: string | null;
+  phoneNumber: string | null;
+  held: number;
+  lastCollectedAt: string | null;
+  lastDepositAt: string | null;
 }

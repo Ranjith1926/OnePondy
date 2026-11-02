@@ -94,6 +94,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<DeliveryJob> DeliveryJobs => Set<DeliveryJob>();
 
+    public DbSet<DriverCashDeposit> DriverCashDeposits => Set<DriverCashDeposit>();
+
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
     public DbSet<SettlementItem> SettlementItems => Set<SettlementItem>();
@@ -223,6 +225,7 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<FoodOrderLine>().HasKey(l => l.Id);
         modelBuilder.Entity<DriverProfile>().HasKey(p => p.UserId);
         modelBuilder.Entity<DeliveryJob>().HasKey(j => j.Id);
+        modelBuilder.Entity<DriverCashDeposit>().HasKey(d => d.Id);
         modelBuilder.Entity<FoodOrderStatusEntry>().HasKey(h => h.Id);
         modelBuilder.Entity<FoodOrder>(order =>
         {

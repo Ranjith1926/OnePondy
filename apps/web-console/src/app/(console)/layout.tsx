@@ -20,6 +20,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
           { href: '/partners', label: 'Partners' },
           { href: '/drivers', label: 'Drivers' },
           { href: '/orders', label: 'Orders' },
+          { href: '/cash', label: 'Cash' },
           { href: '/listings', label: 'Listings' },
           { href: '/payments', label: 'Payments' },
           { href: '/settlements', label: 'Statements' },

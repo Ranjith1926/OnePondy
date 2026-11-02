@@ -18,6 +18,7 @@ import {
 import { formatDateTime } from '../../bookings/formatDateTime';
 import { useRefetchOnFocus } from '../../bookings/hooks/useRefetchOnFocus';
 import { isAreaId } from '../../location/serviceAreas';
+import { formatMoney } from '../../payments/formatMoney';
 import { PaymentPanel } from '../../payments/components/PaymentPanel';
 import { ReceiptSection } from '../../payments/components/ReceiptSection';
 import { usePayOrder } from '../../payments/hooks/usePayOrder';
@@ -96,6 +97,18 @@ export function OrderDetailScreen({ route }: Props) {
 
   const data = order.data;
 
+  // A cash order is paid at the door, so what the customer is told differs: not "paid", but what they will owe, and later what they paid.
+  const cashHint = (o: OrderDetail): string | null => {
+    if (o.paymentMethod !== 'cashOnDelivery') {
+      return null;
+    }
+    const amount = formatMoney(o.price.totalAmount, o.price.currency);
+    if (o.status === 'confirmed') {
+      return t('food.order.hint.confirmedCash', { amount });
+    }
+    return o.status === 'delivered' ? t('food.order.hint.deliveredCash', { amount }) : null;
+  };
+
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.screen}>
       {header}
@@ -107,12 +120,13 @@ export function OrderDetailScreen({ route }: Props) {
           {t(`food.order.status.${data.status}`)}
         </OPText>
         <OPText tone="secondary">
-          {t(
-            // Never tell a customer they paid when nothing was paid (online payment can be off).
-            data.status === 'confirmed' && data.payment
-              ? 'food.order.hint.confirmedPaid'
-              : `food.order.hint.${data.status}`,
-          )}
+          {cashHint(data) ??
+            t(
+              // Never tell a customer they paid when nothing was paid (online payment can be off).
+              data.status === 'confirmed' && data.payment
+                ? 'food.order.hint.confirmedPaid'
+                : `food.order.hint.${data.status}`,
+            )}
         </OPText>
         {data.delivery && (data.status === 'readyForPickup' || data.status === 'outForDelivery') ? (
           <DeliveryLine delivery={data.delivery} />
@@ -138,6 +152,17 @@ export function OrderDetailScreen({ route }: Props) {
         <View style={styles.section}>
           <OPText variant="label">{t('food.order.items')}</OPText>
           <PriceBreakdown lines={data.lines} price={data.price} />
+          {data.paymentMethod === 'cashOnDelivery' ? (
+            <OPText tone="secondary">
+              {data.cashCollected !== null
+                ? t('food.order.cash.paid', {
+                    amount: formatMoney(data.cashCollected, data.price.currency),
+                  })
+                : t('food.order.cash.willPay', {
+                    amount: formatMoney(data.price.totalAmount, data.price.currency),
+                  })}
+            </OPText>
+          ) : null}
         </View>
 
         <View style={styles.section}>

@@ -13,6 +13,7 @@ const knownCodes = [
   'job_changed',
   'job_not_found',
   'job_invalid_transition',
+  'driver_cash_limit',
 ] as const;
 
 type KnownCode = (typeof knownCodes)[number];

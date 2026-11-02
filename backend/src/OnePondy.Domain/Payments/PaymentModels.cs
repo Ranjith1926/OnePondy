@@ -277,6 +277,15 @@ public static class LedgerAccounts
     /// <summary>GST collected on food orders, owed to the government by OnePondy as the e-commerce operator (spec section 21; provisional, decision F3).</summary>
     public const string TaxPayable = "tax_payable";
 
+    /// <summary>
+    /// Cash a driver has collected for OnePondy and not yet handed in: one account per driver, so a driver's balance is simply the account's sum.
+    /// A debit (money OnePondy is owed) when they collect, a credit when an administrator records the cash received.
+    /// </summary>
+    public static string DriverCash(Guid driverUserId) => $"driver_cash:{driverUserId}";
+
+    /// <summary>Cash OnePondy has received from drivers (to be banked).</summary>
+    public const string CashReceived = "cash_received";
+
     public static string PartnerPayable(Guid businessId) => $"partner_payable:{businessId}";
 
     public static string PartnerPaid(Guid businessId) => $"partner_paid:{businessId}";
@@ -543,4 +552,60 @@ public sealed class OutboxMessage
     };
 
     private static string Truncate(string text) => text.Length > 500 ? text[..500] : text;
+}
+
+/// <summary>
+/// A record that a driver handed cash in to OnePondy (step 8.8). Its ledger entries move the amount from the driver's cash account to the cash
+/// received. Never changed or removed: a mistake is answered by an administrator with a note, not by editing this.
+/// </summary>
+public sealed class DriverCashDeposit
+{
+    public const int MaxReferenceLength = 100;
+    public const int MaxNoteLength = 500;
+
+    private DriverCashDeposit()
+    {
+    }
+
+    public Guid Id { get; private set; }
+
+    public Guid DriverUserId { get; private set; }
+
+    public decimal Amount { get; private set; }
+
+    /// <summary>When the driver handed the cash in, as the administrator who took it entered it (not later than when it was recorded).</summary>
+    public DateTimeOffset ReceivedAt { get; private set; }
+
+    public Guid RecordedByUserId { get; private set; }
+
+    /// <summary>A receipt or bank deposit number, if there is one.</summary>
+    public string? Reference { get; private set; }
+
+    public string? Note { get; private set; }
+
+    public DateTimeOffset RecordedAt { get; private set; }
+
+    public static DriverCashDeposit Create(
+        Guid driverUserId,
+        decimal amount,
+        DateTimeOffset receivedAt,
+        Guid recordedByUserId,
+        string? reference,
+        string? note,
+        DateTimeOffset now)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThanOrEqual(amount, 0m);
+        ArgumentOutOfRangeException.ThrowIfGreaterThan(receivedAt, now);
+        return new DriverCashDeposit
+        {
+            Id = Guid.CreateVersion7(),
+            DriverUserId = driverUserId,
+            Amount = decimal.Round(amount, 2, MidpointRounding.AwayFromZero),
+            ReceivedAt = receivedAt,
+            RecordedByUserId = recordedByUserId,
+            Reference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim(),
+            Note = string.IsNullOrWhiteSpace(note) ? null : note.Trim(),
+            RecordedAt = now,
+        };
+    }
 }

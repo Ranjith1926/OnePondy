@@ -269,4 +269,54 @@ describe('<OrderDetailScreen />', () => {
       expect(screen.queryByText(/Looking for a driver/)).not.toBeOnTheScreen();
     });
   });
+
+  describe('cash on delivery', () => {
+    it('tells the customer what they will pay the driver, never that they have paid', async () => {
+      ordered({ status: 'confirmed', paymentMethod: 'cashOnDelivery' });
+      await renderScreen();
+
+      expect(
+        await screen.findByText(
+          "Confirmed. You'll pay ₹339.25 in cash to the driver when it arrives.",
+        ),
+      ).toBeOnTheScreen();
+      expect(
+        screen.getByText('Cash on delivery: you pay ₹339.25 to the driver.'),
+      ).toBeOnTheScreen();
+      expect(screen.queryByText(/Paid and confirmed/)).not.toBeOnTheScreen();
+    });
+
+    it('shows no payment to make: nothing to pay online and no pay button', async () => {
+      ordered({ status: 'confirmed', paymentMethod: 'cashOnDelivery' });
+      await renderScreen();
+      await screen.findByText(/in cash to the driver/);
+
+      expect(screen.queryByRole('button', { name: /Pay/ })).not.toBeOnTheScreen();
+    });
+
+    it('says how much was paid in cash once it is delivered', async () => {
+      ordered({
+        status: 'delivered',
+        paymentMethod: 'cashOnDelivery',
+        cashCollected: 339.25,
+        canCancel: false,
+      });
+      await renderScreen();
+
+      expect(
+        await screen.findByText('Delivered. You paid ₹339.25 in cash. Enjoy your meal.'),
+      ).toBeOnTheScreen();
+      expect(screen.getByText('Paid in cash to the driver: ₹339.25.')).toBeOnTheScreen();
+    });
+
+    it('cancelling a cash order does not promise a refund, because nothing was paid', async () => {
+      ordered({ status: 'confirmed', paymentMethod: 'cashOnDelivery' });
+      const user = userEvent.setup();
+      await renderScreen();
+
+      await user.press(await screen.findByRole('button', { name: 'Cancel order' }));
+
+      expect(screen.queryByText(/full refund/)).not.toBeOnTheScreen();
+    });
+  });
 });

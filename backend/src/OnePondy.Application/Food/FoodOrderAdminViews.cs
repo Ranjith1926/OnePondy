@@ -39,7 +39,8 @@ public sealed record AdminOrderSummary(
     DateTimeOffset UpdatedAt,
     DeliveryJobStatus? DeliveryStatus,
     string? DriverFirstName,
-    OrderAttention? Attention);
+    OrderAttention? Attention,
+    PaymentMethod PaymentMethod);
 
 /// <summary>Where the driver last reported being. Shown to administrators only, and only while the delivery is under way.</summary>
 public sealed record AdminDriverPosition(double Latitude, double Longitude, DateTimeOffset At);

@@ -394,6 +394,18 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
   position exists only while the job is `accepted` or `picked_up`, is all three columns or none, and is on Earth (`ck_delivery_job_location_*`), so it is erased by the database's own rules when a job ends.
   `ux_delivery_jobs_one_active_per_driver` (filtered to `accepted` and `picked_up`) allows one live job per driver. The migration also gives every order already `ready_for_pickup` its open job.
 
+**Cash on delivery (step 8.8, migration 20, `AddCashOnDelivery`).**
+
+- **`food_orders`** gained `payment_method` (`online` or `cash_on_delivery`, default `online`, CHECK) and the cash taken at the door: `cash_collected`, `cash_collected_at` and `cash_collected_by` (a RESTRICT foreign key to the driver). `ck_food_order_cash`: the three are all-or-none; they exist only on a
+  delivered cash on delivery order, and `cash_collected` equals `total_amount`; and a delivered cash on delivery order always has them.
+- **`restaurant_profiles.accepts_cash_on_delivery`** (default false): the restaurant's opt-in.
+- **`driver_cash_deposits`** – cash a driver handed in: `driver_user_id`, `amount` (more than 0), `received_at` (not after `recorded_at`), `recorded_by_user_id`, optional `reference` and `note`, `recorded_at`. Never updated or deleted
+  (trigger). Its money movement is in the ledger.
+- **Ledger.** A delivered cash order posts, with the same five-way split as an online payment, a debit to the per-driver account **`driver_cash:{driver}`** (instead of `gateway_clearing`): what that driver owes OnePondy. A deposit posts a credit to that account
+  and a debit to **`cash_received`**, with no booking or order on the lines. A driver's balance is the sum of their account. `ck_ledger_account` lists the new accounts.
+- **`trg_driver_cash_never_negative`** (deferred constraint trigger on `ledger_entries`, for `driver_cash:` accounts): at commit, under an advisory lock on the account, raises if the account's sum is below nothing, so a driver cannot hand in more than they hold even when two
+  deposits commit at once.
+
 **Administrators' monitoring (step 8.9, migration 19).** No new tables: the `customer_history` view (§3.9) lists food orders, and `ck_refund_reason` allows `admin_cancelled`.
 
 ## 4. Foreign-key delete policy
@@ -409,7 +421,7 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 | `listings`/`availability_slots` → bookings, `booking_slots` | RESTRICT | A booking can never lose its listing or slot. |
 | `bookings` → `booking_slots`, `booking_status_history` | RESTRICT | History is immutable. |
 | `bookings`, `food_orders`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
-| `app_users` → `driver_profiles`, `delivery_jobs` (driver); `food_orders` → `delivery_jobs` | RESTRICT | Who delivered which order is a record. A driver profile is removed explicitly on account deletion (never by cascade). |
+| `app_users` → `driver_profiles`, `delivery_jobs` (driver), `driver_cash_deposits` (driver and the administrator who recorded it), `food_orders.cash_collected_by`; `food_orders` → `delivery_jobs` | RESTRICT | Who delivered which order is a record. A driver profile is removed explicitly on account deletion (never by cascade). |
 | `app_users`, `user_sessions` → `device_tokens` | CASCADE | A phone is meaningful only while its session lives. |
 | `device_tokens` → `notification_log` | SET NULL | The log survives a removed phone. |
 | `app_users`, `outbox_messages` → `notification_log` | RESTRICT | The log is kept for the retention period. |
@@ -430,6 +442,8 @@ migration; EF Core cannot express a non-cascade ownership FK in the model snapsh
 | `trg_food_order_status_history_append_only` / `_no_truncate` and `trg_food_order_lines_append_only` / `_no_truncate`, function `food_order_records_are_immutable()` | `food_order_status_history`, `food_order_lines` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: an order's lines and history are written once. |
 | `trg_food_orders_match_lines` and `trg_food_order_lines_match_order` (rows, **deferred constraint triggers**), function `food_order_matches_its_lines()` | `food_orders`, `food_order_lines` | At commit, raises unless the order's `subtotal` and `tax_amount` equal the sums of its lines. |
 | `trg_delivery_jobs_rules` (row, `UPDATE` and `DELETE`) and `trg_delivery_jobs_no_truncate` (statement), function `delivery_job_follows_the_rules()` | `delivery_jobs` | Allows only the forward steps (open → accepted → picked up → delivered; accepted → open when given up; cancelled from any live state), never gives an accepted or picked-up job to a second driver (the rule behind "exactly one driver gets it"), freezes finished jobs, and refuses deletes, truncates and moving a job to another order. |
+| `trg_driver_cash_deposits_append_only` (row) and `trg_driver_cash_deposits_no_truncate` (statement), function `driver_cash_deposits_are_immutable()` | `driver_cash_deposits` | Raises on `UPDATE`, `DELETE`, `TRUNCATE`: a recorded hand-in is never changed. |
+| `trg_driver_cash_never_negative` (row, **deferred constraint trigger**), function `driver_cash_never_negative()` | `ledger_entries` | At commit, locks the driver's cash account and raises if its sum would be below nothing. |
 | `trg_payment_attempts_keep_subject` (row), function `payment_attempt_keeps_its_subject()` | `payment_attempts` | Raises if an update changes `booking_id` or `food_order_id`: a payment is for one thing for good. |
 | `trg_refunds_match_payment` (row), function `refund_matches_its_payment()` | `refunds` | Raises unless the refund's `booking_id` and `food_order_id` are its payment's, so money is only ever given back for what was paid for. |
 
@@ -458,6 +472,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 17 | `20261030053514_AddDriverProfiles` | `driver_profiles` (one row per driver account) with checks: only an approved driver is on duty, "on duty since" exists exactly while on duty, a motorised vehicle has its registration and licence and a bicycle has neither, a rejection or suspension always has a note; a unique index on the licence number. |
 | 18 | `20261030101407_AddDeliveryJobs` | `delivery_jobs` (one per food order) with checks (status, who holds it, a time for every step, the driver's position only while accepted or picked up, complete and on Earth); unique indexes for one job per order and one live job per driver; a trigger that allows only the forward steps, never gives a taken job to a second driver, freezes finished jobs and refuses deletes and truncates; gives each order already ready for pickup its open job. |
 | 19 | `20261030112541_ExtendCustomerHistoryAndAdminRefundReason` | The `customer_history` view now also lists food orders (kind `food_order`); `ck_refund_reason` allows `admin_cancelled`. |
+| 20 | `20261102044345_AddCashOnDelivery` | `food_orders.payment_method` (`online` for every existing row), `cash_collected`, `cash_collected_at`, `cash_collected_by`; `restaurant_profiles.accepts_cash_on_delivery`; `driver_cash_deposits`; the ledger accounts `driver_cash:{driver}` and `cash_received`; the `cashOnDelivery` module flag (off); triggers that keep deposits immutable and a driver's cash account from going below nothing. |
 
 Rules for new migrations:
 
@@ -481,7 +496,7 @@ Details are in [data-retention.md](data-retention.md). In short:
   statement rows have no end date yet (they need the tax review) and are linked to the anonymised customer row.
 - Deletion is blocked while the customer has bookings in progress (`pending`,
   `awaiting_payment`, `confirmed`, `refund_pending`) or food orders in progress, or, for partners, while their business has
-  any, or, for a driver, while they are on duty. A driver's profile is removed with the account.
+  any, or, for a driver, while they are on duty or hold cash for OnePondy (`driver_holds_cash`). A driver's profile is removed with the account.
 - **Known gap:** an order's delivery address and contact phone stay on the order after its customer's account is anonymised (the order is a financial record). They are
   not scrubbed; see [data-retention.md](data-retention.md).
 

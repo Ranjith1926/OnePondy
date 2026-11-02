@@ -11,6 +11,7 @@ import {
   adminOrderStatusLabels,
   formatDateTime,
   formatMoney,
+  paymentMethodLabels,
 } from '@/lib/labels';
 import { requireAdministrator } from '@/lib/session';
 
@@ -182,6 +183,9 @@ export default async function OrdersPage({ searchParams }: { searchParams: Promi
                     </td>
                     <td className="py-3 pr-4 whitespace-nowrap">
                       {formatMoney(order.totalAmount, order.currency)}
+                      <div className="text-xs text-muted">
+                        {paymentMethodLabels[order.paymentMethod]}
+                      </div>
                     </td>
                     <td className="py-3 whitespace-nowrap">{formatDateTime(order.createdAt)}</td>
                   </tr>

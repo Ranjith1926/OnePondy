@@ -9,6 +9,7 @@ public sealed record RestaurantProfileView(
     decimal MinOrderAmount,
     bool IsAcceptingOrders,
     IReadOnlyList<string> DeliveryAreas,
+    bool AcceptsCashOnDelivery,
     uint Version);
 
 /// <summary>What a partner sends to set up or change their restaurant. <c>Version</c> is required once the profile exists.</summary>
@@ -17,7 +18,9 @@ public sealed record RestaurantInput(
     decimal MinOrderAmount,
     bool IsAcceptingOrders,
     IReadOnlyList<string>? DeliveryAreas,
-    uint? Version);
+    uint? Version,
+    /// <summary>Whether to take cash on delivery. Left out, it stays as it was (off for a new restaurant).</summary>
+    bool? AcceptsCashOnDelivery = null);
 
 public sealed record MenuItemView(
     Guid Id,

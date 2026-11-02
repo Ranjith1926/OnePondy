@@ -510,6 +510,8 @@ describe('the driver app', () => {
       deliveryArea: 'whiteTown',
       itemCount: 3,
       openedAt: '2026-10-30T05:40:00Z',
+      paymentMethod: 'online',
+      cashToCollect: null,
     };
     const held = (status: JobDetail['status']): JobDetail => ({
       id: 'job-1',
@@ -527,6 +529,8 @@ describe('the driver app', () => {
       ],
       acceptedAt: '2026-10-30T05:41:00Z',
       pickedUpAt: status === 'pickedUp' ? '2026-10-30T05:55:00Z' : null,
+      paymentMethod: 'online',
+      cashToCollect: null,
     });
 
     let jobs: DriverJobs;
@@ -693,6 +697,150 @@ describe('the driver app', () => {
       expect(await screen.findByText("You're off duty")).toBeOnTheScreen();
       expect(screen.getByText('Go on duty to see open deliveries.')).toBeOnTheScreen();
       expect(watch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cash on delivery', () => {
+    const onDuty: DriverProfile = {
+      ...approved,
+      isOnDuty: true,
+      onDutySince: '2026-10-30T05:30:00Z',
+      version: 13,
+    };
+    const cashOffer: JobOffer = {
+      id: 'job-1',
+      restaurantName: 'Spice Route',
+      restaurantAddress: '4 Rue Mahe, White Town',
+      deliveryArea: 'whiteTown',
+      itemCount: 3,
+      openedAt: '2026-10-30T05:40:00Z',
+      paymentMethod: 'cashOnDelivery',
+      cashToCollect: 339.25,
+    };
+    const cashJob = (status: JobDetail['status']): JobDetail => ({
+      id: 'job-1',
+      status,
+      restaurantName: 'Spice Route',
+      restaurantAddress: '4 Rue Mahe, White Town',
+      restaurantPhone: '+914132000111',
+      deliveryArea: 'whiteTown',
+      deliveryAddress: '12 Rue Suffren, White Town',
+      deliveryNote: null,
+      contactPhone: '+919876500001',
+      items: [{ name: 'Masala dosa', quantity: 2 }],
+      acceptedAt: '2026-10-30T05:41:00Z',
+      pickedUpAt: status === 'pickedUp' ? '2026-10-30T05:55:00Z' : null,
+      paymentMethod: 'cashOnDelivery',
+      cashToCollect: 339.25,
+    });
+
+    let jobs: DriverJobs;
+    let held = 0;
+
+    beforeEach(() => {
+      jobs = { current: null, open: [cashOffer], canAcceptJobs: true };
+      held = 0;
+      routes['GET /api/v1/driver/jobs'] = () => ({ status: 200, body: jobs });
+      routes['GET /api/v1/driver/cash'] = () => ({
+        status: 200,
+        body: { held, limit: 5000, lastCollectedAt: null, lastDepositAt: null },
+      });
+      routes['POST /api/v1/driver/jobs/job-1/location'] = () => ({ status: 204 });
+    });
+
+    it('shows how much cash an offer will bring in before the driver takes it', async () => {
+      await launchSignedIn(onDuty);
+
+      expect(await screen.findByText('Collect ₹339.25 in cash')).toBeOnTheScreen();
+      expect(screen.getByText('Cash')).toBeOnTheScreen();
+    });
+
+    it('tells the driver while collecting that this is a cash order, and what to take at the door', async () => {
+      jobs = { current: cashJob('accepted'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+
+      expect(
+        await screen.findByText(
+          'Cash on delivery: you will collect ₹339.25 from the customer at the door.',
+        ),
+      ).toBeOnTheScreen();
+    });
+
+    it('asks for the cash at the door and confirms exactly that amount when handing over', async () => {
+      const user = userEvent.setup();
+      jobs = { current: cashJob('pickedUp'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/deliver'] = () => {
+        jobs = { current: null, open: [], canAcceptJobs: true };
+        held = 339.25;
+        return { status: 200, body: { ...cashJob('pickedUp'), status: 'delivered' } };
+      };
+
+      expect(
+        await screen.findByText('Collect ₹339.25 in cash from the customer'),
+      ).toBeOnTheScreen();
+      await user.press(
+        screen.getByRole('button', { name: "I've collected ₹339.25 and handed it over" }),
+      );
+
+      await screen.findByText("You're holding ₹339.25 in cash for OnePondy.");
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/deliver')[0].body).toEqual({
+        cashCollected: 339.25,
+      });
+    });
+
+    it('sends no cash for an order that was paid online', async () => {
+      const user = userEvent.setup();
+      jobs = {
+        current: { ...cashJob('pickedUp'), paymentMethod: 'online', cashToCollect: null },
+        open: [],
+        canAcceptJobs: true,
+      };
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/deliver'] = () => {
+        jobs = { current: null, open: [], canAcceptJobs: true };
+        return { status: 200, body: { ...cashJob('pickedUp'), status: 'delivered' } };
+      };
+
+      await user.press(await screen.findByRole('button', { name: "I've handed it over" }));
+
+      await screen.findByText('No deliveries yet');
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/deliver')[0].body).toBeUndefined();
+      expect(screen.queryByText(/Collect .* in cash from the customer/)).not.toBeOnTheScreen();
+    });
+
+    it('shows the cash the driver holds, and nothing when they hold none', async () => {
+      await launchSignedIn(onDuty);
+      await screen.findByText('Collect ₹339.25 in cash');
+      expect(screen.queryByText(/in cash for OnePondy/)).not.toBeOnTheScreen();
+    });
+
+    it('says what is owed and the limit while the driver is holding cash', async () => {
+      held = 1200;
+      await launchSignedIn(onDuty);
+
+      expect(
+        await screen.findByText("You're holding ₹1,200 in cash for OnePondy."),
+      ).toBeOnTheScreen();
+      expect(screen.getByText(/Once you hold ₹5,000/)).toBeOnTheScreen();
+    });
+
+    it('explains when the driver is holding as much cash as they may', async () => {
+      const user = userEvent.setup();
+      held = 5000;
+      routes['POST /api/v1/driver/jobs/job-1/accept'] = () => ({
+        status: 409,
+        body: { code: 'driver_cash_limit' },
+      });
+      await launchSignedIn(onDuty);
+
+      await user.press(await screen.findByRole('button', { name: 'Take this delivery' }));
+
+      expect(
+        await screen.findByText(
+          'You are holding as much cash as you may. Hand it in to OnePondy before taking another cash order.',
+        ),
+      ).toBeOnTheScreen();
     });
   });
 });
