@@ -9,7 +9,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | # | Question | Proposed default (what is built unless you say otherwise) | Why it matters |
 |---|---|---|---|
 | F1 | Who delivers? | OnePondy delivery partners through the driver app, assigned by the platform. Restaurants do not deliver themselves in v1. | Decides the whole driver app and assignment design. Needs the **delivery operations plan** the spec lists as a dependency: who the drivers are, how they are paid, insurance, hours. |
-| F2 | Cash on delivery | **Approved 2026-11-02: offer both cash on delivery and online payment. Built (8.8).** Off until an administrator switches the `cashOnDelivery` module on; each restaurant opts in (default off); the customer chooses at checkout; limits on the order and on what a driver may hold. **It still needs the legal and tax review before real use** (spec section 21). |
+| F2 | Cash on delivery | **Approved 2026-11-02: offer both cash on delivery and online payment. Built (8.8).** Off until an administrator switches the `cashOnDelivery` module on; each restaurant opts in (default off); the customer chooses at checkout; limits on the order and on what a driver may hold. **It still needs the legal and tax review before real use** (spec section 21). | Cash needs a driver cash ledger and daily reconciliation, and legal sign-off. |
 | F3 | GST on restaurant orders | Tax is calculated per item from a configurable rate (provisional 5%) and recorded separately from the price on every order line; nothing is invoiced. The spec makes the platform liable for GST on restaurant services (CGST §9(5)). | The rate and treatment need your tax adviser. The schema keeps tax apart so changing it never rewrites history. |
 | F4 | Fees | A flat delivery fee and a packaging fee, both settings, both shown before the customer pays. No platform fee yet. | Customer price transparency (Consumer Protection E-Commerce Rules). |
 | F5 | Service areas | Named areas (the same list the app uses: White Town, Auroville, ...), not map polygons (D6: no map provider). A restaurant lists the areas it delivers to; `puducherry` means the whole city. | Matches the app's area picker; polygons wait for a map decision. |
@@ -51,7 +51,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | # | Question | State |
 |---|---|---|
 | F1 | Delivery operations plan | **Not provided.** Built as the default: OnePondy's own drivers, assigned by the platform, with no real fleet behind it. A real launch needs the plan (who the drivers are, pay, insurance, hours). |
-| F2 | Cash on delivery | **Not decided.** Step 8.8 is not built. Until it is, food needs online payment (next row), so no order can be confirmed unpaid in a default setup. |
+| F2 | Cash on delivery | **Approved 2026-11-02 and built (step 8.8).** Offered alongside online payment, so an order always has at least one way to pay. Still needs the legal and tax review before real use. |
 | (new) | Food needs a way to pay | **Done (2026-11-02).** Food can be priced and ordered, and an order accepted, only if the customer has a way to pay: online while the `payments` module is available (`Food:RequireOnlinePayment`, on by default), or cash on delivery where it is offered. Never confirmed with nothing paid and no cash to come. |
 | F3 | GST treatment | **Not confirmed.** Tax is calculated per line at a provisional 5% and booked separately; fees carry no tax. Needs the tax adviser. |
 | F4 | Fees | Built on the defaults (delivery 30, packaging 10). Not confirmed. |
