@@ -384,7 +384,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Ai:Gemini` | `ApiKey`, `Model`, `BaseUrl`, `Timeout` |
 | `Twilio` | `AccountSid`, `AuthToken`, and either `From` (`Auth:Otp:Delivery` = `Twilio`) or `VerifyServiceSid` (`TwilioVerify`). Development only; secrets, never committed. |
 | `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
-| `Food` | `Attention` (`NoDriverAfter` 10 min, `PickupOverdueAfter` 30, `DeliveryOverdueAfter` 60, `KitchenOverdueAfter` 20, `RefundOverdueAfter` 1 h: when the console flags an order), `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
+| `Food` | `RequireOnlinePayment` (default true: food can be priced, ordered and accepted only while the `payments` module is available; `false` allows the unpaid path for development), `Attention` (`NoDriverAfter` 10 min, `PickupOverdueAfter` 30, `DeliveryOverdueAfter` 60, `KitchenOverdueAfter` 20, `RefundOverdueAfter` 1 h: when the console flags an order), `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
 | `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
 | `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
 | `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
@@ -499,7 +499,6 @@ yet).
 - Razorpay Route payouts (D21); GST and tax collected at source on commission.
 - Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
 - Reviews and ratings, rides.
-- **Phase 8 gaps:** cash on delivery (8.8, waiting for the owner); notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); a requirement that
-  food ordering has online payment available (with the `payments` module off an accepted order confirms unpaid); reassigning a delivery to a chosen driver; a map for customers (D6). See
+- **Phase 8 gaps:** cash on delivery (8.8, waiting for the owner); notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); reassigning a delivery to a chosen driver; a map for customers (D6). See
   [phase-8-plan.md](phase-8-plan.md) §4 and the Phase 8 verification in the README.
 - A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.

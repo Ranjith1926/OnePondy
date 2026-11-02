@@ -67,7 +67,9 @@ public sealed class FoodOrderHarness
 
     public PaymentsOptions Payments { get; } = new();
 
-    public FoodOptions Food { get; } = new();
+    // Tests built on this harness exercise ordering, delivery and payment themselves, including the path with online payment off; the rule that
+    // food needs online payment is tested in OrderTests.
+    public FoodOptions Food { get; } = new() { RequireOnlinePayment = false };
 
     public FakePaymentGateway Gateway { get; } = new();
 

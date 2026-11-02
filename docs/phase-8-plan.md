@@ -51,8 +51,8 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 | # | Question | State |
 |---|---|---|
 | F1 | Delivery operations plan | **Not provided.** Built as the default: OnePondy's own drivers, assigned by the platform, with no real fleet behind it. A real launch needs the plan (who the drivers are, pay, insurance, hours). |
-| F2 | Cash on delivery | **Not decided.** Step 8.8 is not built. With the `payments` module off, an accepted order confirms with nothing paid, so this and the next row belong together. |
-| (new) | Require the `payments` module for food orders | **Not decided.** I recommend a small server check (refuse to open food ordering unless online payment is available) unless cash on delivery is approved. |
+| F2 | Cash on delivery | **Not decided.** Step 8.8 is not built. Until it is, food needs online payment (next row), so no order can be confirmed unpaid in a default setup. |
+| (new) | Require the `payments` module for food orders | **Done (2026-11-02, the recommended option; the owner chose it when asked).** Food can be priced and ordered, and an order accepted, only while the `payments` module is available (`Food:RequireOnlinePayment`, on by default). Revisit if cash on delivery (F2) is approved. |
 | F3 | GST treatment | **Not confirmed.** Tax is calculated per line at a provisional 5% and booked separately; fees carry no tax. Needs the tax adviser. |
 | F4 | Fees | Built on the defaults (delivery 30, packaging 10). Not confirmed. |
 | F5, F6 | Areas, accept-then-pay | Built on the defaults. Not objected to. |
@@ -175,9 +175,8 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
   bottom buttons sat against the system gesture bar; the food screens now respect the bottom inset.
 - **Not proven on the emulator:** Razorpay's own checkout (it crashes on the emulator, so that stays a phone test, as for bookings), cancelling, the price-changed path (unit-tested), and
   how it looks with large system text.
-- **Open point for the owner:** with the `payments` module **off**, an accepted order is confirmed with no payment taken, and until cash on delivery exists (8.8, off by default)
-  that would mean food delivered unpaid. The same is intended for bookings (pay at the venue), but food has no such step. Before `food` is switched on anywhere real, either require
-  `payments` to be available for food orders (a small server check) or approve cash on delivery.
+- **Open point for the owner (resolved 2026-11-02, see "Food needs online payment" below):** with the `payments` module off, an accepted order used to be confirmed with no payment
+  taken, which would mean food delivered unpaid. The server now refuses to price, place or accept food orders while online payment is unavailable.
 - **Tests:** 62 new app tests (cart rules; area and error helpers; restaurant list; menu and cart, including replacing a cart and dropping sold-out dishes; checkout, including
   the exact request sent, retry with the same key, a changed price, a cart under the minimum, server field errors and the guest; the order screen in each state; food orders in
   the Bookings tab) and updated module and Bookings tests. Whole app suite: 332 tests across 37 suites pass; type-check and lint are clean.
@@ -304,6 +303,18 @@ the tables they add), the workflow document (§25 in full, and the not-built tab
 verification against the six acceptance criteria) and this plan (where the decisions stand). The functional specification itself was not edited: it states requirements, and none changed.
 
 **What is left before Phase 8 could go live** (nothing here is a code defect; it is the work the owner and the business must do or decide):
-the owner decisions above; a decision on blanking an order's delivery address and phone after its customer deletes their account (they are kept today); a real delivery team and its operations plan; a run of the food checkout and the driver app on real phones; push notifications for orders and deliveries (so nobody has to watch a screen);
+the owner decisions above (cash on delivery, the delivery operations plan, tax, fees); a decision on blanking an order's delivery address and phone after its customer deletes their account (they are kept today); a real delivery team and its operations plan; a run of the food checkout and the driver app on real phones; push notifications for orders and deliveries (so nobody has to watch a screen);
 driver document upload and review; cash on delivery if approved; the legal and tax review; the Phase 7 go-live gate. Phase 9 (transport) builds on the driver app and on the delivery job pattern but needs its own
 licensing and safety work first.
+
+**Food needs online payment (after 8.10, 2026-11-02).** Until now, with the `payments` module off, an accepted food order was confirmed with nothing paid, and nothing but the app's wording said so. Now:
+
+- `Food:RequireOnlinePayment` (default **true**). While it is on and the `payments` module is not available, a cart **cannot be priced** and an order **cannot be placed** (`food_payment_unavailable`, 409), and a
+  restaurant **cannot accept** an order that was placed earlier: it waits for its deadline and expires, and the customer is never charged. Everything else is unchanged, including with payment available.
+- The customer app shows "Food can only be ordered while online payment is available, and it isn't right now." The restaurant's inbox shows the API's message when an accept is refused.
+- **Turning it off** (`Food__RequireOnlinePayment=false`) brings back the unpaid path, for development and for tests that exercise it. It is not a way to take cash: cash on delivery (8.8) is not built. A local run
+  that wants to order food without Razorpay needs this setting.
+- Tests: 5 new unit tests (the default, refusing a quote and a place, working as before with payment on, refusing an accept after payment goes away and then expiring, the setting off), 1 new integration test (a
+  second host with the rule on refuses a quote and a place over HTTP, and the same order is placed on the host without it). The existing food fixtures set the rule off, because they are about ordering mechanics and
+  switch payment on where they need it. Unit 781, integration 148 (6 skipped), customer app 336 with its new error mapping, all passing.
+- **Not verified:** this was not run on the emulator; it is a server rule with an error message, and the message is covered by a customer app test.

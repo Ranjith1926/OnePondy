@@ -606,9 +606,10 @@ Known limitations:
 
 - **Not run on a real phone.** The Razorpay checkout for food, and the driver app's own GPS reaching the API, have not been seen. The emulator's GPS stopped after one fix, so no position report was sent from the
   app (the endpoint accepts the same request, and the app's reporting is covered by its tests).
-- **Open owner decisions:** the delivery operations plan (the drivers were built as OnePondy's own, assigned by the platform, F1); cash on delivery (F2); the GST treatment (F3); the commission, delivery and
-  packaging fees and the food refund rule (F4, F7, F8 with D21 and D22); and whether food orders must require the `payments` module. **With `payments` off, an accepted order is confirmed without any payment
-  being taken**, and the app says "Confirmed", never "Paid".
+- **Open owner decisions:** the delivery operations plan (the drivers were built as OnePondy's own, assigned by the platform, F1); cash on delivery (F2); the GST treatment (F3); and the commission, delivery and
+  packaging fees and the food refund rule (F4, F7, F8 with D21 and D22).
+- **Food needs online payment (2026-11-02).** Food can be priced, ordered and accepted only while the `payments` module is available (`Food:RequireOnlinePayment`, on by default), so no order is confirmed unpaid.
+  To order food locally without Razorpay, run the API with `Food__RequireOnlinePayment=false`.
 - **No notifications** about orders, deliveries or stuck orders to anyone. Drivers see new deliveries by the app refreshing every 10 seconds; administrators and restaurants learn by opening the console, which does not
   refresh by itself (the restaurant's inbox does).
 - **Drivers' documents are not uploaded:** an administrator compares the licence and registration numbers with the originals by other means. There is no driver earnings or pay rule, no map for the customer (D6), and no

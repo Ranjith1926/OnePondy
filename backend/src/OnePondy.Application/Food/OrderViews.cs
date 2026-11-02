@@ -26,6 +26,13 @@ public sealed class FoodOptions
     /// </summary>
     public TimeSpan GatewayCheckGrace { get; set; } = TimeSpan.FromMinutes(5);
 
+    /// <summary>
+    /// Whether food can only be ordered while online payment is available (the `payments` module is on). On by default: with payment off an
+    /// accepted order would be confirmed with nothing paid, and cash on delivery (step 8.8) is not built to cover that. Turn it off only to
+    /// try the unpaid path in development.
+    /// </summary>
+    public bool RequireOnlinePayment { get; set; } = true;
+
     /// <summary>How long an order may sit in each stage before the administrators' list flags it as needing attention (step 8.9).</summary>
     public AttentionOptions Attention { get; set; } = new();
 }
@@ -224,6 +231,11 @@ public static class OrderErrors
         "food_not_available",
         ErrorKind.Conflict,
         "Food ordering is not available yet.");
+
+    public static readonly AppError PaymentUnavailable = new(
+        "food_payment_unavailable",
+        ErrorKind.Conflict,
+        "Food can only be ordered while online payment is available, and it isn't right now. Please try again later.");
 
     public static readonly AppError RestaurantClosed = new(
         "restaurant_not_taking_orders",

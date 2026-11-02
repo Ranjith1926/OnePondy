@@ -26,7 +26,8 @@ public class OrderTests
     private readonly MenuService _menu;
     private readonly OrderService _orders;
     private readonly FoodOrderExpiry _expiry;
-    private readonly FoodOptions _options = new();
+    // These tests are about ordering itself, and turn online payment on where they need it; the rule that food needs online payment has its own tests below.
+    private readonly FoodOptions _options = new() { RequireOnlinePayment = false };
     private readonly Guid _owner;
     private readonly Guid _buyer;
     private readonly Guid _otherBuyer;
@@ -602,6 +603,76 @@ public class OrderTests
         Assert.Equal(1, expired);
         Assert.Equal(FoodOrderStatus.Expired, (await _orders.GetMineAsync(unpaid.Id, _buyer, None)).Value!.Status);
         Assert.Equal(FoodOrderStatus.Confirmed, (await _orders.GetMineAsync(confirmed.Id, _buyer, None)).Value!.Status);
+    }
+
+    // --- Food needs online payment ---
+
+    [Fact]
+    public void Food_needs_online_payment_unless_that_is_switched_off()
+    {
+        Assert.True(new FoodOptions().RequireOnlinePayment);
+    }
+
+    [Fact]
+    public async Task With_online_payment_unavailable_a_cart_cannot_be_priced_or_placed()
+    {
+        _options.RequireOnlinePayment = true;
+        var shop = await OpenShopAsync();
+
+        var quote = await _orders.QuoteAsync(new QuoteInput(shop.BusinessId, "whiteTown", [Line(shop.Dosa, 2)]), None);
+        var placed = await _orders.PlaceAsync(_buyer, Place(shop, DefaultTotal), None);
+
+        Assert.Equal("food_payment_unavailable", quote.Error!.Code);
+        Assert.Equal("food_payment_unavailable", placed.Error!.Code);
+        Assert.Empty(_b.Db.FoodOrders);
+    }
+
+    [Fact]
+    public async Task With_online_payment_available_ordering_works_as_before()
+    {
+        _options.RequireOnlinePayment = true;
+        var shop = await OpenShopAsync();
+        await EnablePaymentsAsync();
+
+        var quote = await _orders.QuoteAsync(new QuoteInput(shop.BusinessId, "whiteTown", [Line(shop.Dosa, 2), Line(shop.Coffee)]), None);
+        var placed = await _orders.PlaceAsync(_buyer, Place(shop, DefaultTotal), None);
+
+        Assert.True(quote.IsSuccess, quote.Error?.Detail);
+        Assert.True(placed.IsSuccess, placed.Error?.Detail);
+        var accepted = await _orders.AcceptAsync(shop.BusinessId, placed.Value!.Id, 0, _owner, None);
+        Assert.Equal(FoodOrderStatus.AwaitingPayment, accepted.Value!.Status);
+    }
+
+    [Fact]
+    public async Task An_order_placed_while_payment_was_available_is_not_accepted_into_nothing_if_payment_goes_away()
+    {
+        _options.RequireOnlinePayment = true;
+        var shop = await OpenShopAsync();
+        await EnablePaymentsAsync();
+        var order = await PlacedAsync(shop);
+        _b.Db.ModuleFlags.RemoveRange(_b.Db.ModuleFlags.Where(f => f.Key == ModuleKeys.Payments));
+        await _b.Db.SaveChangesAsync();
+
+        var accepted = await _orders.AcceptAsync(shop.BusinessId, order.Id, 0, _owner, None);
+
+        Assert.Equal("food_payment_unavailable", accepted.Error!.Code);
+        Assert.Equal(FoodOrderStatus.Placed, (await _orders.GetMineAsync(order.Id, _buyer, None)).Value!.Status);
+
+        // It waits for its deadline like any order nobody answered, and the customer is never charged.
+        _b.Time.Advance(TimeSpan.FromMinutes(30));
+        Assert.Equal(1, (await _expiry.ExpireDueAsync(None)).Expired);
+        Assert.Equal(FoodOrderStatus.Expired, (await _orders.GetMineAsync(order.Id, _buyer, None)).Value!.Status);
+    }
+
+    [Fact]
+    public async Task Switching_the_rule_off_allows_the_unpaid_path_for_development()
+    {
+        var shop = await OpenShopAsync();
+
+        var placed = await PlacedAsync(shop);
+        var accepted = await _orders.AcceptAsync(shop.BusinessId, placed.Id, 0, _owner, None);
+
+        Assert.Equal(FoodOrderStatus.Confirmed, accepted.Value!.Status);
     }
 
     // --- The state table, row by row ---

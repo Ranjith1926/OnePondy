@@ -40,6 +40,11 @@ public sealed partial class OrderService(
     /// <summary>Prices a cart without placing it, so the app can show the full breakdown before the customer commits.</summary>
     public async Task<Result<OrderQuoteView>> QuoteAsync(QuoteInput input, CancellationToken cancellationToken)
     {
+        if (food.Value.RequireOnlinePayment && !await PaymentsOpenAsync(cancellationToken))
+        {
+            return OrderErrors.PaymentUnavailable;
+        }
+
         var built = await BuildAsync(input.BusinessId, input.Area, input.Lines, cancellationToken);
         return built.IsSuccess ? ToQuoteView(built.Value) : built.Error;
     }
@@ -63,6 +68,11 @@ public sealed partial class OrderService(
         if (!open)
         {
             return OrderErrors.ModuleOff;
+        }
+
+        if (food.Value.RequireOnlinePayment && !await PaymentsOpenAsync(cancellationToken))
+        {
+            return OrderErrors.PaymentUnavailable;
         }
 
         var errors = new FieldErrors();
@@ -224,8 +234,15 @@ public sealed partial class OrderService(
     /// </summary>
     public async Task<Result<PartnerOrderDetail>> AcceptAsync(Guid businessId, Guid id, uint expectedVersion, Guid ownerUserId, CancellationToken cancellationToken)
     {
-        var paymentsOpen = await db.ModuleFlags.AsNoTracking()
-            .AnyAsync(f => f.Key == ModuleKeys.Payments && f.Status == ModuleStatus.Available, cancellationToken);
+        var paymentsOpen = await PaymentsOpenAsync(cancellationToken);
+
+        // An order placed while payment was available must not be accepted into a state where nothing can be paid: it waits and expires
+        // instead, and the customer is never charged.
+        if (food.Value.RequireOnlinePayment && !paymentsOpen)
+        {
+            return OrderErrors.PaymentUnavailable;
+        }
+
         var window = food.Value.PaymentWindow;
         return await ForBusinessAsync(
             businessId, id, expectedVersion, ownerUserId, o => o.Accept(ownerUserId, time.GetUtcNow(), paymentsOpen && o.TotalAmount > 0m, window), cancellationToken);
@@ -328,6 +345,9 @@ public sealed partial class OrderService(
     // --- Shared ---
 
     private sealed record Built(OpenRestaurantInfo Restaurant, string Area, OrderPrice Price);
+
+    private Task<bool> PaymentsOpenAsync(CancellationToken cancellationToken) =>
+        db.ModuleFlags.AsNoTracking().AnyAsync(f => f.Key == ModuleKeys.Payments && f.Status == ModuleStatus.Available, cancellationToken);
 
     private IQueryable<FoodOrder> Orders() => db.FoodOrders.Include(o => o.Lines).Include(o => o.History);
 

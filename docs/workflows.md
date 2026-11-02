@@ -886,6 +886,8 @@ restaurant or is on its way. Any other move is refused with `order_invalid_trans
 
 ### 25.2 Pricing and placing (`POST /food/quote`, `POST /food/orders`)
 
+Food needs online payment: while the `payments` module is not available (and `Food:RequireOnlinePayment` is on, as it is by default) a cart cannot be priced or ordered, and a restaurant cannot accept an order, with the error `food_payment_unavailable`.
+
 1. The app sends the restaurant, the delivery area (a specific area, not the whole city) and dishes with quantities. **It never sends a price.**
 2. The server checks: the restaurant is open, approved, active and serves the area (the same rule the browse screens use); every dish is on *that*
    restaurant's menu, not archived and not sold out (`order_item_unavailable` names them); quantities are 1 to 20, at most 30 dishes (a dish listed
@@ -966,8 +968,8 @@ The customer's order view shows the payment as a receipt and any refunds with th
    booking; whatever the checkout reports, the server decides whether it is paid (the app asks it, as for bookings). A receipt and any refund appear on the
    order. The customer may cancel until cooking starts; for a paid order the sheet says a full refund follows, and if refunds are off the server's refusal is
    explained.
-5. A confirmed order is described as paid only when it has a receipt: with online payment off an accepted order is confirmed without any payment, and the app says
-   "Confirmed", never "Paid".
+5. A confirmed order is described as paid only when it has a receipt, and the app says "Confirmed", never "Paid", otherwise. (Since 2026-11-02 food cannot be ordered at all
+   while online payment is unavailable, so with the default settings a confirmed order always has a receipt.)
 6. Nothing in the app sends notifications about orders yet, so it does not ask for permission to.
 
 ### 25.8 Drivers (step 8.6)

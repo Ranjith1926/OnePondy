@@ -696,6 +696,7 @@
       "order_below_minimum": "Your cart is below the restaurant's smallest order.",
       "order_price_changed": "The price changed. Check the new total and place your order again.",
       "food_not_available": "Food ordering isn't available yet.",
+      "food_payment_unavailable": "Food can only be ordered while online payment is available, and it isn't right now. Please try again later.",
       "restaurant_not_found": "We couldn't find that restaurant.",
       "restaurant_not_taking_orders": "This restaurant isn't taking orders right now.",
       "restaurant_area_not_served": "This restaurant doesn't deliver to that area.",

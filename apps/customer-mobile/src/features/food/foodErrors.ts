@@ -8,6 +8,7 @@ const knownCodes = [
   'order_below_minimum',
   'order_price_changed',
   'food_not_available',
+  'food_payment_unavailable',
   'restaurant_not_found',
   'restaurant_not_taking_orders',
   'restaurant_area_not_served',

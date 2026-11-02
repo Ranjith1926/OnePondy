@@ -37,6 +37,10 @@ public sealed partial class FoodOrderApiTests : IAsyncLifetime
         {
             ["Auth:Otp:ResendInterval"] = "00:00:00",
             ["Auth:Otp:MaxPerDestination"] = "100",
+
+            // The payments module flag is never switched on in these tests (other test classes rely on it being off), so the rule that food
+            // needs online payment is off here; Food_needs_online_payment_to_be_available turns it on for one host.
+            ["Food:RequireOnlinePayment"] = "false",
         });
         await TestDatabase.MigrateOnceAsync(_factory.Services);
     }
@@ -478,5 +482,34 @@ public sealed partial class FoodOrderApiTests : IAsyncLifetime
 
         var uncommittable = await Assert.ThrowsAsync<PostgresException>(() => transaction.CommitAsync());
         Assert.Equal("P0001", uncommittable.SqlState);
+    }
+
+    [DatabaseFact]
+    public async Task Food_needs_online_payment_to_be_available()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        await TurnFoodOnAsync(client, admin);
+        var shop = await OpenShopAsync(client, admin, UniqueName("Needs payment"));
+        var customer = await SignInAsync(client);
+
+        // The same API with the rule on (its default). Payment is off in this database, so nothing can be priced or ordered.
+        await using var strict = Factory.WithWebHostBuilder(builder => builder.UseSetting("Food:RequireOnlinePayment", "true"));
+        using var strictClient = strict.CreateClient();
+
+        var quote = await SendAsync(strictClient, HttpMethod.Post, "/api/v1/food/quote", customer, new { businessId = shop.BusinessId, area = "whiteTown", lines = DefaultLines(shop) });
+        Assert.Equal(HttpStatusCode.Conflict, quote.StatusCode);
+        Assert.Equal("food_payment_unavailable", await ErrorCodeAsync(quote));
+
+        var placed = await SendAsync(strictClient, HttpMethod.Post, "/api/v1/food/orders", customer, OrderBody(shop, "needs-payment-1"));
+        Assert.Equal(HttpStatusCode.Conflict, placed.StatusCode);
+        Assert.Equal("food_payment_unavailable", await ErrorCodeAsync(placed));
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.False(await DbOf(scope).FoodOrders.AnyAsync(o => o.IdempotencyKey == "needs-payment-1"));
+
+        // Without the rule (as in every other test here) the same order is placed.
+        var allowed = await SendAsync(client, HttpMethod.Post, "/api/v1/food/orders", customer, OrderBody(shop, "needs-payment-1"));
+        Assert.Equal(HttpStatusCode.Created, allowed.StatusCode);
     }
 }

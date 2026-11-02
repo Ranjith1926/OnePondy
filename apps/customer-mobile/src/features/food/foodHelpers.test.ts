@@ -44,6 +44,9 @@ describe('foodErrorMessageKey', () => {
     expect(foodErrorMessageKey(new ApiError(409, 'restaurant_not_taking_orders'))).toBe(
       'food.errors.restaurant_not_taking_orders',
     );
+    expect(foodErrorMessageKey(new ApiError(409, 'food_payment_unavailable'))).toBe(
+      'food.errors.food_payment_unavailable',
+    );
   });
 
   it('tells a lost connection from a slow one, and anything else is generic', () => {
