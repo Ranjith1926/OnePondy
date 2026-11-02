@@ -1,4 +1,5 @@
 using OnePondy.Application.Common;
+using OnePondy.Application.Reviews;
 
 namespace OnePondy.Application.Food;
 
@@ -59,7 +60,8 @@ public sealed record PublicRestaurant(
     string? FssaiLicenseNumber,
     int PrepTimeMinutes,
     decimal MinOrderAmount,
-    IReadOnlyList<string> DeliveryAreas);
+    IReadOnlyList<string> DeliveryAreas,
+    RatingSummary? Rating = null);
 
 /// <summary>An open restaurant's records, for ordering.</summary>
 public sealed record OpenRestaurantInfo(OnePondy.Domain.Businesses.Business Business, OnePondy.Domain.Food.RestaurantProfile Profile, IReadOnlyList<string> Areas);

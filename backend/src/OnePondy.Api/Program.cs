@@ -75,6 +75,7 @@ app.MapFoodEndpoints();
 app.MapFoodOrderEndpoints();
 app.MapDriverEndpoints();
 app.MapFoodOrderAdminEndpoints();
+app.MapReviewEndpoints();
 app.MapDeviceEndpoints();
 
 app.Run();

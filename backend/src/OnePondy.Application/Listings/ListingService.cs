@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using OnePondy.Application.Audit;
+using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
+using OnePondy.Application.Reviews;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Listings;
@@ -14,8 +16,10 @@ public sealed record ListingListQuery(Guid? BusinessId, ListingStatus? Status, i
 /// sells or offers. Shops are discovery-only (D13); activities, stays, events and services can be
 /// bookable, with slots a customer reserves through <c>BookingService</c>.
 /// </summary>
-public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, TimeProvider time)
+public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, TimeProvider time, IOptions<ReviewOptions>? reviews = null)
 {
+    private int MinReviewsToShow => (reviews?.Value ?? new ReviewOptions()).MinCountToShow;
+
     public const int MaxReasonLength = 1000;
 
     public async Task<Result<IReadOnlyList<ListingSummary>>> ListMineAsync(Guid businessId, Guid ownerUserId, CancellationToken cancellationToken)
@@ -218,8 +222,9 @@ public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, Time
             .Skip((p - 1) * size)
             .Take(size)
             .ToListAsync(cancellationToken);
+        var ratings = await ReviewRatings.ForListingsAsync(db, [.. items.Select(x => x.listing.Id)], MinReviewsToShow, cancellationToken);
         return new PagedResult<PublicListingSummary>(
-            [.. items.Select(x => ToPublicSummary(x.listing, x.business))], p, size, total);
+            [.. items.Select(x => ToPublicSummary(x.listing, x.business, ratings.GetValueOrDefault(x.listing.Id)))], p, size, total);
     }
 
     public async Task<Result<PublicListingDetail>> GetPublicAsync(Guid id, CancellationToken cancellationToken)
@@ -235,7 +240,8 @@ public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, Time
             return ListingErrors.NotFound;
         }
 
-        return ToPublicDetail(found.listing, found.business);
+        var ratings = await ReviewRatings.ForListingsAsync(db, [id], MinReviewsToShow, cancellationToken);
+        return ToPublicDetail(found.listing, found.business, ratings.GetValueOrDefault(id));
     }
 
     // --- Availability slots ---
@@ -478,16 +484,17 @@ public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, Time
         listing.CreatedAt,
         listing.UpdatedAt);
 
-    private static PublicListingSummary ToPublicSummary(Listing listing, Business business) => new(
+    private static PublicListingSummary ToPublicSummary(Listing listing, Business business, RatingSummary? rating) => new(
         listing.Id,
         business.Name,
         listing.ListingType,
         listing.Title,
         listing.IsBookable,
         listing.BasePrice,
-        listing.Currency);
+        listing.Currency,
+        rating);
 
-    private static PublicListingDetail ToPublicDetail(Listing listing, Business business) => new(
+    private static PublicListingDetail ToPublicDetail(Listing listing, Business business, RatingSummary? rating) => new(
         listing.Id,
         business.Id,
         business.Name,
@@ -498,7 +505,8 @@ public sealed class ListingService(IOnePondyDbContext db, AuditTrail audit, Time
         listing.IsBookable,
         listing.BasePrice,
         listing.Currency,
-        listing.CancellationPolicy);
+        listing.CancellationPolicy,
+        rating);
 
     private static AvailabilitySlotView ToSlotView(AvailabilitySlot slot) => new(
         slot.Id,

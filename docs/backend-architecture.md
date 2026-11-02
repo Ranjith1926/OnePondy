@@ -4,8 +4,8 @@ Audience: developers and operations. Scope: everything built through Phase 8 (ac
 tourism content, itineraries and AI planner, partner onboarding, listings, availability, the
 booking engine, Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
 push notifications and partner statements, and Phase 8: restaurants, food orders and their payment,
-delivery drivers, deliveries, cash on delivery and administrators' order monitoring). Reviews and rides are
-**not built** and are marked as such. Live payments are switched off by design until the go-live gate in
+delivery drivers, deliveries, cash on delivery and administrators' order monitoring) and, from Phase 10, reviews (the server side; their
+screens and the rest of the phase come later). Rides are **not built** and are marked as such. Live payments are switched off by design until the go-live gate in
 [phase-7-plan.md](phase-7-plan.md) §9 is met.
 
 Related documents: [database-architecture.md](database-architecture.md),
@@ -137,6 +137,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Planning | `ItineraryService`, `SavedPlacesService`, `TripPlannerService` |
 | Partners | `BusinessService`, `ListingService`, `SavedListingsService` |
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
+| Reviews | `ReviewService` (customer, public, business and moderator sides), `ReviewChecks` (the automatic text check), `ReviewRatings` (displayed averages), `ReviewOptions` |
 | Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens), `FoodOrderAdminService` (administrators' list, detail, cancel, re-offer) with `OrderAttentionRules`, `CashService` (the cash a driver holds and recording what they hand in) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
 | Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
@@ -326,6 +327,16 @@ A restaurant is a business of type restaurant plus a profile, delivery areas and
 
 **Paying (step 8.3)** reuses the Phase 7 services rather than copying them: a `PaymentAttempt`, `Refund`, `LedgerEntry`, `SettlementItem` and `ReconciliationException` belongs to a booking or a food order, and `PaymentService` branches on which once it has the attempt (start, capture, the check before expiry, "is it paid yet?", refund completion). Webhooks, the refund sweep and reconciliation are unchanged: they work from the gateway's ids and find the order through the attempt. `LedgerService.PostFoodCaptureAsync` books the provisional split (commission on the dishes; dishes and packaging to the restaurant; delivery fee to `delivery_fees`; GST to `tax_payable`); `PostFoodRefundAsync` reverses it exactly, since a food refund is always in full (F8). Cancelling a paid order plans its refund first (`RefundService.PlanFoodCancellationAsync`, refused while `Payments:RefundsEnabled` is off), saves the cancellation, refund and closed payment together, then sends the refund. `SettlementService` puts a delivered order on the restaurant's statement (its side only: dishes and packaging, less commission). Food orders send no push notifications yet. Flow: [workflows.md](workflows.md) §25; plan: [phase-8-plan.md](phase-8-plan.md).
 
+### 7.12 Reviews (Phase 10, step 10.1)
+
+A customer reviews a booking that reached `completed` or a food order that was `delivered` (`ReviewService`), once, within the review window; the
+transaction must be theirs, and a unique index in the database makes "once" true even for simultaneous requests. A review is checked automatically
+(`ReviewChecks`: phone numbers, e-mail addresses, links and an operator-written word list) only to give the moderator flags, and always waits in the
+moderators' queue (administrators and content editors) until published. A published review can be answered once by the business and taken down by a
+moderator; the author may change it once and delete it while it is waiting or published. Ratings (`ReviewRatings`) come only from published reviews and
+appear on the public listing and restaurant views once there are enough. Account deletion removes the person's reviews. Workflow: [workflows.md](workflows.md) §26;
+decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md).
+
 ## 8. AI trip planner
 
 `TripPlannerService` is deliberately defensive; the model only ranks and arranges places the
@@ -385,6 +396,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Twilio` | `AccountSid`, `AuthToken`, and either `From` (`Auth:Otp:Delivery` = `Twilio`) or `VerifyServiceSid` (`TwilioVerify`). Development only; secrets, never committed. |
 | `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
 | `Food` | `CashOnDelivery` (`MaxOrderAmount` 2000: the largest order payable in cash; `MaxDriverCashHeld` 5000: a driver holding this much is given no more cash orders until they hand some in; cash is offered only while the `cashOnDelivery` module is on and the restaurant opts in), `RequireOnlinePayment` (default true: food can be priced, ordered and accepted only while the `payments` module is available; `false` allows the unpaid path for development), `Attention` (`NoDriverAfter` 10 min, `PickupOverdueAfter` 30, `DeliveryOverdueAfter` 60, `KitchenOverdueAfter` 20, `RefundOverdueAfter` 1 h: when the console flags an order), `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
+| `Reviews` | `WindowDays` (30: how long after completion a review may be written), `EditWindow` (24 h: the author's one change), `MinCountToShow` (3: published reviews needed before an average is shown), `BlockedWords` (empty: words the automatic check flags) |
 | `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
 | `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
 | `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
@@ -429,6 +441,7 @@ administrator.
 | GET `/places`, `/places/{idOrSlug}` | P | Published, verified places; filters `category`, `q`, `lang`, `lat`+`lng`, paging. |
 | GET `/listings`, `/listings/{id}`, `/listings/{id}/availability` | P | Published listings and open slots. |
 | GET `/itineraries/shared/{token}` | P | Read a shared itinerary. |
+| GET `/reviews?listingId=` or `?restaurantId=` | P | Published reviews of a listing or restaurant, newest first, with the rating once there are enough (Phase 10). |
 
 ### Staff console
 | Method and path | Auth | Purpose |
@@ -440,6 +453,7 @@ administrator.
 | `/admin/staff` list, add, change role, remove; GET `/admin/audit` | S-A | Staff management and audit log. |
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
 | `/admin/food-orders` list (`?status=`, `?needsAttention=true`), `/attention-count`, get, `/{id}/cancel`, `/{id}/release-delivery` | S-A | Order monitoring (step 8.9). Get returns the customer's address and phone and, while a delivery is under way, the driver's last position (each look is audited); cancel needs a reason and refunds a paid order in full when refunds are on; release only before the food is collected. |
+| `/admin/reviews` list (`?status=`, default `pending`), POST `/{id}/publish`, `/reject`, `/remove` | S-W | The moderators' queue for reviews (Phase 10). Reject and remove need a reason. |
 | `/admin/cash/drivers` list (`?onlyHolding=`), POST `/{driverUserId}/deposits` | S-A | The cash drivers hold (step 8.8) and recording cash handed in (never more than held; audited). |
 | `/admin/drivers` list (`?status=`), get, `/{userId}/approve`, `/reject`, `/suspend`, `/reinstate` | S-A | Driver review (step 8.6). Reject and suspend need a reason; suspending ends the shift at once; every step is audited. |
 | `/admin/listings` list, get, publish, send-back, suspend, reinstate | S-A | Listing moderation. |
@@ -451,6 +465,7 @@ administrator.
 | Method and path | Auth | Purpose |
 |---|---|---|
 | `/saved-places`, `/saved-listings` | U | Bookmarks. |
+| POST `/reviews`, GET `/reviews/mine`, PUT and DELETE `/reviews/{id}` | U (own) | Write a review of a completed booking or delivered order, list own, change once, withdraw (Phase 10). |
 | `/itineraries` CRUD, save, archive, unarchive, stops, stops/order, share | U | Trip plans. |
 | POST `/trip-planner/plan` | U | AI draft itinerary. |
 | POST/GET `/bookings`, GET `/bookings/{id}`, POST `/bookings/{id}/cancel` | U | Create, list, view, cancel own bookings. The detail includes the receipt and refunds. |
@@ -476,6 +491,7 @@ administrator.
 | `/partner/businesses` list, apply, get, update; documents upload, download, remove | O (list and apply: U) | Onboarding and profile. |
 | `/partner/businesses/{id}/listings` CRUD, submit, slots CRUD | O | Listings and availability. |
 | `/partner/businesses/{id}/bookings` list, get, accept, reject, cancel, complete | O | Handle incoming bookings. |
+| `/partner/businesses/{id}/reviews` list, POST `/{reviewId}/reply` | O | Read published reviews and answer each once; a business cannot change or remove a review. |
 | `/partner/businesses/{id}/statements` list, get, `/{id}/csv` | O | Own approved and paid statements. |
 | `/partner/businesses/{id}/restaurant` get, put; `/menu` get; `/menu/categories`, `/menu/items` create, update, delete (categories), `/availability`, `/archive` | O | A restaurant's profile, areas and menu. |
 | `/partner/businesses/{id}/orders` list (`?status=`), get, accept, reject, preparing, ready, cancel | O | The restaurant's order inbox. Reject and cancel need a reason; every call takes the order's `version`. Each list row carries its dishes (by name), `version` and `estimatedReadyAt`, so the console can act from the list alone; it never carries the customer's address or phone. |
@@ -501,7 +517,7 @@ yet).
 - **Live payments and payouts.** Everything above is sandbox. Needs the legal and tax review, sign-off of the commission (D21) and refund rule (D22), partner agreements, Razorpay live KYC and an end-to-end settlement checked against Razorpay's report (go-live gate, phase-7-plan.md §9).
 - Razorpay Route payouts (D21); GST and tax collected at source on commission.
 - Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
-- Reviews and ratings, rides.
+- Rides. Reviews are built on the server only (Phase 10, step 10.1); their screens, support tickets, rate limits for all endpoints and monitoring are the rest of Phase 10 ([phase-10-plan.md](phase-10-plan.md)).
 - **Phase 8 gaps:** the legal and tax review of cash on delivery (it is built, off until an administrator switches it on); a daily cash report and alerts for cash held too long; banking the cash; notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); reassigning a delivery to a chosen driver; a map for customers (D6). See
   [phase-8-plan.md](phase-8-plan.md) §4 and the Phase 8 verification in the README.
 - A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.

@@ -1,5 +1,7 @@
 using OnePondy.Application.Identity;
+using Microsoft.EntityFrameworkCore;
 using OnePondy.Domain.Identity;
+using OnePondy.Domain.Reviews;
 
 namespace OnePondy.UnitTests.Identity;
 
@@ -27,6 +29,26 @@ public class AccountServiceTests
         Assert.True(harness.Accounts.IsDeleted(signedIn.User.Id));
         Assert.False(await harness.Auth.IsSessionActiveAsync(sessionId, None));
         Assert.Contains(Phone, harness.Sender.DeletionConfirmations);
+    }
+
+    [Fact]
+    public async Task Deleting_the_account_deletes_the_persons_reviews_and_nobody_elses()
+    {
+        var harness = new AuthHarness();
+        var signedIn = await harness.SignInAsync();
+        var someoneElse = Guid.NewGuid();
+        var now = harness.Time.GetUtcNow();
+        harness.Db.Reviews.Add(Review.ForFoodOrder(signedIn.User.Id, Guid.NewGuid(), Guid.NewGuid(), 5, "Lovely.", "Anita", null, now, now));
+        harness.Db.Reviews.Add(Review.ForFoodOrder(someoneElse, Guid.NewGuid(), Guid.NewGuid(), 4, "Fine.", "Ravi", null, now, now));
+        await harness.Db.SaveChangesAsync(None);
+        harness.Time.Advance(TimeSpan.FromMinutes(1));
+
+        var requested = await harness.AccountService.RequestDeletionCodeAsync(signedIn.User.Id, None);
+        var error = await harness.AccountService.DeleteAccountAsync(signedIn.User.Id, requested.Value!.ChallengeId, harness.Sender.LastCodes[Phone], None);
+
+        Assert.Null(error);
+        var left = await harness.Db.Reviews.AsNoTracking().ToListAsync(None);
+        Assert.Equal(someoneElse, Assert.Single(left).CustomerUserId);
     }
 
     [Fact]

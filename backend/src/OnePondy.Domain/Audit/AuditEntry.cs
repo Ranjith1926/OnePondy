@@ -63,6 +63,7 @@ public static class AuditEntityTypes
     public const string Driver = "driver";
     public const string FoodOrder = "food_order";
     public const string DriverCash = "driver_cash";
+    public const string Review = "review";
 }
 
 public static class AuditActions
@@ -119,4 +120,8 @@ public static class AuditActions
     public const string DeliveryReleasedByAdmin = "food_order.delivery_released_by_admin";
     public const string DriverLocationViewed = "food_order.driver_location_viewed";
     public const string DriverCashDepositRecorded = "driver_cash.deposit_recorded";
+    public const string ReviewPublished = "review.published";
+    public const string ReviewRejected = "review.rejected";
+    public const string ReviewRemoved = "review.removed";
+    public const string ReviewReplied = "review.replied";
 }

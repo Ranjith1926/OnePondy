@@ -2925,6 +2925,157 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.ToTable("saved_places", (string)null);
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Reviews.Review", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthorName")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("author_name");
+
+                    b.Property<string>("AutoCheckFlags")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("auto_check_flags");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CustomerUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_user_id");
+
+                    b.Property<DateTimeOffset?>("EditedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("edited_at");
+
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
+
+                    b.Property<Guid?>("ListingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("listing_id");
+
+                    b.Property<DateTimeOffset?>("ModeratedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("moderated_at");
+
+                    b.Property<Guid?>("ModeratedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("moderated_by_user_id");
+
+                    b.Property<string>("ModerationReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("moderation_reason");
+
+                    b.Property<DateTimeOffset?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<int>("Rating")
+                        .HasColumnType("integer")
+                        .HasColumnName("rating");
+
+                    b.Property<DateTimeOffset?>("RepliedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("replied_at");
+
+                    b.Property<Guid?>("RepliedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("replied_by_user_id");
+
+                    b.Property<string>("ReplyText")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("reply_text");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Text")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("text");
+
+                    b.Property<DateTimeOffset>("TransactionCompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("transaction_completed_at");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_reviews");
+
+                    b.HasIndex("BookingId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_reviews_booking")
+                        .HasFilter("booking_id IS NOT NULL");
+
+                    b.HasIndex("CustomerUserId")
+                        .HasDatabaseName("ix_reviews_customer");
+
+                    b.HasIndex("FoodOrderId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_reviews_food_order")
+                        .HasFilter("food_order_id IS NOT NULL");
+
+                    b.HasIndex("ModeratedByUserId")
+                        .HasDatabaseName("ix_reviews_moderated_by_user_id");
+
+                    b.HasIndex("RepliedByUserId")
+                        .HasDatabaseName("ix_reviews_replied_by_user_id");
+
+                    b.HasIndex("ListingId", "Status")
+                        .HasDatabaseName("ix_reviews_listing_status");
+
+                    b.HasIndex("Status", "CreatedAt")
+                        .HasDatabaseName("ix_reviews_status_created");
+
+                    b.HasIndex("BusinessId", "Status", "PublishedAt")
+                        .HasDatabaseName("ix_reviews_business_status_published");
+
+                    b.ToTable("reviews", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_review_moderation", "(status = 'pending' AND moderated_by_user_id IS NULL AND moderated_at IS NULL AND published_at IS NULL AND moderation_reason IS NULL) OR (status = 'published' AND moderated_by_user_id IS NOT NULL AND moderated_at IS NOT NULL AND published_at IS NOT NULL AND moderation_reason IS NULL) OR (status = 'rejected' AND moderated_by_user_id IS NOT NULL AND moderated_at IS NOT NULL AND published_at IS NULL AND moderation_reason IS NOT NULL) OR (status = 'removed' AND moderated_by_user_id IS NOT NULL AND moderated_at IS NOT NULL AND published_at IS NOT NULL AND moderation_reason IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_review_rating", "rating BETWEEN 1 AND 5");
+
+                            t.HasCheckConstraint("ck_review_reply", "((reply_text IS NULL) = (replied_at IS NULL)) AND ((reply_text IS NULL) = (replied_by_user_id IS NULL)) AND (reply_text IS NULL OR (status IN ('published', 'removed') AND char_length(reply_text) BETWEEN 1 AND 1000))");
+
+                            t.HasCheckConstraint("ck_review_status", "status IN ('pending', 'published', 'rejected', 'removed')");
+
+                            t.HasCheckConstraint("ck_review_subject", "((booking_id IS NOT NULL) <> (food_order_id IS NOT NULL)) AND ((booking_id IS NOT NULL) = (listing_id IS NOT NULL))");
+
+                            t.HasCheckConstraint("ck_review_text", "text IS NULL OR char_length(text) BETWEEN 1 AND 1000");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.TripPlanner.TripPlannerRequestLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -3942,6 +4093,53 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_saved_places_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Reviews.Review", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reviews_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_reviews_businesses_business_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_reviews_app_users_customer_user_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reviews_food_orders_food_order_id");
+
+                    b.HasOne("OnePondy.Domain.Listings.Listing", null)
+                        .WithMany()
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reviews_listings_listing_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ModeratedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reviews_app_users_moderated_by_user_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RepliedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_reviews_app_users_replied_by_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.TripPlanner.TripPlannerRequestLog", b =>

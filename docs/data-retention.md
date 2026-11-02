@@ -78,6 +78,15 @@ The public page never reveals whether an account exists for a phone number or em
 | Payments, refunds and ledger lines for orders | No end date decided | The same Phase 7 records and rules as for bookings (see below); a food order's refund is always in full. |
 | What a restaurant sees of an order | Not stored separately | The restaurant's views leave out the customer's address and phone, in the API and in the console. Only OnePondy's drivers (after they take a delivery) and administrators see them. |
 
+## Reviews (Phase 10, step 10.1)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| A review: rating, text, the author's first name, the automatic check's flags | Until the author deletes it or deletes their account | Deleting an account removes all of the person's reviews. An author can delete a review that is waiting or published. |
+| A review a moderator rejected or took down, and the reason | Until the author's account is deleted | Kept so that deleting and posting again cannot get round a moderator's decision; the author can still see the reason. |
+| A business's reply | With the review | Removed with it. |
+| Who published, rejected, took down or answered a review | With the audit log | Audit entries carry the review and business ids and the rating, never the text or the author's account. |
+
 ## Cash on delivery (Phase 8, step 8.8)
 
 | Data | Kept for | Notes |

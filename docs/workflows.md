@@ -34,7 +34,8 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 23. [Notifications (Expo push)](#23-notifications-expo-push)
 24. [Partner statements and payouts](#24-partner-statements-and-payouts)
 25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-85)
-26. [Not built](#26-not-built)
+26. [Reviews (Phase 10)](#26-reviews-phase-10-step-101)
+27. [Not built](#27-not-built)
 
 ---
 
@@ -1028,7 +1029,27 @@ Notifications about orders (so a restaurant learns of a new order only by lookin
 
 ---
 
-## 26. Not built
+## 26. Reviews (Phase 10, step 10.1)
+
+The server side is built; the apps' and console's screens come in step 10.2. Decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md).
+
+1. **Who may review.** The customer who made a booking that is `completed`, or a food order that is `delivered`, within 30 days of that moment, and only once. A
+   booking or order that is not theirs answers "not found". One that is not finished answers `review_not_eligible`; one already reviewed, `review_already_exists`
+   (also when two requests arrive together: the database allows one); one past the window, `review_window_closed`.
+2. **Writing it.** A rating from 1 to 5 and optional text up to 1000 characters. The author is shown by the first name on their account, or "A customer".
+3. **The automatic check** looks for phone numbers, e-mail addresses, web links and any words on the operator's list, and records what it found for the
+   moderator. It never publishes or rejects anything.
+4. **Moderation.** Every review waits in the moderators' queue (administrators and content editors), oldest first. A moderator publishes it, or rejects it with a reason
+   the author can see. Nothing is public before that. Each decision is audited.
+5. **What the public sees.** Published reviews of a listing or a restaurant, newest first: rating, text, the author's first name and the business's reply. The
+   average and count appear on the listing and restaurant once there are three published reviews.
+6. **Replies.** The business owner answers a published review once. The business cannot change, hide or delete a review, or change its own reply.
+7. **The author's changes.** One change to the rating or text within 24 hours of posting: the review goes back to waiting (a published one is hidden until it is
+   approved again) and any reply to the old words is cleared. The author can delete a review that is waiting or published. A rejected or removed review stays on record.
+8. **Taking down.** A moderator can take down a published review with a reason; it leaves the average at once and the author sees the reason.
+9. **Account deletion** removes all of the person's reviews (section 4).
+
+## 27. Not built
 
 | Area | Status |
 |---|---|
@@ -1036,7 +1057,7 @@ Notifications about orders (so a restaurant learns of a new order only by lookin
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Reviews and ratings, rides | Later phases. Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
+| Rides; the review and support screens; support tickets; rate limits on all endpoints; monitoring | Later phases (reviews are built on the server only: section 26). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
 | Notifications about orders and deliveries; a daily cash report; driver document upload | Not built (Phase 8 gaps: see section 25.12 and phase-8-plan.md §4). Cash on delivery is built (section 25.11) but needs the legal and tax review before real use. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

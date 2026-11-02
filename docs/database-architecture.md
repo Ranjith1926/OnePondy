@@ -406,6 +406,20 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 - **`trg_driver_cash_never_negative`** (deferred constraint trigger on `ledger_entries`, for `driver_cash:` accounts): at commit, under an advisory lock on the account, raises if the account's sum is below nothing, so a driver cannot hand in more than they hold even when two
   deposits commit at once.
 
+**Reviews (Phase 10, step 10.1, migration 21, `AddReviews`).**
+
+- **`reviews`** – one customer's rating and comment on one completed transaction: `customer_user_id`; exactly one of `booking_id` and `food_order_id` (a booking
+  also carries its `listing_id`; a food order's subject is its `business_id`); `rating` (1 to 5); `text` (up to 1000, optional); `author_name` (a first name, or "A
+  customer"); `status` (`pending`, `published`, `rejected`, `removed`); `auto_check_flags` (what the automatic check found, for the moderator);
+  `moderation_reason`, `moderated_by_user_id`, `moderated_at`, `published_at`; the business's one reply (`reply_text`, `replied_at`, `replied_by_user_id`);
+  `transaction_completed_at` (the review window counts from it); `created_at`, `updated_at`, `edited_at` (set when the author used their one edit); and the `xmin` version.
+- **Rules the database enforces:** `ux_reviews_booking` and `ux_reviews_food_order` (one review per transaction, even when requests arrive together);
+  `ck_review_rating`, `ck_review_text`, `ck_review_status`; `ck_review_subject` (a booking or a food order, never both, and a booking brings its listing);
+  `ck_review_moderation` (a waiting review has no moderator or publication time; a published one has both; a rejected or removed one has a moderator and a reason,
+  and only a removed one was ever published); `ck_review_reply` (a reply is all three columns or none, and only on a review that was published).
+- **Indexes** for the public pages and ratings (`ix_reviews_listing_status`, `ix_reviews_business_status_published`), the moderators' queue (`ix_reviews_status_created`)
+  and a customer's own reviews (`ix_reviews_customer`). There is no trigger: who may change what is decided in `ReviewService` (a business has no endpoint that changes a review).
+
 **Administrators' monitoring (step 8.9, migration 19).** No new tables: the `customer_history` view (§3.9) lists food orders, and `ck_refund_reason` allows `admin_cancelled`.
 
 ## 4. Foreign-key delete policy
@@ -418,6 +432,7 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 | `places` → translations, fees, media, saved, stops | CASCADE | Owned or bookmark data. |
 | `businesses` → `business_documents` | CASCADE | Owned data. |
 | `businesses` → `listings`, `listings` → `availability_slots` | RESTRICT | Commercial history must survive. |
+| `app_users`, `bookings`, `food_orders`, `businesses`, `listings` → `reviews` | RESTRICT | A review is removed by the service when its author's account is deleted; nothing else cascades. |
 | `listings`/`availability_slots` → bookings, `booking_slots` | RESTRICT | A booking can never lose its listing or slot. |
 | `bookings` → `booking_slots`, `booking_status_history` | RESTRICT | History is immutable. |
 | `bookings`, `food_orders`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
@@ -473,6 +488,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 18 | `20261030101407_AddDeliveryJobs` | `delivery_jobs` (one per food order) with checks (status, who holds it, a time for every step, the driver's position only while accepted or picked up, complete and on Earth); unique indexes for one job per order and one live job per driver; a trigger that allows only the forward steps, never gives a taken job to a second driver, freezes finished jobs and refuses deletes and truncates; gives each order already ready for pickup its open job. |
 | 19 | `20261030112541_ExtendCustomerHistoryAndAdminRefundReason` | The `customer_history` view now also lists food orders (kind `food_order`); `ck_refund_reason` allows `admin_cancelled`. |
 | 20 | `20261102044345_AddCashOnDelivery` | `food_orders.payment_method` (`online` for every existing row), `cash_collected`, `cash_collected_at`, `cash_collected_by`; `restaurant_profiles.accepts_cash_on_delivery`; `driver_cash_deposits`; the ledger accounts `driver_cash:{driver}` and `cash_received`; the `cashOnDelivery` module flag (off); triggers that keep deposits immutable and a driver's cash account from going below nothing. |
+| 21 | `20261102130258_AddReviews` | `reviews`: one review per completed booking or delivered food order, with unique indexes, checks and the moderation and reply columns. No triggers. |
 
 Rules for new migrations:
 
@@ -490,7 +506,7 @@ Details are in [data-retention.md](data-retention.md). In short:
 - The Worker purges `otp_challenges` older than 1 day, consumed/expired `refresh_tokens` older
   than 30 days and ended `user_sessions` older than 90 days (hourly).
 - Account deletion anonymises `app_users` (`display_name` becomes "Deleted user", phone and e-mail
-  are cleared, `is_active = false`, `deleted_at` set, security stamp rotated) and removes saved places, saved listings and itineraries. Sessions are
+  are cleared, `is_active = false`, `deleted_at` set, security stamp rotated) and removes saved places, saved listings, itineraries and reviews. Sessions are
   revoked with reason `account_deleted`. Bookings, audit rows and partner records are kept.
 - The Worker removes `notification_log` rows and finished `outbox_messages` after 30 days. Payment, refund, ledger and
   statement rows have no end date yet (they need the tax review) and are linked to the anonymised customer row.

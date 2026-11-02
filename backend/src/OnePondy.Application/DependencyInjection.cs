@@ -30,6 +30,7 @@ public static class DependencyInjection
         services.Configure<PaymentsOptions>(configuration.GetSection(PaymentsOptions.SectionName));
         services.Configure<OnePondy.Application.Food.FoodOptions>(configuration.GetSection(OnePondy.Application.Food.FoodOptions.SectionName));
         services.Configure<NotificationOptions>(configuration.GetSection(NotificationOptions.SectionName));
+        services.Configure<OnePondy.Application.Reviews.ReviewOptions>(configuration.GetSection(OnePondy.Application.Reviews.ReviewOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddScoped<IAccountDeletionGuard, BookingsDeletionGuard>();
@@ -68,6 +69,7 @@ public static class DependencyInjection
         services.AddScoped<OnePondy.Application.Delivery.DeliveryService>();
         services.AddScoped<OnePondy.Application.Food.FoodOrderAdminService>();
         services.AddScoped<OnePondy.Application.Delivery.CashService>();
+        services.AddScoped<OnePondy.Application.Reviews.ReviewService>();
         services.AddScoped<PaymentAdminService>();
         services.AddScoped<NotificationOutbox>();
         services.AddScoped<DeviceService>();

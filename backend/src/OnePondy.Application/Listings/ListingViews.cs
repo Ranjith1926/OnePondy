@@ -1,3 +1,4 @@
+using OnePondy.Application.Reviews;
 using OnePondy.Domain.Listings;
 
 namespace OnePondy.Application.Listings;
@@ -38,7 +39,8 @@ public sealed record PublicListingSummary(
     string Title,
     bool IsBookable,
     decimal? BasePrice,
-    string Currency);
+    string Currency,
+    RatingSummary? Rating = null);
 
 public sealed record PublicListingDetail(
     Guid Id,
@@ -51,7 +53,8 @@ public sealed record PublicListingDetail(
     bool IsBookable,
     decimal? BasePrice,
     string Currency,
-    CancellationPolicy? CancellationPolicy);
+    CancellationPolicy? CancellationPolicy,
+    RatingSummary? Rating = null);
 
 public sealed record AvailabilitySlotView(
     Guid Id,

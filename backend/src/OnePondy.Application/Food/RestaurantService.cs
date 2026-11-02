@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using OnePondy.Application.Audit;
+using Microsoft.Extensions.Options;
 using OnePondy.Application.Common;
+using OnePondy.Application.Reviews;
 using OnePondy.Domain.Audit;
 using OnePondy.Domain.Businesses;
 using OnePondy.Domain.Food;
@@ -11,8 +13,10 @@ namespace OnePondy.Application.Food;
 /// A restaurant's profile and its public listing (spec Phase 8, step 8.1). A partner sets up and opens their own restaurant;
 /// customers see only restaurants that are open, approved, active and deliver to their area.
 /// </summary>
-public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, TimeProvider time)
+public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, TimeProvider time, IOptions<ReviewOptions>? reviews = null)
 {
+    private int MinReviewsToShow => (reviews?.Value ?? new ReviewOptions()).MinCountToShow;
+
     /// <summary>The most restaurants one public list returns.</summary>
     public const int MaxPublicRestaurants = 200;
 
@@ -135,10 +139,11 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
     {
         var open = await OpenRestaurantsQuery(null).ToListAsync(cancellationToken);
         var areasByBusiness = await AreasOfAsync(open.Select(o => o.Business.Id).ToList(), cancellationToken);
+        var ratings = await ReviewRatings.ForRestaurantsAsync(db, [.. open.Select(o => o.Business.Id)], MinReviewsToShow, cancellationToken);
         return
         [
             .. open
-                .Select(o => ToPublic(o.Business, o.Profile, areasByBusiness.GetValueOrDefault(o.Business.Id, [])))
+                .Select(o => ToPublic(o.Business, o.Profile, areasByBusiness.GetValueOrDefault(o.Business.Id, []), ratings.GetValueOrDefault(o.Business.Id)))
                 .Where(r => FoodAreas.Serves(r.DeliveryAreas, area))
                 .Take(MaxPublicRestaurants),
         ];
@@ -154,7 +159,8 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
         }
 
         var areas = await AreasOfAsync([businessId], cancellationToken);
-        return ToPublic(found.Business, found.Profile, areas.GetValueOrDefault(businessId, []));
+        var ratings = await ReviewRatings.ForRestaurantsAsync(db, [businessId], MinReviewsToShow, cancellationToken);
+        return ToPublic(found.Business, found.Profile, areas.GetValueOrDefault(businessId, []), ratings.GetValueOrDefault(businessId));
     }
 
     /// <summary>
@@ -225,12 +231,13 @@ public sealed class RestaurantService(IOnePondyDbContext db, AuditTrail audit, T
     private static RestaurantProfileView NotConfigured(Guid businessId) =>
         new(false, businessId, 30, 0m, false, [], false, 0);
 
-    private static PublicRestaurant ToPublic(Business business, RestaurantProfile profile, IReadOnlyList<string> areas) => new(
+    private static PublicRestaurant ToPublic(Business business, RestaurantProfile profile, IReadOnlyList<string> areas, RatingSummary? rating = null) => new(
         business.Id,
         business.Name,
         business.Description,
         business.FssaiLicenseNumber,
         profile.PrepTimeMinutes,
         profile.MinOrderAmount,
-        areas);
+        areas,
+        rating);
 }
