@@ -1089,9 +1089,9 @@ Built on the server, in the customer app and in the console. Decisions and as-bu
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |
 
-## 29. Rides (Phase 9, steps 9.1 and 9.2)
+## 29. Rides (Phase 9)
 
-Switched off: the `rides` module is off until the owner has the licence, insurance and verified drivers (spec section 21). When it is on:
+Switched off: the `rides` module is off until the owner has the licence, insurance and verified drivers (spec section 21). In the customer app a rider uses "Book a ride"; in the driver app a driver uses ride mode; staff use the console's Ride drivers and Ride safety pages; a person a trip is shared with opens a public page (`/trip/{token}`). When it is on:
 
 1. **A driver applies** in ride mode with vehicle class, registration, licence, permit and insurance (and the date it ends). An administrator checks the documents and approves, or rejects with a reason. A driver can
    start a shift only while approved and insured; changing a document sends them back to review. A lapsed policy takes them off duty.

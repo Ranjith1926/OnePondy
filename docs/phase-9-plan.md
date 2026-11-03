@@ -1,6 +1,6 @@
 # Phase 9 plan: Transport (rides)
 
-Status: **steps 9.1 to 9.3 (ride drivers, fares, requests, dispatch, the trip, and safety with live updates) built on the server 2026-11-03; the console (9.4) built 2026-11-03; the apps (9.5, 9.6) are planned.** Anything below that is not marked built is still a plan. Spec: Phase 9 (§9), the Ride workflow (§7), Safety (§§ on location and privacy), and the legal table (§21: aggregator
+Status: **steps 9.1 to 9.3 (ride drivers, fares, requests, dispatch, the trip, and safety with live updates) built on the server 2026-11-03; the console (9.4), the customer and driver apps (9.5, 9.6) and the release readiness document (9.7) built 2026-11-03. Phase 9 is built; launching it is not (section 5).** Anything below that is not marked built is still a plan. Spec: Phase 9 (§9), the Ride workflow (§7), Safety (§§ on location and privacy), and the legal table (§21: aggregator
 licence, driver verification and insurance).
 
 **Read this first.** Spec Phase 9 is *Release 4* and says "Do not launch publicly until applicable legal and operational requirements are met." This phase builds the software so that the work is not waiting on
@@ -39,9 +39,9 @@ These were made without waiting for the owner (they asked for the work to contin
 | 9.2 | Fares, requests, dispatch and the trip lifecycle: quotes, ride requests, offers to eligible drivers, first-to-accept, arrive, start, complete, cancel, expiry (Worker), history view. Migration. | Only eligible drivers see and can accept a job; two accepting at once: one wins; every legal and illegal move; expiry; history lists rides. **Built (2026-11-03).** |
 | 9.3 | Safety and live updates: SOS, trip sharing, incident reports, the ride hub, operations alert. Migration. | SOS shows on the operations page; a shared link shows only what P9 says and stops when the ride ends; the hub tells only the two people on the ride. **Built on the server (2026-11-03).** |
 | 9.4 | Console: ride driver review, rides list and detail, safety queue; audit wording and filters. | Console tests; a real run. **Built (2026-11-03).** |
-| 9.5 | Customer app: ride booking screens (pickup, destination, quote, request, searching, trip, safety, history). Behind the module flag. | Component and screen tests; a real run with a test driver. |
-| 9.6 | Driver app: ride mode (apply, duty, offers, trip steps, SOS). | Tests; a real run. |
-| 9.7 | Release readiness: what is built, what cannot be done in code, the checklist for the owner. | Documents updated |
+| 9.5 | Customer app: ride booking screens (pickup, destination, quote, request, searching, trip, safety, history). Behind the module flag. | Component and screen tests; a real run with a test driver. **Built (2026-11-03).** |
+| 9.6 | Driver app: ride mode (apply, duty, offers, trip steps, SOS). | Tests; a real run. **Built (2026-11-03).** |
+| 9.7 | Release readiness: what is built, what cannot be done in code, the checklist for the owner. | Documents updated **Built (2026-11-03).** |
 
 ## 4. Not in Phase 9
 
@@ -118,4 +118,30 @@ Details in [backend-architecture.md](backend-architecture.md) §7.15 and [databa
 - **Operations page** links its new "ride emergency" and "incident reports" alerts to `/safety`. The audit log has filters for ride drivers and ride safety, with plain wording for every action and links to the item.
 - **Tests.** The safety actions (permission first, versions, the required note, bad ids refused before any call), the view and map-link helpers, and the alert link. Not done: a real-browser run of these pages.
 - **Not in 9.4:** a console list of all rides (history for support), which waits for a decision on how long rides are kept (data-retention.md).
+
+## 9. As built: steps 9.5 and 9.6 (the apps)
+
+- **Customer app, "Book a ride"** (`features/rides`; opens from the Rides shortcut only while the module is available). One screen with three states that always come from the server's current ride, so reopening the
+  app in the middle of a trip lands on the trip: choosing the trip (pickup from "my location" or a list of landmarks, destination from the list, an optional note), choosing a fare (the server's quotes, each saying
+  whether a driver is near), and following the ride (status in words, the driver's first name and plate, cancel until the trip starts, the emergency button with a confirmation, a call-112 button, sharing the
+  trip, and reporting a problem). A guest is asked to sign in; while the module is off the screen says rides are not open and offers nothing, though a ride already under way can still be followed.
+- **Driver app, ride mode** (`features/rides`; reached from the home screen, or from the delivery application for someone who only wants to drive passengers). The application form (every number required,
+  insurance date checked on the phone and again by the server), review states with the reviewer's reason, an "insurance has ended" warning, the duty switch (locked while a ride is held), the requests near the driver
+  (the pickup's name and distance, the trip length and the cash fare), and the ride: the exact pickup, the note and the rider's first name after accepting, arrived, start, ending with the exact cash confirmed,
+  giving up before arriving, ending with a reason once there, the emergency button and a report form. Position is reported only while on duty and with the app open: to dispatch, and onto the ride while it is held.
+- **Live updates in both apps** (`useRideLive`): a SignalR connection that says "a ride changed" and nothing else; the apps refetch on it and on every reconnect, poll every 10 seconds while it is down and every
+  minute as a safety net while it is up, retry every 30 seconds if it gives up, and show "reconnecting". The same code and test are in both apps.
+- **Shared trips** open at `/trip/{token}` in the console, a public page with no sign-in: first names, the vehicle, the place names, the driver's last position as a map link, refreshing itself every 15 seconds,
+  and "no longer available" for an unknown, turned-off or ended link. It is excluded from the console's sign-in guard and from search engines.
+- **Module flag.** The customer app now lists `rides` as a module it can open, so the Rides shortcut works once the server's flag is on; the flag is off.
+- **Tests.** Customer app: the ride rules and error mapping, the live hook (connect, message, reconnect, retry, switch off), and the screen (guest, module off, choosing, fares and requesting, errors in words, a ride
+  in progress, cancelling, emergency with confirmation, calling, sharing, reporting). Driver app: the rules (insurance date edges, steps), errors, the live hook, the application form (every field, tidying, review
+  warning, version) and the home screen (review states, duty, offers, losing the race, every step of a trip, cash confirmation, emergency, report). Console: the shared-trip page.
+- **Not done in 9.5 and 9.6:** a run on an emulator or device (neither app's ride screens has been seen on a screen), a map picker, background location, and push notifications for ride events (the live connection
+  needs the app open).
+
+## 10. As built: step 9.7
+
+[release-readiness.md](release-readiness.md) works the spec's release gate through for the whole product: what is checked, what needs the owner, a lawyer, a device or a server, the production settings, the flows to
+run on devices, the migrations to apply, and the known gaps. **Phase 9 is built as far as code can take it; launching it is the owner's decision, and section 5 lists what that needs.**
 
