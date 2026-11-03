@@ -5,6 +5,10 @@ import type {
   BusinessType,
   DayOfWeek,
   DriverApprovalStatus,
+  RideVehicleClass,
+  SafetyCategory,
+  SafetyKind,
+  SafetyStatus,
   FoodAreaCode,
   DeliveryJobStatus,
   FoodOrderStatus,
@@ -156,6 +160,45 @@ export const auditActionLabels: Record<string, string> = {
   'settlement.paid': 'Statement paid',
   'settlement.discarded': 'Statement discarded',
   'restaurant.updated': 'Restaurant edited',
+  'ride_driver.applied': 'Ride driver applied',
+  'ride_driver.updated': 'Ride driver details edited',
+  'ride_driver.approved': 'Ride driver approved',
+  'ride_driver.rejected': 'Ride driver rejected',
+  'ride_driver.suspended': 'Ride driver suspended',
+  'ride_driver.reinstated': 'Ride driver reinstated',
+  'ride_safety.sos_raised': 'Emergency button pressed',
+  'ride_safety.incident_reported': 'Ride incident reported',
+  'ride_safety.share_created': 'Trip shared',
+  'ride_safety.viewed': 'Safety report opened',
+  'ride_safety.acknowledged': 'Safety report taken',
+  'ride_safety.resolved': 'Safety report resolved',
+};
+
+export const rideVehicleClassLabels: Record<RideVehicleClass, string> = {
+  auto: 'Auto',
+  cab: 'Cab',
+  bikeTaxi: 'Bike taxi',
+};
+
+export const safetyCategoryLabels: Record<SafetyCategory, string> = {
+  emergency: 'Emergency',
+  unsafeDriving: 'Unsafe driving',
+  harassment: 'Harassment',
+  accident: 'Accident',
+  vehicleProblem: 'Vehicle problem',
+  overcharge: 'Overcharge',
+  other: 'Other',
+};
+
+export const safetyStatusLabels: Record<SafetyStatus, string> = {
+  open: 'Waiting',
+  acknowledged: 'Being handled',
+  resolved: 'Resolved',
+};
+
+export const safetyKindLabels: Record<SafetyKind, string> = {
+  sos: 'Emergency button',
+  incident: 'Incident report',
 };
 
 export const listingTypeLabels: Record<ListingType, string> = {

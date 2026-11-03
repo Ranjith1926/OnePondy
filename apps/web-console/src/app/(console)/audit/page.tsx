@@ -22,6 +22,8 @@ const areas: Record<string, string> = {
   food_order: 'Food orders',
   restaurant: 'Restaurants',
   driver: 'Drivers',
+  ride_driver: 'Ride drivers',
+  ride_safety: 'Ride safety',
   driver_cash: 'Driver cash',
   settlement: 'Statements',
 };
@@ -61,6 +63,23 @@ function entityLink(entry: AuditEntry) {
         className="font-semibold text-brand hover:underline"
       >
         Open request
+      </Link>
+    );
+  }
+  if (entry.entityType === 'ride_safety' && entry.action !== 'ride_safety.share_created') {
+    return (
+      <Link href={`/safety/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+        Open report
+      </Link>
+    );
+  }
+  if (entry.entityType === 'ride_driver') {
+    return (
+      <Link
+        href={`/ride-drivers/${entry.entityId}`}
+        className="font-semibold text-brand hover:underline"
+      >
+        Open driver
       </Link>
     );
   }

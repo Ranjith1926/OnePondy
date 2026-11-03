@@ -14,6 +14,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
   const items: NavItem[] = [
     { href: '/', label: 'Dashboard' },
     { href: '/places', label: 'Places' },
+    ...(canWorkSupport(user.role) ? [{ href: '/safety', label: 'Safety' }] : []),
     ...(canEditContent(user.role) ? [{ href: '/reviews', label: 'Reviews' }] : []),
     ...(canWorkSupport(user.role) ? [{ href: '/support', label: 'Support' }] : []),
     { href: '/configuration', label: 'Configuration' },
@@ -21,6 +22,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
       ? [
           { href: '/partners', label: 'Partners' },
           { href: '/drivers', label: 'Drivers' },
+          { href: '/ride-drivers', label: 'Ride drivers' },
           { href: '/orders', label: 'Orders' },
           { href: '/cash', label: 'Cash' },
           { href: '/listings', label: 'Listings' },

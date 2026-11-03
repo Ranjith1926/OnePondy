@@ -936,4 +936,109 @@ export interface OperationsSnapshot {
     since: string;
     classes: { name: string; requests: number; rejected: number; lastRejectedAt: string | null }[];
   };
+  rideSafety: SafetyCounts;
+}
+
+// --- Rides (Phase 9) ---
+
+export type RideVehicleClass = 'auto' | 'cab' | 'bikeTaxi';
+
+export interface RideDriverSummary {
+  userId: string;
+  fullName: string;
+  vehicleClass: RideVehicleClass;
+  approvalStatus: DriverApprovalStatus;
+  isOnDuty: boolean;
+  insuranceValidUntil: string;
+  insuranceEnded: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RideDriverDetail {
+  userId: string;
+  version: number;
+  fullName: string;
+  vehicleClass: RideVehicleClass;
+  vehicleNumber: string;
+  licenceNumber: string;
+  permitNumber: string;
+  insurancePolicyNumber: string;
+  insuranceValidUntil: string;
+  insuranceEnded: boolean;
+  approvalStatus: DriverApprovalStatus;
+  reviewNote: string | null;
+  isOnDuty: boolean;
+  onDutySince: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type SafetyKind = 'sos' | 'incident';
+export type SafetyCategory =
+  | 'emergency'
+  | 'unsafeDriving'
+  | 'harassment'
+  | 'accident'
+  | 'vehicleProblem'
+  | 'overcharge'
+  | 'other';
+export type SafetyStatus = 'open' | 'acknowledged' | 'resolved';
+export type RideParty = 'rider' | 'driver';
+
+export interface SafetySummary {
+  id: string;
+  rideId: string;
+  kind: SafetyKind;
+  category: SafetyCategory;
+  reportedBy: RideParty;
+  status: SafetyStatus;
+  details: string | null;
+  createdAt: string;
+  acknowledgedAt: string | null;
+}
+
+export interface SafetyCounts {
+  openSos: number;
+  openIncidents: number;
+  oldestOpenAt: string | null;
+}
+
+export interface SafetyPerson {
+  userId: string;
+  name: string | null;
+  phoneNumber: string | null;
+  email: string | null;
+}
+
+export interface SafetyDetail {
+  id: string;
+  version: number;
+  kind: SafetyKind;
+  category: SafetyCategory;
+  reportedBy: RideParty;
+  status: SafetyStatus;
+  details: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: string;
+  acknowledgedAt: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  ride: {
+    rideId: string;
+    status: string;
+    vehicleClass: RideVehicleClass;
+    pickupLabel: string;
+    destinationLabel: string;
+    fare: number;
+    requestedAt: string;
+    startedAt: string | null;
+    completedAt: string | null;
+    vehicleNumber: string | null;
+  };
+  rider: SafetyPerson;
+  driver: SafetyPerson | null;
 }

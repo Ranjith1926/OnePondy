@@ -8,6 +8,7 @@ describe('alertLink', () => {
     expect(alertLink('support')?.href).toBe('/support?view=overdue');
     expect(alertLink('orders')?.href).toBe('/orders?attention=1');
     expect(alertLink('reviews')?.href).toBe('/reviews');
+    expect(alertLink('safety')?.href).toBe('/safety');
   });
 
   it('has nowhere to send an alert about the platform itself', () => {

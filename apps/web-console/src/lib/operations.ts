@@ -6,6 +6,7 @@ const areaLinks: Record<string, { href: string; label: string }> = {
   support: { href: '/support?view=overdue', label: 'Open support' },
   orders: { href: '/orders?attention=1', label: 'Open orders that need attention' },
   reviews: { href: '/reviews', label: 'Open the review queue' },
+  safety: { href: '/safety', label: 'Open the safety queue' },
 };
 
 export const alertLink = (area: string): { href: string; label: string } | null =>
