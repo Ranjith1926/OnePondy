@@ -46,13 +46,12 @@ describe('app configuration from the server', () => {
         food: 'hidden',
         tripPlanner: 'hidden',
         notifications: 'hidden',
-        rides: 'available',
       },
       minSupportedAppVersion: '0.1.0',
     });
     await launch();
 
-    expect(await screen.findByRole('button', { name: 'Rides, Soon' })).toBeOnTheScreen();
+    expect(await screen.findByRole('button', { name: 'Stays, Soon' })).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Food, Soon' })).not.toBeOnTheScreen();
     expect(screen.queryByText('Plan my Pondy trip')).not.toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Notifications' })).not.toBeOnTheScreen();

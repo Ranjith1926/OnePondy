@@ -20,6 +20,7 @@ import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScree
 import { HelpScreen } from '../features/support/screens/HelpScreen';
 import { NewRequestScreen } from '../features/support/screens/NewRequestScreen';
 import { TicketScreen } from '../features/support/screens/TicketScreen';
+import { RideScreen } from '../features/rides/screens/RideScreen';
 import { PlaceDetailScreen } from '../features/tourism/screens/PlaceDetailScreen';
 import { SearchScreen } from '../features/tourism/screens/SearchScreen';
 import { TripPlannerFormScreen } from '../features/trip-planner/screens/TripPlannerFormScreen';
@@ -81,6 +82,7 @@ export const RootStack = createNativeStackNavigator({
         Help: HelpScreen,
         NewSupportRequest: NewRequestScreen,
         SupportTicket: TicketScreen,
+        Ride: RideScreen,
         TripPlanner: {
           screen: TripPlannerFormScreen,
           options: { presentation: 'modal' },

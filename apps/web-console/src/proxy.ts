@@ -110,8 +110,8 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Everything except both sign-in pages, the session-ended handler, the public grievance page, photos and Next.js assets.
+  // Everything except both sign-in pages, the session-ended handler, the public grievance page and shared trips, photos and Next.js assets.
   matcher: [
-    '/((?!sign-in|partner/sign-in|session-expired|grievance|media/|_next/static|_next/image|favicon.ico).*)',
+    '/((?!sign-in|partner/sign-in|session-expired|grievance|trip/|media/|_next/static|_next/image|favicon.ico).*)',
   ],
 };

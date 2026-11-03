@@ -23,6 +23,7 @@ export const implementedModules: ReadonlySet<ModuleKey> = new Set<ModuleKey>([
   'stays',
   'food',
   'support',
+  'rides',
 ]);
 
 const isStatus = (value: unknown): value is ModuleStatus =>

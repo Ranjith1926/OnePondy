@@ -28,6 +28,10 @@ export function HomeScreen() {
       navigation.navigate('Restaurants');
       return;
     }
+    if (module === 'rides' && modules.rides === 'available') {
+      navigation.navigate('Ride');
+      return;
+    }
     if (module === 'activities' && modules.activities === 'available') {
       navigation.navigate('Listings', { type: 'activity' });
       return;

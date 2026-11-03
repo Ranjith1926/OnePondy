@@ -1042,3 +1042,17 @@ export interface SafetyDetail {
   rider: SafetyPerson;
   driver: SafetyPerson | null;
 }
+
+/** What someone following a shared trip sees. Once the ride has ended `ended` is true and everything else is empty. */
+export interface SharedRide {
+  ended: boolean;
+  status: string;
+  riderFirstName: string | null;
+  driverFirstName: string | null;
+  vehicleClass: RideVehicleClass | null;
+  vehicleNumber: string | null;
+  pickupLabel: string | null;
+  destinationLabel: string | null;
+  driverLocation: { latitude: number; longitude: number; at: string } | null;
+  updatedAt: string;
+}

@@ -23,6 +23,11 @@ export interface ApiRequestOptions {
   timeoutMs?: number;
 }
 
+/** A valid access token for connections that are not plain requests (the live-updates socket); null when signed out. */
+export async function getApiAccessToken(): Promise<string | null> {
+  return (await authHooks?.getAccessToken()) ?? null;
+}
+
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   if (!options.auth) {
     return parse<T>(await send(path, options, null));

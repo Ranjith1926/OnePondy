@@ -15,7 +15,7 @@ describe('effectiveModuleStatus', () => {
   });
 
   it('never shows a module as available when this app version cannot open it', () => {
-    expect(effectiveModuleStatus({ rides: 'available' }).rides).toBe('comingSoon');
+    expect(effectiveModuleStatus({ notifications: 'available' }).notifications).toBe('comingSoon');
   });
 
   it('opens Stays and Activities now that bookings exist, but only when the server says so', () => {
@@ -31,6 +31,12 @@ describe('effectiveModuleStatus', () => {
     expect(effectiveModuleStatus({ food: 'available' }).food).toBe('available');
     expect(effectiveModuleStatus({ food: 'comingSoon' }).food).toBe('comingSoon');
     expect(effectiveModuleStatus({ food: 'hidden' }).food).toBe('hidden');
+  });
+
+  it('opens rides now that the screens exist, but only when the server says so (it stays off until the owner is ready)', () => {
+    expect(effectiveModuleStatus({ rides: 'available' }).rides).toBe('available');
+    expect(effectiveModuleStatus({ rides: 'comingSoon' }).rides).toBe('comingSoon');
+    expect(effectiveModuleStatus({}).rides).toBe('comingSoon');
   });
 
   it('opens support requests now that they exist, but only when the server says so', () => {
