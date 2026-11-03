@@ -17,6 +17,9 @@ import { ListingDetailScreen } from '../features/listings/screens/ListingDetailS
 import { ListingsScreen } from '../features/listings/screens/ListingsScreen';
 import { LocationSelectorScreen } from '../features/location/screens/LocationSelectorScreen';
 import { OnboardingScreen } from '../features/onboarding/screens/OnboardingScreen';
+import { HelpScreen } from '../features/support/screens/HelpScreen';
+import { NewRequestScreen } from '../features/support/screens/NewRequestScreen';
+import { TicketScreen } from '../features/support/screens/TicketScreen';
 import { PlaceDetailScreen } from '../features/tourism/screens/PlaceDetailScreen';
 import { SearchScreen } from '../features/tourism/screens/SearchScreen';
 import { TripPlannerFormScreen } from '../features/trip-planner/screens/TripPlannerFormScreen';
@@ -75,6 +78,9 @@ export const RootStack = createNativeStackNavigator({
         RestaurantMenu: RestaurantMenuScreen,
         Checkout: CheckoutScreen,
         OrderDetail: OrderDetailScreen,
+        Help: HelpScreen,
+        NewSupportRequest: NewRequestScreen,
+        SupportTicket: TicketScreen,
         TripPlanner: {
           screen: TripPlannerFormScreen,
           options: { presentation: 'modal' },

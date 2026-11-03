@@ -10,9 +10,7 @@ import { useAppState } from '../../../state';
 import { useAuthActions } from '../../auth/hooks/useAuthActions';
 import { formatPhone, useProfile } from '../../auth/hooks/useProfile';
 import { useSelectedArea } from '../../location/hooks/useSelectedArea';
-import { ComingSoonSheet } from '../../modules/components/ComingSoonSheet';
 import { useModuleStatus } from '../../modules/hooks/useAppConfig';
-import type { ModuleKey } from '../../modules/moduleConfig';
 import { AppearanceSheet } from '../components/AppearanceSheet';
 import { LanguageSheet } from '../components/LanguageSheet';
 import { ProfileSummary } from '../components/ProfileSummary';
@@ -29,7 +27,6 @@ export function ProfileScreen() {
   const signOutRequest = useMutation({ mutationFn: signOut });
   const modules = useModuleStatus();
   const [sheet, setSheet] = useState<OpenSheet>(null);
-  const [comingSoon, setComingSoon] = useState<ModuleKey | null>(null);
   const languageName =
     languageOptions.find((option) => option.code === preferences.language)?.nativeName ?? '';
   const version = Constants.expoConfig?.version;
@@ -96,7 +93,7 @@ export function ProfileScreen() {
               leadingIcon="life-buoy"
               title={t('profile.help')}
               trailing={{ kind: 'chevron' }}
-              onPress={() => setComingSoon('support')}
+              onPress={() => navigation.navigate('Help')}
             />
           </ListSection>
         )}
@@ -122,7 +119,6 @@ export function ProfileScreen() {
       </MainTabTemplate>
       <AppearanceSheet visible={sheet === 'appearance'} onClose={() => setSheet(null)} />
       <LanguageSheet visible={sheet === 'language'} onClose={() => setSheet(null)} />
-      <ComingSoonSheet module={comingSoon} onClose={() => setComingSoon(null)} />
     </>
   );
 }

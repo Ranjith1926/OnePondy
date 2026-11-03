@@ -19,6 +19,7 @@ import { formatMoney } from '../../payments/formatMoney';
 import { PaymentCard } from '../../payments/components/PaymentCard';
 import { ReceiptSection } from '../../payments/components/ReceiptSection';
 import { MyReviewSection } from '../../reviews/components/MyReviewSection';
+import { GetHelpButton } from '../../support/components/GetHelpButton';
 import { bookingErrorMessageKey } from '../bookingErrors';
 import { formatDateTime } from '../formatDateTime';
 import { useBooking, useCancelBooking } from '../hooks/useBookings';
@@ -135,6 +136,8 @@ export function BookingDetailScreen({ route }: Props) {
             </View>
           ))}
         </View>
+
+        <GetHelpButton about={{ bookingId: data.id }} label={t('support.getHelpBooking')} />
       </ScrollView>
 
       {canCancel ? (

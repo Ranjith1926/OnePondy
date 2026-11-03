@@ -23,6 +23,7 @@ import { PaymentPanel } from '../../payments/components/PaymentPanel';
 import { ReceiptSection } from '../../payments/components/ReceiptSection';
 import { usePayOrder } from '../../payments/hooks/usePayOrder';
 import { MyReviewSection } from '../../reviews/components/MyReviewSection';
+import { GetHelpButton } from '../../support/components/GetHelpButton';
 import type { OrderDetail } from '../api/foodApi';
 import { DeliveryLine } from '../components/DeliveryLine';
 import { PriceBreakdown } from '../components/PriceBreakdown';
@@ -198,6 +199,8 @@ export function OrderDetailScreen({ route }: Props) {
             </View>
           ))}
         </View>
+
+        <GetHelpButton about={{ foodOrderId: data.id }} label={t('support.getHelpOrder')} />
       </ScrollView>
 
       {data.canCancel ? (

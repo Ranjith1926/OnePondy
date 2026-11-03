@@ -780,5 +780,88 @@
       "timeout": "That took too long. Check your connection and try again.",
       "generic": "Something went wrong. Please try again."
     }
+  },
+  "support": {
+    "title": "Help and support",
+    "yourRequests": "Your requests",
+    "newRequest": "New request",
+    "empty": "You haven't asked for help yet.",
+    "loading": "Loading your requests",
+    "notOpen": "Support requests are not open yet. If you have a complaint, you can write to the grievance officer below.",
+    "signInPrompt": "Sign in to send a request and follow the answers.",
+    "signInTitle": "Sign in to ask for help",
+    "signInMessage": "Sign in so we know who we are helping and can show you our answers.",
+    "getHelpBooking": "Get help with this booking",
+    "getHelpOrder": "Get help with this order",
+    "error": {
+      "title": "Couldn't load your requests",
+      "message": "Check your connection and try again."
+    },
+    "status": {
+      "open": "Waiting for OnePondy",
+      "waitingForRequester": "OnePondy has replied",
+      "resolved": "Resolved"
+    },
+    "topic": {
+      "booking": "A booking",
+      "foodOrder": "A food order",
+      "payment": "A payment or refund",
+      "account": "My account",
+      "business": "A business",
+      "other": "Something else"
+    },
+    "about": {
+      "booking": "About this booking",
+      "food_order": "About this order"
+    },
+    "form": {
+      "title": "New request",
+      "aboutBooking": "Your request will be linked to this booking.",
+      "aboutOrder": "Your request will be linked to this order.",
+      "topic": "What is it about?",
+      "subject": "Subject",
+      "subjectHint": "A few words, for example \"Wrong item in my order\".",
+      "message": "Tell us what happened",
+      "messageHint": "Please don't include card numbers or passwords.",
+      "required": "This is needed.",
+      "submit": "Send request",
+      "submitting": "Sending…"
+    },
+    "ticket": {
+      "loading": "Loading your request",
+      "reference": "Reference {{reference}}",
+      "fromSupport": "OnePondy support",
+      "fromYou": "You",
+      "replyLabel": "Your reply",
+      "send": "Send",
+      "sending": "Sending…",
+      "resolvedNote": "This request is resolved. If it isn't, reply and we'll reopen it.",
+      "cannotReply": "This request was resolved a while ago. Please start a new one.",
+      "error": {
+        "title": "Couldn't load this request",
+        "message": "Check your connection and try again."
+      }
+    },
+    "grievance": {
+      "title": "Grievance officer",
+      "none": "A grievance officer has not been appointed yet.",
+      "email": "Email: {{value}}",
+      "phone": "Phone: {{value}}",
+      "address": "Address: {{value}}",
+      "promise": "We acknowledge a complaint within {{hours}} hours and aim to resolve it within {{days}} days."
+    },
+    "errors": {
+      "support_unavailable": "Support requests are not open yet.",
+      "support_too_many_open": "You already have several open requests. Wait for an answer, or add to one of them.",
+      "support_too_many_messages": "This request has a lot of messages already. Start a new request for anything else.",
+      "support_cannot_reopen": "This request was resolved a while ago. Please start a new one.",
+      "support_linked_not_found": "We couldn't find that booking or order.",
+      "ticket_not_found": "We couldn't find that request.",
+      "support_changed": "This request changed while you were looking at it. Reload and try again.",
+      "validation_failed": "Check your subject and message, then try again.",
+      "offline": "You're offline. Check your connection and try again.",
+      "timeout": "That took too long. Check your connection and try again.",
+      "generic": "Something went wrong. Please try again."
+    }
   }
 }
