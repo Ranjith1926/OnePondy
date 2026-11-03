@@ -1,6 +1,6 @@
 # Phase 10 plan: reviews, support and trust hardening
 
-Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; step 10.3 (support requests: the server, the customer app and the console) built 2026-11-03; step 10.4 (rate limits on every endpoint) built 2026-11-03; step 10.5 is planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
+Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; step 10.3 (support requests: the server, the customer app and the console) built 2026-11-03; step 10.4 (rate limits on every endpoint) built 2026-11-03; step 10.5 (operations page and audit log filters) built 2026-11-03. Phase 10 is built, apart from what stays with the owner (section 5).** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
 Consumer Protection (E-Commerce) Rules row in §21 ("no manipulated reviews", a grievance officer) and the abuse-protection items in
 §12. The spec says Phase 10 can run alongside Phases 8 and 9 once Phase 7 is complete; Phase 7 and Phase 8 are built, so it can start.
 Rides (Phase 9) are not built, so reviews cover bookings and food orders only; rides join when Phase 9 exists.
@@ -50,7 +50,7 @@ These are the proposed defaults: what gets built unless the owner says otherwise
 | 10.2 | Reviews in the apps and console: customer app write and read screens and the history entry point; ratings on listing and restaurant pages; console moderation queue and partner replies. | Component and screen tests; a real run of write, moderate, publish, reply. **Built (2026-11-03).** |
 | 10.3 | Support tickets: ticket and message model, customer and partner creation and reading, agent queue and answer screens in the console, assignment, status, response-time targets and escalation (R9, R10), audited access, grievance officer page (R11). Migration. | An agent sees only what a ticket needs; every record view is in the audit log; a ticket past its target is flagged and escalated **Built (2026-11-03).** |
 | 10.4 | Abuse prevention: rate-limit policies for every endpoint group (R12) with settings, per-user partitions, tests that a limit refuses and recovers, and a review of which endpoints are public. | Tests per group; the existing auth limits unchanged **Built (2026-11-03).** |
-| 10.5 | Monitoring and alerts (R13): an operations page in the console (limits hit, OTP abuse, moderation backlog, overdue tickets, payment and order attention counts), audit log review filters, and the documentation pass for the phase. | Counts match the data; documents updated |
+| 10.5 | Monitoring and alerts (R13): an operations page in the console (limits hit, OTP abuse, moderation backlog, overdue tickets, payment and order attention counts), audit log review filters, and the documentation pass for the phase. | Counts match the data; documents updated **Built (2026-11-03).** |
 
 ## 4. Not in Phase 10
 
@@ -187,3 +187,19 @@ Details in [backend-architecture.md](backend-architecture.md) §5.4. Decision R1
   gateway callbacks and sign-in alone, count correctly), and against PostgreSQL that one person's limit does not touch another's from the same address. The shared test host sets the new limits very high so other tests are unaffected.
 - **Not in 10.4:** limits that adapt to load, blocking an address for longer after repeated refusals, per-endpoint limits finer than the classes, and a shared store so several API servers count together (the counts live in one
   process; with more than one API server each has its own).
+
+## 10. As built: step 10.5
+
+Details in [backend-architecture.md](backend-architecture.md) §7.14. Decision R13 was built as proposed: alerts are shown, not delivered.
+
+- **Operations page** (console, administrators only; `GET /api/v1/admin/operations`). It adds no new data. It counts what the platform already keeps: reviews waiting for a moderator (and how long the oldest has waited), support
+  requests needing a reply, overdue and escalated, food orders that look stuck, open payment differences, notifications not yet sent, sign-in codes asked for in the last hour and day, and the rate limiter's counts per class.
+- **Alerts** turn those numbers and the thresholds in the `Operations` settings into a short list, most serious first. Each says what is wrong in a sentence and links to the page that deals with it. Payment
+  differences and escalated support requests are *act now*; the rest are *look today*. Defaults: a review waiting more than 2 days, a notification waiting more than 15 minutes (only while sending is switched on), more
+  than 200 sign-in codes in an hour, 50 refused requests in one class.
+- **Audit log filters:** reviews, support requests, food orders, restaurants, drivers, driver cash and statements, with plain wording for every action those record, and links from a support request or an order entry
+  to the item.
+- **Tests.** The alert rules as a pure table (each rule fires, stays quiet below its threshold, and the order is by seriousness), the snapshot over an in-memory database (counts, oldest waiting, the notification setting),
+  and against PostgreSQL that only administrators may read it and that every part of it is answered. Console: the alert links and the age wording.
+- **Not in 10.5:** sending an alert by e-mail, chat or pager (needs a provider and the owner's choice), history or graphs (the page is a snapshot; reload to refresh), and limiter counts that survive a restart or span
+  several API servers.

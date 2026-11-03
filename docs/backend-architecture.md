@@ -139,6 +139,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
 | Reviews | `ReviewService` (customer, public, business and moderator sides), `ReviewChecks` (the automatic text check), `ReviewRatings` (displayed averages), `ReviewOptions` |
 | Support | `SupportService` (requests, the agents' queue, audited access), `SupportEscalation` (the Worker's check), `SupportOptions` |
+| Operations | `OperationsService` (the administrators' snapshot and its alert rules), `OperationsOptions`, `IRateLimitStatistics` (the limiter's counts, supplied by the API) |
 | Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens), `FoodOrderAdminService` (administrators' list, detail, cancel, re-offer) with `OrderAttentionRules`, `CashService` (the cash a driver holds and recording what they hand in) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
 | Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
@@ -362,6 +363,13 @@ releasing, resolving and escalating are audited. Every agent change carries the 
 `SupportEscalation` (run by the Worker's `SupportEscalationJob`). `GET /support/grievance` is public and names the grievance officer from settings. Account deletion removes the person's requests.
 Workflow: [workflows.md](workflows.md) §27; decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md) §8.
 
+### 7.14 Operations page (Phase 10, step 10.5)
+
+`OperationsService.SnapshotAsync` gathers, in one read, what an administrator should look at: reviews waiting, the support counts, orders that look stuck, open payment differences, notifications not yet sent, sign-in
+codes in the last hour and day, and the limiter's counts. `OperationsService.Alerts` is a pure function that turns those numbers and the `Operations` settings into alerts, most serious first (payment differences and
+escalated support requests are critical). Nothing is stored and nothing is sent: the console shows the snapshot when an administrator loads the page. Administrators only.
+Decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md) §10.
+
 ## 8. AI trip planner
 
 `TripPlannerService` is deliberately defensive; the model only ranks and arranges places the
@@ -414,6 +422,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Auth:Sessions` | `RefreshTokenLifetime` |
 | `RateLimiting:Auth` | `PermitLimit`, `Window` (sign-in and account endpoints, per address) |
 | `RateLimiting:Browse`, `Read`, `Write`, `Create`, `Upload`, `Staff` | `PermitLimit`, `Window` (per signed-in person, or per address; see §5.4 for the defaults) |
+| `Operations` | `ReviewBacklogWarnAfter` (2 days), `NotificationBacklogWarnAfter` (15 minutes), `SignInCodesPerHourWarn` (200), `RateLimitRefusalsWarn` (50) |
 | `Content` | `ReviewInterval` (default 180 days) |
 | `Media` | `RootPath`, `MaxUploadBytes`, `MinLongEdge`, `MinShortEdge`, `MaxPixels`, `MaxPerPlace` |
 | `BusinessDocuments` | `RootPath` (private) |
@@ -483,6 +492,7 @@ administrator, **S-P** administrator or support agent.
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
 | `/admin/food-orders` list (`?status=`, `?needsAttention=true`), `/attention-count`, get, `/{id}/cancel`, `/{id}/release-delivery` | S-A | Order monitoring (step 8.9). Get returns the customer's address and phone and, while a delivery is under way, the driver's last position (each look is audited); cancel needs a reason and refunds a paid order in full when refunds are on; release only before the food is collected. |
 | `/admin/support/tickets` list (`?view=`), get, `/{id}/contact`, POST `/{id}/messages`, `/assign`, `/release`, `/resolve`, `/escalate`; GET `/admin/support/counts` | S-P | The support queue. Opening a request, and separately asking for the person's contact details, are audited. |
+| `/admin/operations` | S-A | What needs attention (step 10.5): counts, alerts and the limiter's numbers. Read only. |
 | `/admin/reviews` list (`?status=`, default `pending`), POST `/{id}/publish`, `/reject`, `/remove` | S-W | The moderators' queue for reviews (Phase 10). Reject and remove need a reason. |
 | `/admin/cash/drivers` list (`?onlyHolding=`), POST `/{driverUserId}/deposits` | S-A | The cash drivers hold (step 8.8) and recording cash handed in (never more than held; audited). |
 | `/admin/drivers` list (`?status=`), get, `/{userId}/approve`, `/reject`, `/suspend`, `/reinstate` | S-A | Driver review (step 8.6). Reject and suspend need a reason; suspending ends the shift at once; every step is audited. |

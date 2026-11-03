@@ -17,6 +17,13 @@ const areas: Record<string, string> = {
   module_flag: 'Module settings',
   app_setting: 'App version',
   staff: 'Staff access',
+  review: 'Reviews',
+  support_ticket: 'Support requests',
+  food_order: 'Food orders',
+  restaurant: 'Restaurants',
+  driver: 'Drivers',
+  driver_cash: 'Driver cash',
+  settlement: 'Statements',
 };
 
 function entityLink(entry: AuditEntry) {
@@ -44,6 +51,23 @@ function entityLink(entry: AuditEntry) {
         className="font-semibold text-brand hover:underline"
       >
         Open listing
+      </Link>
+    );
+  }
+  if (entry.entityType === 'support_ticket') {
+    return (
+      <Link
+        href={`/support/${entry.entityId}`}
+        className="font-semibold text-brand hover:underline"
+      >
+        Open request
+      </Link>
+    );
+  }
+  if (entry.entityType === 'food_order') {
+    return (
+      <Link href={`/orders/${entry.entityId}`} className="font-semibold text-brand hover:underline">
+        Open order
       </Link>
     );
   }

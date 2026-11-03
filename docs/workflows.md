@@ -1084,7 +1084,7 @@ Built on the server, in the customer app and in the console. Decisions and as-bu
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Rides; rate limits on all endpoints; monitoring; a notification when support answers | Later phases (reviews and support requests are built: sections 26 and 27). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
+| Rides; alerts sent by e-mail or chat; a notification when support answers | Later phases (reviews and support requests are built: sections 26 and 27; rate limits on every endpoint and the administrators' operations page are built, with alerts shown in the console only). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
 | Notifications about orders and deliveries; a daily cash report; driver document upload | Not built (Phase 8 gaps: see section 25.12 and phase-8-plan.md §4). Cash on delivery is built (section 25.11) but needs the legal and tax review before real use. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

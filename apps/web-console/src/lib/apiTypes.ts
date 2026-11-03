@@ -910,3 +910,30 @@ export interface GrievanceOfficer {
   acknowledgeWithinHours: number;
   resolveWithinDays: number;
 }
+
+// --- Operations (Phase 10.5) ---
+
+export type AlertSeverity = 'warning' | 'critical';
+
+export interface OperationsAlert {
+  code: string;
+  severity: AlertSeverity;
+  message: string;
+  /** Names the console page to look at: reviews, support, orders, payments or operations (this page). */
+  area: string;
+}
+
+export interface OperationsSnapshot {
+  generatedAt: string;
+  alerts: OperationsAlert[];
+  reviews: { pending: number; oldestPendingAt: string | null };
+  support: { counts: SupportCounts; oldestNeedingReplyAt: string | null };
+  foodOrdersNeedingAttention: number;
+  openReconciliationExceptions: number;
+  notifications: { sending: boolean; unsent: number; oldestUnsentAt: string | null };
+  signIn: { codesLastHour: number; codesLast24Hours: number };
+  rateLimits: {
+    since: string;
+    classes: { name: string; requests: number; rejected: number; lastRejectedAt: string | null }[];
+  };
+}
