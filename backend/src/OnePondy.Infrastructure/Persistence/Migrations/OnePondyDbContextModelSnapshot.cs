@@ -3273,6 +3273,36 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideDriverPosition", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<double>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<DateTimeOffset>("RecordedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_ride_driver_positions");
+
+                    b.HasIndex("RecordedAt")
+                        .HasDatabaseName("ix_ride_driver_positions_recorded");
+
+                    b.ToTable("ride_driver_positions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ride_driver_position_range", "latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Rides.RideDriverProfile", b =>
                 {
                     b.Property<Guid>("UserId")
@@ -3308,18 +3338,6 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsOnDuty")
                         .HasColumnType("boolean")
                         .HasColumnName("is_on_duty");
-
-                    b.Property<double?>("LastLatitude")
-                        .HasColumnType("double precision")
-                        .HasColumnName("last_latitude");
-
-                    b.Property<DateTimeOffset?>("LastLocationAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("last_location_at");
-
-                    b.Property<double?>("LastLongitude")
-                        .HasColumnType("double precision")
-                        .HasColumnName("last_longitude");
 
                     b.Property<string>("LicenceNumber")
                         .IsRequired()
@@ -3385,12 +3403,6 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                             t.HasCheckConstraint("ck_ride_driver_duty_requires_approval", "NOT is_on_duty OR approval_status = 'approved'");
 
                             t.HasCheckConstraint("ck_ride_driver_duty_since", "is_on_duty = (on_duty_since IS NOT NULL)");
-
-                            t.HasCheckConstraint("ck_ride_driver_location_complete", "(last_latitude IS NULL) = (last_longitude IS NULL) AND (last_latitude IS NULL) = (last_location_at IS NULL)");
-
-                            t.HasCheckConstraint("ck_ride_driver_location_only_on_duty", "is_on_duty OR (last_latitude IS NULL AND last_longitude IS NULL AND last_location_at IS NULL)");
-
-                            t.HasCheckConstraint("ck_ride_driver_location_range", "(last_latitude IS NULL OR last_latitude BETWEEN -90 AND 90) AND (last_longitude IS NULL OR last_longitude BETWEEN -180 AND 180)");
 
                             t.HasCheckConstraint("ck_ride_driver_review_note", "approval_status NOT IN ('rejected', 'suspended') OR review_note IS NOT NULL");
 
@@ -4921,6 +4933,16 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_rides_app_users_rider_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideDriverPosition", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Rides.RideDriverProfile", null)
+                        .WithOne()
+                        .HasForeignKey("OnePondy.Domain.Rides.RideDriverPosition", "UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ride_driver_positions_ride_driver_profiles_user_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Rides.RideDriverProfile", b =>

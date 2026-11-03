@@ -82,6 +82,8 @@ public interface IOnePondyDbContext
 
     DbSet<RideDriverProfile> RideDriverProfiles { get; }
 
+    DbSet<RideDriverPosition> RideDriverPositions { get; }
+
     DbSet<RideQuote> RideQuotes { get; }
 
     DbSet<Ride> Rides { get; }

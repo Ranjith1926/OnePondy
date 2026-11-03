@@ -254,6 +254,18 @@ public sealed class ContentApiTests : IAsyncLifetime
 
     private async Task<string> SignInStaffAsync(HttpClient client, string email)
     {
+        if (email == Founder)
+        {
+            // The first administrator is normally created by the bootstrap setting, which only works while the database has no administrator at
+            // all. Test classes share one database and run in parallel, so another class may have made one first; the founder is given the role
+            // directly, exactly as the other classes do. The bootstrap rule itself is tested in SettingsTests.
+            await using var scope = Factory.Services.CreateAsyncScope();
+            var accounts = scope.ServiceProvider.GetRequiredService<OnePondy.Application.Identity.IUserAccountStore>();
+            var staff = scope.ServiceProvider.GetRequiredService<OnePondy.Application.Staff.IStaffDirectory>();
+            var founder = await accounts.FindOrCreateAsync(OnePondy.Domain.Identity.OtpChannel.Email, Founder, default);
+            await staff.SetRoleAsync(founder.Id, OnePondy.Domain.Identity.RoleNames.Administrator, default);
+        }
+
         var requested = await client.PostAsJsonAsync("/api/v1/admin/auth/otp/request", new { email });
         Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
         var challengeId = (await ReadAsync(requested)).GetProperty("challengeId").GetString();

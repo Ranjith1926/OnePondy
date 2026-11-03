@@ -97,6 +97,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
 
     public DbSet<RideDriverProfile> RideDriverProfiles => Set<RideDriverProfile>();
 
+    public DbSet<RideDriverPosition> RideDriverPositions => Set<RideDriverPosition>();
+
     public DbSet<RideQuote> RideQuotes => Set<RideQuote>();
 
     public DbSet<Ride> Rides => Set<Ride>();
@@ -242,6 +244,7 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<FoodOrderLine>().HasKey(l => l.Id);
         modelBuilder.Entity<DriverProfile>().HasKey(p => p.UserId);
         modelBuilder.Entity<RideDriverProfile>().HasKey(p => p.UserId);
+        modelBuilder.Entity<RideDriverPosition>().HasKey(p => p.UserId);
         modelBuilder.Entity<RideQuote>().HasKey(q => q.Id);
         modelBuilder.Entity<Ride>().HasKey(r => r.Id);
         modelBuilder.Entity<RideSafetyEvent>().HasKey(e => e.Id);

@@ -281,6 +281,7 @@
       "ride_driver_not_available": "You can take rides once you are approved, insured and on duty.",
       "ride_driver_busy": "Finish your current trip first.",
       "ride_taken": "Another driver took this ride.",
+      "ride_own_request": "You cannot take a ride you asked for yourself.",
       "ride_too_far": "This pickup is too far from where you are.",
       "ride_changed": "This ride changed. It has been refreshed; try again.",
       "ride_not_found": "We could not find that ride.",

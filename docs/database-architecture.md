@@ -423,9 +423,12 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 **Rides (Phase 9, steps 9.1 and 9.2, migration 23, `AddRides`).**
 
 - **`ride_driver_profiles`** – a driver in ride mode, keyed by the account: `full_name`, `vehicle_class` (`auto`, `cab`, `bike_taxi`), `vehicle_number`, `licence_number`, `permit_number`, `insurance_policy_number`,
-  `insurance_valid_until` (date), `approval_status`, `review_note`, `is_on_duty`, `on_duty_since`, the latest position (`last_latitude`, `last_longitude`, `last_location_at`), timestamps and the `xmin` version. Unique
-  licence and unique vehicle number. Checks: only an approved driver is on duty; "on duty since" exists exactly while on duty; **the position exists only while on duty**, is complete and on Earth; a rejection or
-  suspension has a reason.
+  `insurance_valid_until` (date), `approval_status`, `review_note`, `is_on_duty`, `on_duty_since`, timestamps and the `xmin` version. Unique
+  licence and unique vehicle number. Checks: only an approved driver is on duty; "on duty since" exists exactly while on duty; a rejection or suspension has a reason.
+- **`ride_driver_positions`** (migration 25, `MoveRideDriverPosition`) – the driver's latest position for dispatch: one row per driver (`user_id`, `latitude`, `longitude`, `recorded_at`), on Earth. It is a separate table so
+  that reporting a position every few seconds never changes the profile's version, which administrators and the driver use to know they act on what they last saw (a position inside the profile made **Suspend** and the
+  duty switch fail with "changed since you loaded it", found on a real phone). **The position exists only while on duty:** a trigger deletes it when the profile goes off duty, and another refuses one for a driver
+  who is not on duty.
 - **`ride_quotes`** – a fare the server worked out: the rider, class, pickup and destination (coordinates and the name the rider gave), `distance_km`, `fare`, `currency`, `cancellation_terms`, `created_at`, `expires_at`.
 - **`rides`** – one ride: the rider, `quote_id` (unique: a quote becomes one ride), the snapshot of class, places, note, distance, fare and terms, `status` (`requested`, `accepted`, `arrived`, `in_progress`,
   `completed`, `cancelled`, `expired`), `driver_user_id`, a time for each step, `cancelled_by` and `cancel_reason`, `cash_collected`, the driver's latest position (`driver_latitude`, `driver_longitude`,
@@ -518,6 +521,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 19 | `20261030112541_ExtendCustomerHistoryAndAdminRefundReason` | The `customer_history` view now also lists food orders (kind `food_order`); `ck_refund_reason` allows `admin_cancelled`. |
 | 20 | `20261102044345_AddCashOnDelivery` | `food_orders.payment_method` (`online` for every existing row), `cash_collected`, `cash_collected_at`, `cash_collected_by`; `restaurant_profiles.accepts_cash_on_delivery`; `driver_cash_deposits`; the ledger accounts `driver_cash:{driver}` and `cash_received`; the `cashOnDelivery` module flag (off); triggers that keep deposits immutable and a driver's cash account from going below nothing. |
 | 21 | `20261102130258_AddReviews` | `reviews`: one review per completed booking or delivered food order, with unique indexes, checks and the moderation and reply columns. No triggers. |
+| 25 | `20261103075231_MoveRideDriverPosition` | `ride_driver_positions` (with the two triggers above); the position columns and their checks leave `ride_driver_profiles`, and positions already reported move across. |
 | 24 | `20261103050729_AddRideSafety` | `ride_safety_events` (with checks, the one-open-SOS index and the keep-forever trigger) and `ride_shares`. |
 | 23 | `20261103044905_AddRides` | `ride_driver_profiles`, `ride_quotes` and `rides` with their checks, the one-open-ride and one-active-ride indexes, the `ride_follows_the_rules` trigger, and the `ride` branch of `customer_history`. |
 | 22 | `20261103033839_AddSupportTickets` | `support_tickets` and `support_messages`: a request and its conversation, with checks that keep a ticket's columns consistent with its status. No triggers. |

@@ -136,6 +136,8 @@ public static class RideErrors
 
     public static readonly AppError Taken = new("ride_taken", ErrorKind.Conflict, "Another driver took this ride.");
 
+    public static readonly AppError OwnRide = new("ride_own_request", ErrorKind.Conflict, "You cannot take a ride you asked for yourself.");
+
     public static readonly AppError TooFar = new("ride_too_far", ErrorKind.Conflict, "This pickup is too far from where you are.");
 
     public static readonly AppError Changed = new(

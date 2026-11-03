@@ -23,17 +23,6 @@ public sealed class RideDriverProfileConfiguration : IEntityTypeConfiguration<Ri
 
             // A rejection or suspension always says why.
             table.HasCheckConstraint("ck_ride_driver_review_note", "approval_status NOT IN ('rejected', 'suspended') OR review_note IS NOT NULL");
-
-            // The position exists only while on duty, is complete, and is on Earth: it is never kept after a shift.
-            table.HasCheckConstraint(
-                "ck_ride_driver_location_only_on_duty",
-                "is_on_duty OR (last_latitude IS NULL AND last_longitude IS NULL AND last_location_at IS NULL)");
-            table.HasCheckConstraint(
-                "ck_ride_driver_location_complete",
-                "(last_latitude IS NULL) = (last_longitude IS NULL) AND (last_latitude IS NULL) = (last_location_at IS NULL)");
-            table.HasCheckConstraint(
-                "ck_ride_driver_location_range",
-                "(last_latitude IS NULL OR last_latitude BETWEEN -90 AND 90) AND (last_longitude IS NULL OR last_longitude BETWEEN -180 AND 180)");
         });
 
         builder.HasKey(p => p.UserId);
@@ -57,5 +46,28 @@ public sealed class RideDriverProfileConfiguration : IEntityTypeConfiguration<Ri
 
         // What dispatch and the review queue scan.
         builder.HasIndex(p => new { p.ApprovalStatus, p.IsOnDuty }).HasDatabaseName("ix_ride_driver_profiles_status_duty");
+    }
+}
+
+public sealed class RideDriverPositionConfiguration : IEntityTypeConfiguration<RideDriverPosition>
+{
+    public void Configure(EntityTypeBuilder<RideDriverPosition> builder)
+    {
+        builder.ToTable("ride_driver_positions", table =>
+        {
+            table.HasCheckConstraint(
+                "ck_ride_driver_position_range",
+                "latitude BETWEEN -90 AND 90 AND longitude BETWEEN -180 AND 180");
+        });
+
+        builder.HasKey(p => p.UserId);
+        builder.Property(p => p.UserId).ValueGeneratedNever();
+
+        // One row per driver, gone with the profile. A trigger in the migration also deletes it when the driver goes off duty and refuses
+        // to keep one for a driver who is not on duty.
+        builder.HasOne<RideDriverProfile>().WithOne().HasForeignKey<RideDriverPosition>(p => p.UserId).OnDelete(DeleteBehavior.Cascade);
+
+        // What dispatch scans: who is recent.
+        builder.HasIndex(p => p.RecordedAt).HasDatabaseName("ix_ride_driver_positions_recorded");
     }
 }

@@ -59,7 +59,7 @@ public sealed class RideService(
 
         var now = time.GetUtcNow();
         var today = RideClock.Today(now);
-        var nearby = await NearbyDriversAsync(pickup, today, now, cancellationToken);
+        var nearby = await NearbyDriversAsync(pickup, today, now, riderUserId, cancellationToken);
         var quotes = new List<RideQuoteView>();
         foreach (var vehicleClass in settings.EnabledClasses.Distinct())
         {
@@ -124,7 +124,7 @@ public sealed class RideService(
             return RideErrors.RiderBusy;
         }
 
-        var nearby = await NearbyDriversAsync(quote.Pickup, RideClock.Today(now), now, cancellationToken);
+        var nearby = await NearbyDriversAsync(quote.Pickup, RideClock.Today(now), now, riderUserId, cancellationToken);
         if (!nearby.Contains(quote.VehicleClass))
         {
             return RideErrors.NoDrivers;
@@ -241,12 +241,13 @@ public sealed class RideService(
             return new DriverRidesView(await ToDriverViewAsync(current, cancellationToken), [], available);
         }
 
-        if (!available || profile is null || !profile.HasFreshPosition(now))
+        var position = await db.RideDriverPositions.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == driverUserId, cancellationToken);
+        if (!available || profile is null || position is null || !position.IsFresh(now))
         {
             return new DriverRidesView(null, [], available);
         }
 
-        return new DriverRidesView(null, await OffersAsync(profile, now, cancellationToken), true);
+        return new DriverRidesView(null, await OffersAsync(profile, position, now, cancellationToken), true);
     }
 
     public async Task<Result<DriverRideView>> AcceptAsync(Guid driverUserId, Guid rideId, CancellationToken cancellationToken)
@@ -264,6 +265,12 @@ public sealed class RideService(
             return RideErrors.NotFound;
         }
 
+        // Nobody takes their own request: a ride needs two different people.
+        if (ride.RiderUserId == driverUserId)
+        {
+            return RideErrors.OwnRide;
+        }
+
         // A second tap on "accept" by the driver who already has it is not an error.
         if (ride.Status == RideStatus.Accepted && ride.DriverUserId == driverUserId)
         {
@@ -276,9 +283,11 @@ public sealed class RideService(
         }
 
         // Only the right kind of vehicle, with a recent position close to the pickup, can take it: the same rule that decides who is offered it.
+        var position = await db.RideDriverPositions.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == driverUserId, cancellationToken);
         if (profile.VehicleClass != ride.VehicleClass
-            || !profile.HasFreshPosition(now)
-            || DistanceToPickupKm(profile, ride) > options.Value.OfferRadiusKm)
+            || position is null
+            || !position.IsFresh(now)
+            || DistanceToPickupKm(position, ride) > options.Value.OfferRadiusKm)
         {
             return RideErrors.TooFar;
         }
@@ -467,28 +476,31 @@ public sealed class RideService(
         return trimmed.Length == 0 ? null : new RidePlace(lat, lon, trimmed);
     }
 
-    private static double DistanceToPickupKm(RideDriverProfile profile, Ride ride) =>
-        RideFare.StraightLineKm(profile.LastLatitude!.Value, profile.LastLongitude!.Value, ride.PickupLatitude, ride.PickupLongitude);
+    private static double DistanceToPickupKm(RideDriverPosition position, Ride ride) =>
+        RideFare.StraightLineKm(position.Latitude, position.Longitude, ride.PickupLatitude, ride.PickupLongitude);
 
     /// <summary>The vehicle classes for which an eligible driver is on duty, with a recent position, near a point.</summary>
-    private async Task<HashSet<RideVehicleClass>> NearbyDriversAsync(RidePlace pickup, DateOnly today, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<HashSet<RideVehicleClass>> NearbyDriversAsync(RidePlace pickup, DateOnly today, DateTimeOffset now, Guid riderUserId, CancellationToken cancellationToken)
     {
         var radius = options.Value.OfferRadiusKm;
         var oldest = now - RideDriverProfile.PositionFreshFor;
-        var candidates = await db.RideDriverProfiles.AsNoTracking()
-            .Where(p => p.ApprovalStatus == OnePondy.Domain.Delivery.DriverApprovalStatus.Approved
+        var candidates = await (
+            from p in db.RideDriverProfiles.AsNoTracking()
+            join position in db.RideDriverPositions.AsNoTracking() on p.UserId equals position.UserId
+            where p.ApprovalStatus == OnePondy.Domain.Delivery.DriverApprovalStatus.Approved
+                && p.UserId != riderUserId
                 && p.IsOnDuty
                 && p.InsuranceValidUntil >= today
-                && p.LastLocationAt != null
-                && p.LastLocationAt >= oldest)
+                && position.RecordedAt >= oldest
+            select new { p.UserId, p.VehicleClass, position.Latitude, position.Longitude })
             .ToListAsync(cancellationToken);
         var busy = await BusyDriversAsync(candidates.Select(c => c.UserId).ToList(), cancellationToken);
         return
         [
             .. candidates
-                .Where(p => !busy.Contains(p.UserId)
-                    && RideFare.StraightLineKm(p.LastLatitude!.Value, p.LastLongitude!.Value, pickup.Latitude, pickup.Longitude) <= radius)
-                .Select(p => p.VehicleClass),
+                .Where(c => !busy.Contains(c.UserId)
+                    && RideFare.StraightLineKm(c.Latitude, c.Longitude, pickup.Latitude, pickup.Longitude) <= radius)
+                .Select(c => c.VehicleClass),
         ];
     }
 
@@ -501,18 +513,18 @@ public sealed class RideService(
                 .ToListAsync(cancellationToken),
         ];
 
-    private async Task<List<RideOfferView>> OffersAsync(RideDriverProfile profile, DateTimeOffset now, CancellationToken cancellationToken)
+    private async Task<List<RideOfferView>> OffersAsync(RideDriverProfile profile, RideDriverPosition position, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var settings = options.Value;
         var open = await db.Rides.AsNoTracking()
-            .Where(r => r.Status == RideStatus.Requested && r.VehicleClass == profile.VehicleClass && r.SearchEndsAt > now)
+            .Where(r => r.Status == RideStatus.Requested && r.VehicleClass == profile.VehicleClass && r.SearchEndsAt > now && r.RiderUserId != profile.UserId)
             .OrderBy(r => r.RequestedAt)
             .Take(200)
             .ToListAsync(cancellationToken);
         return
         [
             .. open
-                .Select(r => (Ride: r, Distance: DistanceToPickupKm(profile, r)))
+                .Select(r => (Ride: r, Distance: DistanceToPickupKm(position, r)))
                 .Where(x => x.Distance <= settings.OfferRadiusKm)
                 .Take(settings.MaxOffers)
                 .Select(x => new RideOfferView(

@@ -681,6 +681,31 @@ public class RideTests
             throw new InvalidOperationException("The hub is down.");
     }
 
+    // --- Two different people ---
+
+    [Fact]
+    public async Task A_driver_cannot_be_offered_or_accept_their_own_request_and_does_not_count_as_a_driver_near_them()
+    {
+        // The rider is also an approved driver, on duty at the pickup.
+        var driver = await _h.OnDutyDriverAsync("+919000011111");
+        var asRider = driver;
+
+        var quote = await _h.Rides.QuoteAsync(asRider, _h.Trip(), None);
+        Assert.False(quote.Value!.Options[0].Available);
+        var request = await _h.Rides.RequestAsync(asRider, new RequestRideInput(quote.Value.Options[0].QuoteId, null), None);
+        Assert.Equal(RideErrors.NoDrivers, request.Error);
+
+        // Another driver is near, so the request can be made; the rider-driver still never sees it or gets it.
+        var other = await _h.OnDutyDriverAsync("+919000022222", plate: "PY 01 AA 0002", licence: "PY-0120200000002");
+        var made = await _h.Rides.RequestAsync(asRider, new RequestRideInput((await _h.Rides.QuoteAsync(asRider, _h.Trip(), None)).Value!.Options[0].QuoteId, null), None);
+        Assert.True(made.IsSuccess, made.Error?.Detail);
+
+        Assert.Empty((await _h.Rides.GetMineAsync(driver, None)).Offers);
+        Assert.Equal(RideErrors.OwnRide, (await _h.Rides.AcceptAsync(driver, made.Value!.Id, None)).Error);
+        Assert.Single((await _h.Rides.GetMineAsync(other, None)).Offers);
+        Assert.True((await _h.Rides.AcceptAsync(other, made.Value.Id, None)).IsSuccess);
+    }
+
     // --- Leaving ---
 
     [Fact]

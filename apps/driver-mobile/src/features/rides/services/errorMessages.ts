@@ -12,6 +12,7 @@ const knownCodes = [
   'ride_driver_not_available',
   'ride_driver_busy',
   'ride_taken',
+  'ride_own_request',
   'ride_too_far',
   'ride_changed',
   'ride_not_found',

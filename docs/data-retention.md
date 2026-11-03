@@ -83,7 +83,7 @@ The public page never reveals whether an account exists for a phone number or em
 | Data | Kept for | Notes |
 |---|---|---|
 | A ride driver's name, vehicle, licence, permit and insurance | Until the driver deletes their account | Deletion is refused while the driver is on duty or holds a ride; it then removes the profile. |
-| A driver's position for dispatch | Only while on duty; the latest only | Erased when the shift ends or the driver is suspended; the database refuses to keep one off duty. A position older than two minutes is ignored. |
+| A driver's position for dispatch | Only while on duty; the latest only | Its own table (`ride_driver_positions`). Erased when the shift ends or the driver is suspended: a database trigger deletes it the moment the driver goes off duty, and another refuses to keep one off duty. A position older than two minutes is ignored. |
 | A driver's position during a ride | Only while the ride is active; the latest only | Shown to that ride's rider only; erased when the ride ends (the database refuses to keep it). No history of positions is stored. |
 | Fare quotes | A day after they expire, if no ride used them | Removed by the Worker. |
 | A finished ride (the pickup and destination names and points, the fare, who drove, when) | **Open question for the owner.** For now, kept after the rider deletes their account | A ride is the record of a trip, needed for safety reports, disputes and tax, and the database refuses to change or delete one. Deciding how long to keep it, and whether to blank the places once that is over, needs the owner and legal advice, and a migration. |

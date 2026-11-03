@@ -144,7 +144,7 @@ public class RideDriverTests
         Assert.Equal(RideDriverErrors.InsuranceEnded, shared.Error);
         var profile = await _h.ProfileAsync(user);
         Assert.False(profile.IsOnDuty);
-        Assert.Null(profile.LastLatitude);
+        Assert.Null(await _h.PositionAsync(user));
     }
 
     [Fact]
@@ -158,7 +158,7 @@ public class RideDriverTests
         Assert.True(edited.IsSuccess, edited.Error?.Detail);
         Assert.Equal(DriverApprovalStatus.Pending, edited.Value!.ApprovalStatus);
         Assert.False(edited.Value.IsOnDuty);
-        Assert.Null((await _h.ProfileAsync(user)).LastLocationAt);
+        Assert.Null(await _h.PositionAsync(user));
     }
 
     [Fact]
@@ -192,16 +192,15 @@ public class RideDriverTests
         var user = await _h.OnDutyDriverAsync("+919000011111");
 
         await _h.Drivers.ShareLocationAsync(user, 11.95, 79.82, None);
-        var profile = await _h.ProfileAsync(user);
-        Assert.Equal(11.95, profile.LastLatitude);
-        Assert.Equal(79.82, profile.LastLongitude);
+        await _h.Drivers.ShareLocationAsync(user, 11.96, 79.83, None);
+        var position = await _h.PositionAsync(user);
+        Assert.Equal(11.96, position!.Latitude);
+        Assert.Equal(79.83, position.Longitude);
+        Assert.Equal(1, await _h.B.Db.RideDriverPositions.CountAsync());
 
         var version = (await _h.Drivers.GetMineAsync(user, None)).Version;
         await _h.Drivers.SetDutyAsync(user, false, version, None);
-        var off = await _h.ProfileAsync(user);
-        Assert.Null(off.LastLatitude);
-        Assert.Null(off.LastLongitude);
-        Assert.Null(off.LastLocationAt);
+        Assert.Null(await _h.PositionAsync(user));
 
         var refused = await _h.Drivers.ShareLocationAsync(user, 11.95, 79.82, None);
         Assert.Equal(RideDriverErrors.NotOnDuty, refused.Error);
@@ -218,7 +217,7 @@ public class RideDriverTests
         var result = await _h.Drivers.ShareLocationAsync(user, latitude, longitude, None);
 
         Assert.False(result.IsSuccess);
-        Assert.Equal(RideHarness.PromenadeLatitude, (await _h.ProfileAsync(user)).LastLatitude);
+        Assert.Equal(RideHarness.PromenadeLatitude, (await _h.PositionAsync(user))!.Latitude);
     }
 
     [Fact]
@@ -226,11 +225,25 @@ public class RideDriverTests
     {
         var user = await _h.OnDutyDriverAsync("+919000011111");
         var now = _h.B.Time.GetUtcNow();
-        var profile = await _h.ProfileAsync(user);
+        var position = await _h.PositionAsync(user);
 
-        Assert.True(profile.HasFreshPosition(now));
-        Assert.True(profile.HasFreshPosition(now.AddMinutes(2)));
-        Assert.False(profile.HasFreshPosition(now.AddMinutes(2).AddSeconds(1)));
+        Assert.True(position!.IsFresh(now));
+        Assert.True(position.IsFresh(now.AddMinutes(2)));
+        Assert.False(position.IsFresh(now.AddMinutes(2).AddSeconds(1)));
+    }
+
+    [Fact]
+    public async Task Reporting_a_position_never_changes_the_profile_so_nobody_acting_on_it_is_told_it_changed()
+    {
+        var user = await _h.OnDutyDriverAsync("+919000011111");
+        var before = await _h.ProfileAsync(user);
+
+        _h.B.Time.Advance(TimeSpan.FromSeconds(15));
+        await _h.Drivers.ShareLocationAsync(user, 11.95, 79.82, None);
+        var after = await _h.ProfileAsync(user);
+
+        Assert.Equal(before.UpdatedAt, after.UpdatedAt);
+        Assert.Equal(before.Version, after.Version);
     }
 
     // --- Administrators ---
@@ -280,7 +293,7 @@ public class RideDriverTests
         var suspended = await _h.Drivers.SuspendAsync(user, view.Version, "Safety complaint", _h.B.Administrator, None);
 
         Assert.False(suspended.Value!.IsOnDuty);
-        Assert.Null((await _h.ProfileAsync(user)).LastLatitude);
+        Assert.Null(await _h.PositionAsync(user));
         var edit = await _h.Drivers.SaveMineAsync(user, _h.Application(licence: "PY-0120209999999", version: suspended.Value.Version), None);
         Assert.Equal(RideDriverErrors.Locked, edit.Error);
     }

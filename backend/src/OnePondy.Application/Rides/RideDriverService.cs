@@ -96,6 +96,7 @@ public sealed partial class RideDriverService(
         db.ExpectVersion(existing, input.Version.Value);
         var before = existing.ApprovalStatus;
         existing.Edit(content.Value, now);
+        await ClearPositionAsync(userId, cancellationToken);
         audit.Record(
             userId,
             AuditActions.RideDriverUpdated,
@@ -140,6 +141,7 @@ public sealed partial class RideDriverService(
         else
         {
             profile.GoOffDuty(now);
+            await ClearPositionAsync(userId, cancellationToken);
         }
 
         return await SaveAsync(profile, cancellationToken);
@@ -182,11 +184,22 @@ public sealed partial class RideDriverService(
         if (!profile.IsEligible(RideClock.Today(now)) && !await HoldsRideAsync(userId, cancellationToken))
         {
             profile.GoOffDuty(now);
+            await ClearPositionAsync(userId, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
             return RideDriverErrors.InsuranceEnded;
         }
 
-        profile.ShareLocation(latitude!.Value, longitude!.Value, now);
+        // The position is its own row: reporting it never changes the profile, so nobody acting on the profile's version is told it "changed".
+        var position = await db.RideDriverPositions.SingleOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        if (position is null)
+        {
+            db.RideDriverPositions.Add(RideDriverPosition.At(userId, latitude!.Value, longitude!.Value, now));
+        }
+        else
+        {
+            position.MoveTo(latitude!.Value, longitude!.Value, now);
+        }
+
         try
         {
             await db.SaveChangesAsync(cancellationToken);
@@ -199,6 +212,16 @@ public sealed partial class RideDriverService(
         }
 
         return true;
+    }
+
+    /// <summary>Erases where the driver was. Called wherever a driver stops being on duty; the database also does it, so it cannot be missed.</summary>
+    private async Task ClearPositionAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        var position = await db.RideDriverPositions.SingleOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        if (position is not null)
+        {
+            db.RideDriverPositions.Remove(position);
+        }
     }
 
     private Task<bool> HoldsRideAsync(Guid userId, CancellationToken cancellationToken) =>
@@ -301,6 +324,11 @@ public sealed partial class RideDriverService(
             {
                 ride.GiveUp(userId, time.GetUtcNow(), options.Value.SearchWindow);
             }
+        }
+
+        if (!profile.IsOnDuty)
+        {
+            await ClearPositionAsync(userId, cancellationToken);
         }
 
         audit.Record(staffUserId, auditAction, AuditEntityTypes.RideDriver, userId, auditDetails);

@@ -149,7 +149,7 @@ public sealed class RideApiTests : IAsyncLifetime
     {
         await using var scope = Factory.Services.CreateAsyncScope();
         await DbOf(scope).Database.ExecuteSqlRawAsync(
-            "UPDATE ride_driver_profiles SET is_on_duty = false, on_duty_since = NULL, last_latitude = NULL, last_longitude = NULL, last_location_at = NULL");
+            "UPDATE ride_driver_profiles SET is_on_duty = false, on_duty_since = NULL");
     }
 
     private async Task<HttpResponseMessage> DeleteAccountAsync(HttpClient client, string token)
@@ -492,13 +492,65 @@ public sealed class RideApiTests : IAsyncLifetime
             Assert.Equal(PostgresErrorCodes.UniqueViolation, refused.SqlState);
         }
 
+        // The driver went off duty (the map is cleared): the database erased the position itself, and refuses to keep one for a driver off duty.
         await ClearTheMapAsync();
+        await using (var count = sql.CreateCommand())
+        {
+            count.CommandText = "SELECT count(*) FROM ride_driver_positions WHERE user_id = @driver";
+            count.Parameters.AddWithValue("driver", Guid.Parse(driverId));
+            Assert.Equal(0L, (long)(await count.ExecuteScalarAsync())!);
+        }
+
         await using var stale = sql.CreateCommand();
-        stale.CommandText = "UPDATE ride_driver_profiles SET last_latitude = 11.9, last_longitude = 79.8, last_location_at = now() WHERE user_id = @driver";
+        stale.CommandText = "INSERT INTO ride_driver_positions (user_id, latitude, longitude, recorded_at) VALUES (@driver, 11.9, 79.8, now())";
         stale.Parameters.AddWithValue("driver", Guid.Parse(driverId));
         var kept = await Assert.ThrowsAsync<PostgresException>(() => stale.ExecuteNonQueryAsync());
-        Assert.Equal(PostgresErrorCodes.CheckViolation, kept.SqlState);
-        Assert.Contains("ck_ride_driver_location_only_on_duty", kept.ConstraintName);
+        Assert.Equal("P0001", kept.SqlState);
+        Assert.Contains("only while the driver is on duty", kept.MessageText);
+    }
+
+    [DatabaseFact]
+    public async Task Reporting_positions_does_not_make_an_administrators_review_or_the_drivers_duty_switch_fail()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        await ClearTheMapAsync();
+        var (driver, driverId) = await OnDutyDriverAsync(client, admin);
+
+        // The administrator opens the driver, the driver's app keeps reporting where it is, and the administrator then suspends: this used to be
+        // refused with "changed since you loaded it" because every position changed the profile's version.
+        var opened = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/admin/ride-drivers/{driverId}", admin));
+        for (var i = 0; i < 3; i++)
+        {
+            await ReadAsync(await SendAsync(client, HttpMethod.Post, "/api/v1/ride-driver/location", driver, new { latitude = 11.93 + (i * 0.001), longitude = 79.83 }));
+        }
+
+        var suspended = await SendAsync(client, HttpMethod.Post, $"/api/v1/admin/ride-drivers/{driverId}/suspend", admin, new { version = VersionOf(opened), reason = "Safety complaint" });
+        Assert.Equal(HttpStatusCode.OK, suspended.StatusCode);
+
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.False(await DbOf(scope).RideDriverPositions.AnyAsync(p => p.UserId == Guid.Parse(driverId)));
+    }
+
+    [DatabaseFact]
+    public async Task A_driver_can_go_off_duty_after_their_app_has_been_reporting_positions()
+    {
+        using var client = Factory.CreateClient();
+        var admin = await AdministratorTokenAsync();
+        await ClearTheMapAsync();
+        var (driver, driverId) = await OnDutyDriverAsync(client, admin);
+        var loaded = await ReadAsync(await SendAsync(client, HttpMethod.Get, "/api/v1/ride-driver/me", driver));
+
+        for (var i = 0; i < 3; i++)
+        {
+            await ReadAsync(await SendAsync(client, HttpMethod.Post, "/api/v1/ride-driver/location", driver, new { latitude = 11.93, longitude = 79.83 + (i * 0.001) }));
+        }
+
+        var off = await SendAsync(client, HttpMethod.Post, "/api/v1/ride-driver/duty", driver, new { onDuty = false, version = VersionOf(loaded) });
+
+        Assert.Equal(HttpStatusCode.OK, off.StatusCode);
+        await using var scope = Factory.Services.CreateAsyncScope();
+        Assert.False(await DbOf(scope).RideDriverPositions.AnyAsync(p => p.UserId == Guid.Parse(driverId)));
     }
 
     [DatabaseFact]

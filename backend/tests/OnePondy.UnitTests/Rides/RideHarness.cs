@@ -129,5 +129,8 @@ public sealed class RideHarness
 
     public Task<RideDriverProfile> ProfileAsync(Guid user) => B.Db.RideDriverProfiles.AsNoTracking().SingleAsync(p => p.UserId == user);
 
+    /// <summary>Where the driver last said they were, or null (never on duty, or off duty since).</summary>
+    public Task<RideDriverPosition?> PositionAsync(Guid user) => B.Db.RideDriverPositions.AsNoTracking().SingleOrDefaultAsync(p => p.UserId == user);
+
     public Task<Ride> RideRowAsync(Guid rideId) => B.Db.Rides.AsNoTracking().SingleAsync(r => r.Id == rideId);
 }

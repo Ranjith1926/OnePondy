@@ -88,6 +88,8 @@ Details in [backend-architecture.md](backend-architecture.md) §7.15 and [databa
 - **Tests.** Fare arithmetic and settings; the driver's application, eligibility on the day boundary, review and suspension; quotes and availability; requests; offers; accepting (first wins, the wrong class or
   distance, a lapsed policy, one ride at a time, an expired search); the trip step by step, giving up, cancelling, expiry and what each person sees (unit, 64 tests). Against PostgreSQL: the whole trip over HTTP, access
   control, two drivers accepting at the same moment (five rounds, exactly one wins), one driver accepting two rides, two requests by one rider, and every database rule above (11 tests).
+- **Nobody takes their own request.** A rider who is also an approved driver is not counted as a driver near their own pickup, is not offered their own request, and accepting it is refused (`ride_own_request`). Found when
+  one account was used for both roles during the first device test.
 - **Not in 9.1 and 9.2:** location rules in the apps, safety (SOS, trip sharing, incident reports), the live-update hub, the console and the apps: steps 9.3 to 9.6.
 
 ## 7. As built: step 9.3 (on the server)
@@ -140,7 +142,19 @@ Details in [backend-architecture.md](backend-architecture.md) §7.15 and [databa
 - **Not done in 9.5 and 9.6:** a run on an emulator or device (neither app's ride screens has been seen on a screen), a map picker, background location, and push notifications for ride events (the live connection
   needs the app open).
 
-## 10. As built: step 9.7
+## 10. Found on a real phone (2026-11-03)
+
+The whole trip was run on an OnePlus 11R (arm64): sign in with a real SMS code, fares, a request, the driver's offer and accepting (a second account, in the driver app), arriving, starting, ending with the exact cash,
+the emergency button (it reached the database with the position), and the rider's screen following every step. It found three things, all fixed:
+
+- **The duty switch and Suspend failed with "changed since you loaded it".** A position was stored in the driver's profile, so every report (every 15 seconds) changed the profile's version. The position now has its
+  own table; the profile is untouched by position reports. Regression tests on PostgreSQL cover both the driver's duty switch and an administrator suspending a driver whose app is reporting.
+- **A rider could take their own request** when the same account was both rider and driver. Refused now.
+- **The apps worked against the real server** (IIS, PostgreSQL, Twilio): the Rides tile followed the server's flag, availability followed the driver's position, and an offer showed only the pickup's name and distance.
+
+Not seen on the phone: sharing a trip and opening the link, the console's safety queue and ride-driver review, and the live connection staying up across a long idle (the screens refreshed on return, by polling or the hub).
+
+## 11. As built: step 9.7
 
 [release-readiness.md](release-readiness.md) works the spec's release gate through for the whole product: what is checked, what needs the owner, a lawyer, a device or a server, the production settings, the flows to
 run on devices, the migrations to apply, and the known gaps. **Phase 9 is built as far as code can take it; launching it is the owner's decision, and section 5 lists what that needs.**

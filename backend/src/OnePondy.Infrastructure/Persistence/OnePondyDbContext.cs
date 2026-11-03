@@ -86,6 +86,8 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
 
     public DbSet<RideDriverProfile> RideDriverProfiles => Set<RideDriverProfile>();
 
+    public DbSet<RideDriverPosition> RideDriverPositions => Set<RideDriverPosition>();
+
     public DbSet<RideQuote> RideQuotes => Set<RideQuote>();
 
     public DbSet<Ride> Rides => Set<Ride>();

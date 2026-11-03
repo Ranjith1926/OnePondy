@@ -25,7 +25,9 @@ public sealed record RideDriverContent(
 /// policy takes the driver out of service without anyone having to remember. Only an eligible driver goes on duty for rides, and only one who is on
 /// duty with a recent position is offered a job.
 /// <para>
-/// The driver's position is kept for dispatch only: the latest one, only while on duty, and erased when the shift ends. It is not a history.
+/// The driver's position is kept for dispatch only (<see cref="RideDriverPosition"/>): the latest one, only while on duty, and erased when the shift
+/// ends. It lives in its own row so that reporting it every few seconds never changes this profile's version, which administrators and the driver
+/// rely on to know they are acting on what they last saw.
 /// </para>
 /// </summary>
 public sealed class RideDriverProfile
@@ -75,12 +77,6 @@ public sealed class RideDriverProfile
 
     public DateTimeOffset? OnDutySince { get; private set; }
 
-    public double? LastLatitude { get; private set; }
-
-    public double? LastLongitude { get; private set; }
-
-    public DateTimeOffset? LastLocationAt { get; private set; }
-
     public DateTimeOffset CreatedAt { get; private set; }
 
     public DateTimeOffset UpdatedAt { get; private set; }
@@ -93,9 +89,6 @@ public sealed class RideDriverProfile
 
     /// <summary>Whether a job may be offered to this driver right now: eligible and on duty.</summary>
     public bool IsAvailableForRides(DateOnly today) => IsEligible(today) && IsOnDuty;
-
-    /// <summary>Whether the last position is recent enough to say where the driver is.</summary>
-    public bool HasFreshPosition(DateTimeOffset now) => LastLocationAt is { } at && now - at <= PositionFreshFor;
 
     /// <summary>A suspended driver cannot change anything: support deals with them.</summary>
     public bool CanEdit => ApprovalStatus != DriverApprovalStatus.Suspended;
@@ -199,28 +192,10 @@ public sealed class RideDriverProfile
         UpdatedAt = now;
     }
 
-    /// <summary>Keeps only the latest position, and only while on duty.</summary>
-    public void ShareLocation(double latitude, double longitude, DateTimeOffset now)
-    {
-        EnsureState(IsOnDuty, "Location is only shared while you are on duty.");
-        if (!double.IsFinite(latitude) || !double.IsFinite(longitude) || latitude is < -90 or > 90 || longitude is < -180 or > 180)
-        {
-            throw new ArgumentOutOfRangeException(nameof(latitude), "That is not a position on Earth.");
-        }
-
-        LastLatitude = latitude;
-        LastLongitude = longitude;
-        LastLocationAt = now;
-        UpdatedAt = now;
-    }
-
     private void StopDuty()
     {
         IsOnDuty = false;
         OnDutySince = null;
-        LastLatitude = null;
-        LastLongitude = null;
-        LastLocationAt = null;
     }
 
     private bool Matches(RideDriverContent content) =>
@@ -259,5 +234,46 @@ public sealed class RideDriverProfile
         {
             throw new InvalidOperationException(message);
         }
+    }
+}
+
+/// <summary>
+/// Where an on-duty ride driver last said they were, so requests near them can be offered to them. Only the latest is kept, there is never a history,
+/// and the database deletes it the moment the driver goes off duty (and refuses to keep one for a driver who is not on duty).
+/// </summary>
+public sealed class RideDriverPosition
+{
+    private RideDriverPosition()
+    {
+    }
+
+    public Guid UserId { get; private set; }
+
+    public double Latitude { get; private set; }
+
+    public double Longitude { get; private set; }
+
+    public DateTimeOffset RecordedAt { get; private set; }
+
+    /// <summary>Whether this is recent enough to say where the driver is.</summary>
+    public bool IsFresh(DateTimeOffset now) => now - RecordedAt <= RideDriverProfile.PositionFreshFor;
+
+    public static RideDriverPosition At(Guid userId, double latitude, double longitude, DateTimeOffset now)
+    {
+        var position = new RideDriverPosition { UserId = userId };
+        position.MoveTo(latitude, longitude, now);
+        return position;
+    }
+
+    public void MoveTo(double latitude, double longitude, DateTimeOffset now)
+    {
+        if (!double.IsFinite(latitude) || !double.IsFinite(longitude) || latitude is < -90 or > 90 || longitude is < -180 or > 180)
+        {
+            throw new ArgumentOutOfRangeException(nameof(latitude), "That is not a position on Earth.");
+        }
+
+        Latitude = latitude;
+        Longitude = longitude;
+        RecordedAt = now;
     }
 }
