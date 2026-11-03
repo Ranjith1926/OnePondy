@@ -221,9 +221,24 @@ only while no administrator exists.
 
 ### 5.4 Rate limiting
 
-A fixed-window limiter, policy `auth`, partitioned per client IP (default 30 per minute,
-configurable under `RateLimiting:Auth`). Rejections return `429` problem JSON with
-`code: "rate_limited"`. OTP-specific limits (§5.1) apply on top.
+Two layers, both fixed-window limiters that answer `429` problem JSON with `code: "rate_limited"` and a `Retry-After` header.
+
+- **Sign-in and account endpoints** (`/auth`, `/account`, `/admin/auth`) keep the named policy `auth`, counted per client address (default 30 per minute, `RateLimiting:Auth`). OTP-specific limits (§5.1) apply on top.
+- **Everything else under `/api/`** is put in a class by `RateLimitClassifier` and counted **per signed-in person**, or per address for someone who is not signed in, so one person hammering the API cannot slow
+  it for others, and people signed in behind one shared address do not lock each other out. Authentication runs before the limiter for that reason; a forged or expired token does not count as a person.
+
+| Class | What it covers | Default |
+|---|---|---|
+| `browse` | public reads: places, listings, restaurants, reviews, configuration, the grievance officer | 120 a minute |
+| `read` | reads by a signed-in person | 240 a minute |
+| `write` | changes by a person: saving, cancelling, accepting, updating | 90 a minute |
+| `create` | starting something a person must then read, moderate or answer: a review, a support request or message, a booking, an order, a trip plan, a business application, registering a device | 12 a minute |
+| `upload` | photos and documents | 20 a minute |
+| `staff` | everything under `/admin` | 600 a minute |
+
+Health checks, static files, the API description and the payment gateway's callbacks (verified by signature, and never to be refused for arriving together) are not limited. Each limit is a setting
+(`RateLimiting:Browse`, `Read`, `Write`, `Create`, `Upload`, `Staff`: `PermitLimit` and `Window`). `RateLimitStats` counts, per class, the requests that arrived and the ones refused, and when the last refusal was
+(counts only, no addresses and no accounts, in the API's memory since it last started); the operations page reads it. Behind a reverse proxy, the address is what the host reports: IIS in-process hosting reports the real client.
 
 ### 5.5 Ownership checks
 
@@ -397,7 +412,8 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Auth:HashingKey` | Key for the HMAC `ISecretHasher` |
 | `Auth:Otp` | Code length, lifetime, attempts, resend interval, per-destination and daily limits, allowed calling codes (`["91"]`), `Delivery` |
 | `Auth:Sessions` | `RefreshTokenLifetime` |
-| `RateLimiting:Auth` | `PermitLimit`, `Window` |
+| `RateLimiting:Auth` | `PermitLimit`, `Window` (sign-in and account endpoints, per address) |
+| `RateLimiting:Browse`, `Read`, `Write`, `Create`, `Upload`, `Staff` | `PermitLimit`, `Window` (per signed-in person, or per address; see §5.4 for the defaults) |
 | `Content` | `ReviewInterval` (default 180 days) |
 | `Media` | `RootPath`, `MaxUploadBytes`, `MinLongEdge`, `MinShortEdge`, `MaxPixels`, `MaxPerPlace` |
 | `BusinessDocuments` | `RootPath` (private) |

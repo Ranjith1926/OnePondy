@@ -397,7 +397,7 @@ the app, so it must never be secret.
 | 8 — Food ordering and the driver app | **Built in sandbox (steps 8.1 to 8.10): steps 8.1 (restaurants and menus), 8.2 (orders and server-side pricing), 8.3 (paying for orders, sandbox), 8.4 (the customer app's food screens), 8.5 (the restaurant's order inbox in the console), 8.6 (drivers: applying, review in the console, the new driver app with sign-in, onboarding and duty), 8.7 (delivery: open jobs, one driver accepts, pickup and drop-off, location only during a delivery), 8.8 (cash on delivery, with the cash drivers hold) and 8.9 (administrators watch orders and deliveries; food orders in the customer history view) and the documentation pass 8.10 are done; the `food` flag stays off until the go-live gate** — see `docs/phase-8-plan.md` |
 | 7 — Payments, ledger and notifications | **Built in sandbox (steps 7.1–7.9); live payments deliberately off** until the legal and tax review, D21/D22 sign-off and an end-to-end settlement check — see "Phase 7 verification" and `docs/phase-7-plan.md` |
 | 9 — Transport | Not started: needs the aggregator licence, legal approval, driver supply and insurance (spec §21) |
-| 10 — Reviews, support and trust hardening | **In progress: steps 10.1 and 10.2 (reviews) and 10.3 (support requests, with the grievance officer) built.** Steps 10.4 and 10.5 not started — see `docs/phase-10-plan.md` |
+| 10 — Reviews, support and trust hardening | **In progress: steps 10.1 and 10.2 (reviews), 10.3 (support requests, with the grievance officer) and 10.4 (rate limits on every endpoint) built.** Step 10.5 not started — see `docs/phase-10-plan.md` |
 
 ### Phase 0 verification (2026-10-26)
 

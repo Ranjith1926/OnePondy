@@ -47,8 +47,10 @@ app.UseStaticFiles(new StaticFileOptions
     OnPrepareResponse = context => context.Context.Response.Headers.CacheControl = "public, max-age=31536000, immutable",
 });
 
-app.UseRateLimiter();
+// Authentication comes first so the limiter can count a signed-in person on their own, not with everyone behind the same address.
 app.UseAuthentication();
+app.UseRateLimitCounting();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 // Liveness: the process is running. Readiness: dependencies such as PostgreSQL are reachable.

@@ -34,6 +34,12 @@ public sealed class ApiFactory(string connectionString, IReadOnlyDictionary<stri
         builder.UseSetting("Auth:Jwt:SigningKey", SigningKey);
         builder.UseSetting("Auth:HashingKey", HashingKey);
         builder.UseSetting("RateLimiting:Auth:PermitLimit", "1000");
+        // The other limits are out of the way for tests that are about something else; the rate limit tests set their own.
+        foreach (var limited in new[] { "Browse", "Read", "Write", "Create", "Upload", "Staff" })
+        {
+            builder.UseSetting($"RateLimiting:{limited}:PermitLimit", "100000");
+        }
+
         builder.UseSetting("Media:RootPath", MediaRoot);
         builder.UseSetting("BusinessDocuments:RootPath", BusinessDocumentsRoot);
         foreach (var (key, value) in settings ?? new Dictionary<string, string>())

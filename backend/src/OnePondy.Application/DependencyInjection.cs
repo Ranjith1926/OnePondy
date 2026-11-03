@@ -34,6 +34,7 @@ public static class DependencyInjection
         services.Configure<OnePondy.Application.Support.SupportOptions>(configuration.GetSection(OnePondy.Application.Support.SupportOptions.SectionName));
 
         services.TryAddSingleton(TimeProvider.System);
+        services.TryAddSingleton<OnePondy.Application.Operations.IRateLimitStatistics, OnePondy.Application.Operations.NoRateLimitStatistics>();
         services.TryAddScoped<IAccountDeletionGuard, BookingsDeletionGuard>();
 
         services.AddScoped<OtpChallengeService>();

@@ -1,6 +1,6 @@
 # Phase 10 plan: reviews, support and trust hardening
 
-Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; step 10.3 (support requests: the server, the customer app and the console) built 2026-11-03; steps 10.4 and 10.5 are planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
+Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; step 10.3 (support requests: the server, the customer app and the console) built 2026-11-03; step 10.4 (rate limits on every endpoint) built 2026-11-03; step 10.5 is planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
 Consumer Protection (E-Commerce) Rules row in §21 ("no manipulated reviews", a grievance officer) and the abuse-protection items in
 §12. The spec says Phase 10 can run alongside Phases 8 and 9 once Phase 7 is complete; Phase 7 and Phase 8 are built, so it can start.
 Rides (Phase 9) are not built, so reviews cover bookings and food orders only; rides join when Phase 9 exists.
@@ -49,7 +49,7 @@ These are the proposed defaults: what gets built unless the owner says otherwise
 | 10.1 | Reviews domain and API: the review model and states (`pending`, `published`, `rejected`, `removed`), eligibility (R1, R2), one per transaction, the automatic check (R5), the moderator queue API, partner reply API, rating summary on listings and restaurants. Migration. | Only the owner of an eligible, completed transaction can review it, once, inside the window; a published review shows in the summary and a pending one does not; a partner cannot change a review. **Built (2026-11-02).** |
 | 10.2 | Reviews in the apps and console: customer app write and read screens and the history entry point; ratings on listing and restaurant pages; console moderation queue and partner replies. | Component and screen tests; a real run of write, moderate, publish, reply. **Built (2026-11-03).** |
 | 10.3 | Support tickets: ticket and message model, customer and partner creation and reading, agent queue and answer screens in the console, assignment, status, response-time targets and escalation (R9, R10), audited access, grievance officer page (R11). Migration. | An agent sees only what a ticket needs; every record view is in the audit log; a ticket past its target is flagged and escalated **Built (2026-11-03).** |
-| 10.4 | Abuse prevention: rate-limit policies for every endpoint group (R12) with settings, per-user partitions, tests that a limit refuses and recovers, and a review of which endpoints are public. | Tests per group; the existing auth limits unchanged |
+| 10.4 | Abuse prevention: rate-limit policies for every endpoint group (R12) with settings, per-user partitions, tests that a limit refuses and recovers, and a review of which endpoints are public. | Tests per group; the existing auth limits unchanged **Built (2026-11-03).** |
 | 10.5 | Monitoring and alerts (R13): an operations page in the console (limits hit, OTP abuse, moderation backlog, overdue tickets, payment and order attention counts), audit log review filters, and the documentation pass for the phase. | Counts match the data; documents updated |
 
 ## 4. Not in Phase 10
@@ -173,3 +173,17 @@ Flow in [workflows.md](workflows.md) §27. The decisions R9 to R11 in section 1 
 - **Not in 10.3, and known gaps:** a push notification when support answers (notifications are about bookings only; the customer sees the answer when they open the request, which refreshes itself, or
   from Help); attachments or photos; internal notes between agents; assigning to a named colleague (an agent takes a request for themselves); a business owner linking a booking or order from the console
   (the API supports it); a customer rating the answer; and the legal review of the grievance officer's wording and the 48-hour and one-month promises.
+
+## 9. As built: step 10.4
+
+Details in [backend-architecture.md](backend-architecture.md) §5.4. Decision R12 was built as proposed.
+
+- **Every API request is limited,** not only sign-in: a classifier puts each in `browse`, `read`, `write`, `create`, `upload` or `staff` (sign-in and account endpoints keep their own per-address limit; health checks, files and the
+  payment gateway's callbacks are exempt). Each class has a setting for its limit and window. Defaults: 120, 240, 90, 12, 20 and 600 requests a minute.
+- **Per person, not per address.** A signed-in person is counted on their own, and anyone else by address, so one person cannot use up another's allowance and a shared address does not lock out the people behind it. The
+  limiter now runs after authentication for this; a bad token is limited as the public read it is.
+- **Refusals** are `429` with `code: "rate_limited"` and `Retry-After`, are logged as warnings, and are counted per class (counts only: no address, no account) for the operations page in 10.5.
+- **Tests.** Classifier table (what each endpoint is, and what is exempt, including paths that only look like an exempt one), the limits over HTTP (refuse, say when to come back, work again after the window, leave health,
+  gateway callbacks and sign-in alone, count correctly), and against PostgreSQL that one person's limit does not touch another's from the same address. The shared test host sets the new limits very high so other tests are unaffected.
+- **Not in 10.4:** limits that adapt to load, blocking an address for longer after repeated refusals, per-endpoint limits finer than the classes, and a shared store so several API servers count together (the counts live in one
+  process; with more than one API server each has its own).
