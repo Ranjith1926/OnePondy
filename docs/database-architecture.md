@@ -420,6 +420,18 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 - **Indexes** for the public pages and ratings (`ix_reviews_listing_status`, `ix_reviews_business_status_published`), the moderators' queue (`ix_reviews_status_created`)
   and a customer's own reviews (`ix_reviews_customer`). There is no trigger: who may change what is decided in `ReviewService` (a business has no endpoint that changes a review).
 
+**Support requests (Phase 10, step 10.3, migration 22, `AddSupportTickets`).**
+
+- **`support_tickets`** – one request for help: `requester_user_id`; `business_id` (set when a business owner wrote about a business); `topic` (`booking`, `food_order`, `payment`, `account`, `business`, `other`);
+  `subject` (up to 120); `status` (`open`, `waiting_for_requester`, `resolved`); `booking_id` or `food_order_id` (at most one: what it is about); `assigned_to_user_id` and `assigned_at`; `escalated_at` and
+  `escalation_reason` (a code such as `first_reply_overdue`, or an agent's words); `first_response_at`; `resolved_at` and `resolved_by_user_id`; `last_requester_message_at`, `last_staff_message_at`,
+  `created_at`, `updated_at`; and the `xmin` version.
+- **`support_messages`** – one message: `ticket_id` (cascade), `author_user_id`, `author_kind` (`requester` or `staff`), `body` (1 to 2000 characters), `created_at`.
+- **Rules the database enforces:** `ck_support_ticket_status`, `_topic`, `_subject`; `ck_support_ticket_about` (a booking or an order, not both); `ck_support_ticket_resolved` (resolved if and only if there is a time and a
+  person); `ck_support_ticket_assigned` (a person and a time, or neither); `ck_support_ticket_escalated` (a time and a reason, or neither); `ck_support_message_body` and `_author_kind`.
+- **Indexes** for the agents' queue (`ix_support_tickets_status_waiting`), a person's own requests (`ix_support_tickets_requester`), an agent's requests (`ix_support_tickets_assigned`) and a thread
+  (`ix_support_messages_ticket_time`). There is no trigger: who may see or change what is decided in `SupportService`, and the audit entries are written in the same save.
+
 **Administrators' monitoring (step 8.9, migration 19).** No new tables: the `customer_history` view (§3.9) lists food orders, and `ck_refund_reason` allows `admin_cancelled`.
 
 ## 4. Foreign-key delete policy
@@ -433,6 +445,7 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 | `businesses` → `business_documents` | CASCADE | Owned data. |
 | `businesses` → `listings`, `listings` → `availability_slots` | RESTRICT | Commercial history must survive. |
 | `app_users`, `bookings`, `food_orders`, `businesses`, `listings` → `reviews` | RESTRICT | A review is removed by the service when its author's account is deleted; nothing else cascades. |
+| `app_users`, `bookings`, `food_orders`, `businesses` → `support_tickets`; `support_tickets` → `support_messages` | RESTRICT; CASCADE for messages | A request is removed by the service when its author's account is deleted (its messages go with it); nothing else cascades. |
 | `listings`/`availability_slots` → bookings, `booking_slots` | RESTRICT | A booking can never lose its listing or slot. |
 | `bookings` → `booking_slots`, `booking_status_history` | RESTRICT | History is immutable. |
 | `bookings`, `food_orders`, `payment_attempts`, `businesses` → `payment_attempts`, `refunds`, `ledger_entries`, `settlements`, `settlement_items`, `reconciliation_exceptions` | RESTRICT | Financial records must outlive everything they describe. |
@@ -489,6 +502,7 @@ Applied in this order (folder `Persistence/Migrations`):
 | 19 | `20261030112541_ExtendCustomerHistoryAndAdminRefundReason` | The `customer_history` view now also lists food orders (kind `food_order`); `ck_refund_reason` allows `admin_cancelled`. |
 | 20 | `20261102044345_AddCashOnDelivery` | `food_orders.payment_method` (`online` for every existing row), `cash_collected`, `cash_collected_at`, `cash_collected_by`; `restaurant_profiles.accepts_cash_on_delivery`; `driver_cash_deposits`; the ledger accounts `driver_cash:{driver}` and `cash_received`; the `cashOnDelivery` module flag (off); triggers that keep deposits immutable and a driver's cash account from going below nothing. |
 | 21 | `20261102130258_AddReviews` | `reviews`: one review per completed booking or delivered food order, with unique indexes, checks and the moderation and reply columns. No triggers. |
+| 22 | `20261103033839_AddSupportTickets` | `support_tickets` and `support_messages`: a request and its conversation, with checks that keep a ticket's columns consistent with its status. No triggers. |
 
 Rules for new migrations:
 
@@ -506,7 +520,7 @@ Details are in [data-retention.md](data-retention.md). In short:
 - The Worker purges `otp_challenges` older than 1 day, consumed/expired `refresh_tokens` older
   than 30 days and ended `user_sessions` older than 90 days (hourly).
 - Account deletion anonymises `app_users` (`display_name` becomes "Deleted user", phone and e-mail
-  are cleared, `is_active = false`, `deleted_at` set, security stamp rotated) and removes saved places, saved listings, itineraries and reviews. Sessions are
+  are cleared, `is_active = false`, `deleted_at` set, security stamp rotated) and removes saved places, saved listings, itineraries, reviews and support requests. Sessions are
   revoked with reason `account_deleted`. Bookings, audit rows and partner records are kept.
 - The Worker removes `notification_log` rows and finished `outbox_messages` after 30 days. Payment, refund, ledger and
   statement rows have no end date yet (they need the tax review) and are linked to the anonymised customer row.

@@ -5,7 +5,7 @@ import { redirect } from 'next/navigation';
 
 import type { SessionTokens } from './apiTypes';
 import { secureCookies } from './config';
-import { canEditContent, isAdministrator } from './roles';
+import { canEditContent, canWorkSupport, isAdministrator } from './roles';
 import {
   cookieOptions,
   parsePartnerUser,
@@ -44,6 +44,14 @@ export async function requireUser(): Promise<ConsoleUser> {
 export async function requireEditor(): Promise<ConsoleUser> {
   const user = await requireUser();
   if (!canEditContent(user.role)) {
+    redirect('/?denied=1');
+  }
+  return user;
+}
+
+export async function requireSupport(): Promise<ConsoleUser> {
+  const user = await requireUser();
+  if (!canWorkSupport(user.role)) {
     redirect('/?denied=1');
   }
   return user;

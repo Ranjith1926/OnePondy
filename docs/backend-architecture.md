@@ -4,7 +4,7 @@ Audience: developers and operations. Scope: everything built through Phase 8 (ac
 tourism content, itineraries and AI planner, partner onboarding, listings, availability, the
 booking engine, Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
 push notifications and partner statements, and Phase 8: restaurants, food orders and their payment,
-delivery drivers, deliveries, cash on delivery and administrators' order monitoring) and, from Phase 10, reviews (the server, the customer app's screens and the
+delivery drivers, deliveries, cash on delivery and administrators' order monitoring) and, from Phase 10, reviews and support requests (the server, the customer app's screens and the
 console's; the rest of the phase comes later). Rides are **not built** and are marked as such. Live payments are switched off by design until the go-live gate in
 [phase-7-plan.md](phase-7-plan.md) §9 is met.
 
@@ -138,6 +138,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Partners | `BusinessService`, `ListingService`, `SavedListingsService` |
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
 | Reviews | `ReviewService` (customer, public, business and moderator sides), `ReviewChecks` (the automatic text check), `ReviewRatings` (displayed averages), `ReviewOptions` |
+| Support | `SupportService` (requests, the agents' queue, audited access), `SupportEscalation` (the Worker's check), `SupportOptions` |
 | Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens), `FoodOrderAdminService` (administrators' list, detail, cancel, re-offer) with `OrderAttentionRules`, `CashService` (the cash a driver holds and recording what they hand in) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
 | Statements | `SettlementService` (draft, approve, pay, discard, partner statements, CSV) |
@@ -337,6 +338,15 @@ moderator; the author may change it once and delete it while it is waiting or pu
 appear on the public listing and restaurant views once there are enough. Account deletion removes the person's reviews. Workflow: [workflows.md](workflows.md) §26;
 decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md).
 
+### 7.13 Support requests (Phase 10, step 10.3)
+
+A customer, or a business owner about their business, writes to support and follows the conversation (`SupportService`); starting a request needs the `support` module, and each person has at most five
+unresolved ones. Support agents and administrators (the `support` policy; content editors are excluded) work a queue of lists. An agent sees the request, the first name on the account and a short summary
+of the one booking or order it is about, never the person's other history or phone number; opening a request is audited each time, the person's contact details are a separate audited step, and taking,
+releasing, resolving and escalating are audited. Every agent change carries the request's version. A request that misses the first-reply or the resolution target is flagged in the queue and escalated once by
+`SupportEscalation` (run by the Worker's `SupportEscalationJob`). `GET /support/grievance` is public and names the grievance officer from settings. Account deletion removes the person's requests.
+Workflow: [workflows.md](workflows.md) §27; decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md) §8.
+
 ## 8. AI trip planner
 
 `TripPlannerService` is deliberately defensive; the model only ranks and arranges places the
@@ -368,6 +378,7 @@ and runnable as a console app in development. It shares Application and Infrastr
 | `PaymentReconciliationJob` | every 5 minutes | Checks open orders, stuck refunds and unprocessed webhooks, applies what a lost webhook missed, raises exceptions; once a day compares the previous day's payments with Razorpay's. |
 | `OutboxDispatchJob` | every 20 seconds | Sends due notifications through Expo, reads delivery receipts about 15 minutes later, deletes dead phones, and (hourly) removes old log and outbox rows. |
 | `BookingReminderJob` | every 30 minutes | Queues the "booking tomorrow" reminder, once per booking. |
+| `SupportEscalationJob` | every 5 minutes (and once at start-up) | Calls `SupportEscalation`: escalates, once, each unresolved support request with no first answer within the first-reply target or still unresolved after the resolution target, recording the reason in the audit log. |
 
 All jobs catch and log exceptions so a bad run never stops the service; the next interval retries.
 
@@ -397,6 +408,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Payments` | `Mode` (`Sandbox` default), `AllowLive` (false), `PaymentWindow` (30 min), `GatewayCheckGrace` (15 min), `CommissionPercent` (10, provisional), `RefundsEnabled` (false) |
 | `Food` | `CashOnDelivery` (`MaxOrderAmount` 2000: the largest order payable in cash; `MaxDriverCashHeld` 5000: a driver holding this much is given no more cash orders until they hand some in; cash is offered only while the `cashOnDelivery` module is on and the restaurant opts in), `RequireOnlinePayment` (default true: food can be priced, ordered and accepted only while the `payments` module is available; `false` allows the unpaid path for development), `Attention` (`NoDriverAfter` 10 min, `PickupOverdueAfter` 30, `DeliveryOverdueAfter` 60, `KitchenOverdueAfter` 20, `RefundOverdueAfter` 1 h: when the console flags an order), `AcceptWindow` (5 min: how long a restaurant has to answer), `PaymentWindow` (10 min), `DeliveryFee` (30), `PackagingFee` (10), `GatewayCheckGrace` (5 min: how long an unpaid order waits past its window when Razorpay cannot be asked); checked at start-up (`FoodOptionsGuard`). Placing an order also needs the `food` module flag to be available; paying for one uses the `Payments` settings (and is offered only while the `payments` module is available). |
 | `Reviews` | `WindowDays` (30: how long after completion a review may be written), `EditWindow` (24 h: the author's one change), `MinCountToShow` (3: published reviews needed before an average is shown), `BlockedWords` (empty: words the automatic check flags) |
+| `Support` | `FirstReplyTarget` (24 h), `ResolutionTarget` (5 days), `ReopenWindow` (14 days), `MaxOpenTicketsPerUser` (5), `MaxMessagesPerTicket` (100), `GrievanceOfficer` (`Name`, `Email`, `Phone`, `Address`, `AcknowledgeWithinHours` 48, `ResolveWithinDays` 30: empty until one is appointed) |
 | `Payments:Razorpay` | `KeyId`, `KeySecret`, `WebhookSecret` (all secrets), `BaseUrl` |
 | `Notifications` | `Enabled` (false), `MessageLifetime` (24 h), `ReceiptDelay` (15 min) |
 | `Notifications:Expo` | `AccessToken` (secret, only if Expo enhanced push security is on), `BaseUrl` |
@@ -422,7 +434,7 @@ every migration to a fresh database and fails on pending model changes.
 
 All routes are prefixed `/api/v1`. Auth column: **P** public, **U** any signed-in user, **O**
 signed-in owner of the business, **S-R** staff content-read, **S-W** staff content-write, **S-A**
-administrator.
+administrator, **S-P** administrator or support agent.
 
 ### Accounts and sessions
 | Method and path | Auth | Purpose |
@@ -442,6 +454,7 @@ administrator.
 | GET `/listings`, `/listings/{id}`, `/listings/{id}/availability` | P | Published listings and open slots. |
 | GET `/itineraries/shared/{token}` | P | Read a shared itinerary. |
 | GET `/reviews?listingId=` or `?restaurantId=` | P | Published reviews of a listing or restaurant, newest first, with the rating once there are enough (Phase 10). |
+| GET `/support/grievance` | P | Who the grievance officer is (names no one until one is appointed). |
 
 ### Staff console
 | Method and path | Auth | Purpose |
@@ -453,6 +466,7 @@ administrator.
 | `/admin/staff` list, add, change role, remove; GET `/admin/audit` | S-A | Staff management and audit log. |
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
 | `/admin/food-orders` list (`?status=`, `?needsAttention=true`), `/attention-count`, get, `/{id}/cancel`, `/{id}/release-delivery` | S-A | Order monitoring (step 8.9). Get returns the customer's address and phone and, while a delivery is under way, the driver's last position (each look is audited); cancel needs a reason and refunds a paid order in full when refunds are on; release only before the food is collected. |
+| `/admin/support/tickets` list (`?view=`), get, `/{id}/contact`, POST `/{id}/messages`, `/assign`, `/release`, `/resolve`, `/escalate`; GET `/admin/support/counts` | S-P | The support queue. Opening a request, and separately asking for the person's contact details, are audited. |
 | `/admin/reviews` list (`?status=`, default `pending`), POST `/{id}/publish`, `/reject`, `/remove` | S-W | The moderators' queue for reviews (Phase 10). Reject and remove need a reason. |
 | `/admin/cash/drivers` list (`?onlyHolding=`), POST `/{driverUserId}/deposits` | S-A | The cash drivers hold (step 8.8) and recording cash handed in (never more than held; audited). |
 | `/admin/drivers` list (`?status=`), get, `/{userId}/approve`, `/reject`, `/suspend`, `/reinstate` | S-A | Driver review (step 8.6). Reject and suspend need a reason; suspending ends the shift at once; every step is audited. |
@@ -466,6 +480,7 @@ administrator.
 |---|---|---|
 | `/saved-places`, `/saved-listings` | U | Bookmarks. |
 | POST `/reviews`, GET `/reviews/mine`, PUT and DELETE `/reviews/{id}` | U (own) | Write a review of a completed booking or delivered order, list own, change once, withdraw (Phase 10). |
+| POST/GET `/support/tickets`, GET `/support/tickets/{id}`, POST `/support/tickets/{id}/messages` | U (own) | Ask for help (about a booking or an order, or as a business owner about a business), follow it and reply (Phase 10). Starting one needs the `support` module. |
 | `/itineraries` CRUD, save, archive, unarchive, stops, stops/order, share | U | Trip plans. |
 | POST `/trip-planner/plan` | U | AI draft itinerary. |
 | POST/GET `/bookings`, GET `/bookings/{id}`, POST `/bookings/{id}/cancel` | U | Create, list, view, cancel own bookings. The detail includes the receipt and refunds. |
@@ -517,7 +532,7 @@ yet).
 - **Live payments and payouts.** Everything above is sandbox. Needs the legal and tax review, sign-off of the commission (D21) and refund rule (D22), partner agreements, Razorpay live KYC and an end-to-end settlement checked against Razorpay's report (go-live gate, phase-7-plan.md §9).
 - Razorpay Route payouts (D21); GST and tax collected at source on commission.
 - Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
-- Rides. Reviews are built (Phase 10, steps 10.1 and 10.2); support tickets, rate limits for all endpoints and monitoring are the rest of Phase 10 ([phase-10-plan.md](phase-10-plan.md)).
+- Rides. Reviews and support requests are built (Phase 10, steps 10.1 to 10.3); a notification when support answers, rate limits for all endpoints and monitoring are the rest of Phase 10 ([phase-10-plan.md](phase-10-plan.md)).
 - **Phase 8 gaps:** the legal and tax review of cash on delivery (it is built, off until an administrator switches it on); a daily cash report and alerts for cash held too long; banking the cash; notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); reassigning a delivery to a chosen driver; a map for customers (D6). See
   [phase-8-plan.md](phase-8-plan.md) §4 and the Phase 8 verification in the README.
 - A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.

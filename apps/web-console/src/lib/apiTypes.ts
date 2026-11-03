@@ -815,3 +815,98 @@ export interface PartnerReview {
   reply: ReviewReply | null;
   version: number;
 }
+
+// --- Support (Phase 10, step 10.3) ---
+
+export type SupportTopic = 'booking' | 'foodOrder' | 'payment' | 'account' | 'business' | 'other';
+
+/** Open: waiting for OnePondy. Waiting for requester: support has answered. Resolved: closed, though replying can reopen it for a while. */
+export type SupportStatus = 'open' | 'waitingForRequester' | 'resolved';
+
+/** What a request is about, in a few lines: enough to see the thing, not the person's other history. */
+export interface SupportLinkedSubject {
+  kind: 'booking' | 'food_order';
+  id: string;
+  title: string;
+  status: string;
+  totalAmount: number;
+  currency: string;
+  when: string;
+}
+
+/** A request in the agents' list. The person is a first name only. */
+export interface AgentTicketSummary {
+  id: string;
+  reference: string;
+  topic: SupportTopic;
+  subject: string;
+  status: SupportStatus;
+  requesterKind: 'customer' | 'partner';
+  requesterName: string;
+  businessName: string | null;
+  assignedToUserId: string | null;
+  escalated: boolean;
+  escalationReason: string | null;
+  firstReplyOverdue: boolean;
+  resolutionOverdue: boolean;
+  createdAt: string;
+  lastRequesterMessageAt: string;
+}
+
+export interface AgentMessage {
+  id: string;
+  kind: 'requester' | 'staff';
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface AgentTicketDetail {
+  ticket: AgentTicketSummary;
+  about: SupportLinkedSubject | null;
+  messages: AgentMessage[];
+  resolvedByUserId: string | null;
+  resolvedAt: string | null;
+  version: number;
+}
+
+export interface SupportCounts {
+  needsReply: number;
+  waiting: number;
+  unassigned: number;
+  overdue: number;
+  escalated: number;
+}
+
+/** How to reach the person. Asking for it is recorded in the audit log. */
+export interface SupportContact {
+  phoneNumber: string | null;
+  email: string | null;
+}
+
+/** A request as its author (a business owner, here) sees it. */
+export interface RequesterTicketSummary {
+  id: string;
+  reference: string;
+  topic: SupportTopic;
+  subject: string;
+  status: SupportStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RequesterTicketDetail extends RequesterTicketSummary {
+  about: SupportLinkedSubject | null;
+  messages: { id: string; fromSupport: boolean; body: string; createdAt: string }[];
+  canReply: boolean;
+}
+
+export interface GrievanceOfficer {
+  configured: boolean;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  acknowledgeWithinHours: number;
+  resolveWithinDays: number;
+}

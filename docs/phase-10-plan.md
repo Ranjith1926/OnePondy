@@ -1,6 +1,6 @@
 # Phase 10 plan: reviews, support and trust hardening
 
-Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; steps 10.3 to 10.5 are planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
+Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; step 10.3 (support requests: the server, the customer app and the console) built 2026-11-03; steps 10.4 and 10.5 are planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
 Consumer Protection (E-Commerce) Rules row in §21 ("no manipulated reviews", a grievance officer) and the abuse-protection items in
 §12. The spec says Phase 10 can run alongside Phases 8 and 9 once Phase 7 is complete; Phase 7 and Phase 8 are built, so it can start.
 Rides (Phase 9) are not built, so reviews cover bookings and food orders only; rides join when Phase 9 exists.
@@ -48,7 +48,7 @@ These are the proposed defaults: what gets built unless the owner says otherwise
 |---|---|---|
 | 10.1 | Reviews domain and API: the review model and states (`pending`, `published`, `rejected`, `removed`), eligibility (R1, R2), one per transaction, the automatic check (R5), the moderator queue API, partner reply API, rating summary on listings and restaurants. Migration. | Only the owner of an eligible, completed transaction can review it, once, inside the window; a published review shows in the summary and a pending one does not; a partner cannot change a review. **Built (2026-11-02).** |
 | 10.2 | Reviews in the apps and console: customer app write and read screens and the history entry point; ratings on listing and restaurant pages; console moderation queue and partner replies. | Component and screen tests; a real run of write, moderate, publish, reply. **Built (2026-11-03).** |
-| 10.3 | Support tickets: ticket and message model, customer and partner creation and reading, agent queue and answer screens in the console, assignment, status, response-time targets and escalation (R9, R10), audited access, grievance officer page (R11). Migration. | An agent sees only what a ticket needs; every record view is in the audit log; a ticket past its target is flagged and escalated |
+| 10.3 | Support tickets: ticket and message model, customer and partner creation and reading, agent queue and answer screens in the console, assignment, status, response-time targets and escalation (R9, R10), audited access, grievance officer page (R11). Migration. | An agent sees only what a ticket needs; every record view is in the audit log; a ticket past its target is flagged and escalated **Built (2026-11-03).** |
 | 10.4 | Abuse prevention: rate-limit policies for every endpoint group (R12) with settings, per-user partitions, tests that a limit refuses and recovers, and a review of which endpoints are public. | Tests per group; the existing auth limits unchanged |
 | 10.5 | Monitoring and alerts (R13): an operations page in the console (limits hit, OTP abuse, moderation backlog, overdue tickets, payment and order attention counts), audit log review filters, and the documentation pass for the phase. | Counts match the data; documents updated |
 
@@ -134,3 +134,42 @@ Flow in [workflows.md](workflows.md) §26. No server change: everything below us
 - **Not in 10.2, and known gaps:** a list of "my reviews" (a review is found on its own booking or order); paging through more than 25 reviews; a marker on the history list for orders
   and bookings that can be reviewed; telling the author or the business when something happens to a review (the notifications gap); photos. A moderator can still publish a review the
   automatic check flagged: the flag is information, and the decision is theirs.
+
+## 8. As built: step 10.3
+
+Flow in [workflows.md](workflows.md) §27. The decisions R9 to R11 in section 1 were built as the proposed defaults; the owner has not yet named the grievance officer or confirmed the targets.
+
+- **Who can ask, and about what (R9).** A signed-in customer, or a business owner about one of their businesses, writes a request with a topic (a booking, a food order, a payment or refund,
+  an account, a business, something else), a subject and a message, and may tie it to **one** booking or order of their own (or their business's): support then sees that one thing, not their
+  history. Starting a request needs the `support` module to be switched on (it starts off, and the customer app keeps it at "coming soon" until then); reading and answering existing ones does not.
+  Each person can have five unresolved requests at once, and a thread is limited to 100 messages, so one person cannot bury the queue.
+- **The conversation.** The person and support write in turn. Support's messages reach the person as "OnePondy support", with no staff member's name. A request is **open** (waiting for OnePondy),
+  **waiting for the person** (support has answered) or **resolved**; the person can reopen a resolved request by replying for 14 days (`Support:ReopenWindow`), after which they start a new one.
+  Deleting an account deletes the person's requests and messages.
+- **The agents' queue (R9, R10).** Administrators and support agents (not content editors: the new `support` policy) see lists for needs a reply, waiting, mine, unassigned, escalated, overdue and
+  resolved, with counts. An agent sees the request, the first name on the account (a name that is really a number or an e-mail address shows as "A customer"), and the one booking or order it is about;
+  never the person's other bookings, orders, phone number or address. **Opening a request is audited each time**, and the person's phone number and e-mail address are a separate step ("Show contact
+  details") that is audited too. Taking (assigning), releasing, resolving and escalating a request are audited. Every change carries the version the agent was looking at, so a request that moved on is refused.
+- **Targets and escalation (R9).** A request with no first answer within `Support:FirstReplyTarget` (24 hours), or still unresolved after `Support:ResolutionTarget` (5 days), is flagged in the queue, and the Worker's
+  `SupportEscalationJob` (every five minutes) escalates it once with the reason in the audit log. An agent can also escalate with their own reason. Escalated requests sort first, and an administrator sees them
+  in the "Escalated" list; escalation changes nobody's permissions.
+- **The grievance officer (R11).** `GET /support/grievance` is public: the customer app's Help screen and a public web page (`/grievance` in the console) show the name and the contact details from the settings
+  `Support:GrievanceOfficer`, with the 48-hour and one-month promises (`AcknowledgeWithinHours`, `ResolveWithinDays`). Until an officer is appointed both say so plainly. The Help screen always shows it,
+  even to a guest and while requests are not open.
+- **API.** Customers and business owners: `POST /support/tickets`, `GET /support/tickets`, `GET /support/tickets/{id}`, `POST /support/tickets/{id}/messages`. Agents: `GET /admin/support/tickets?view=`,
+  `GET /admin/support/tickets/{id}`, `GET .../contact`, `POST .../messages`, `.../assign`, `.../release`, `.../resolve`, `.../escalate`, `GET /admin/support/counts`.
+- **Customer app.** Profile's "Help and support" opens a Help screen (the person's requests with where each stands, "New request", the grievance officer). "Get help with this booking" / "this order"
+  on those screens starts a request about it. A request is a thread with the person's and support's messages, the linked booking or order in a card, and a reply box; it refreshes every 30 seconds and when
+  the screen is shown. A request resolved too long ago says to start a new one.
+- **Console.** A **Support** page for administrators and support agents (menu link; lists with counts; flags for escalated, no first reply in time and open too long), a request page (conversation,
+  the linked booking or order, an answer box, Take it / Release / Resolve / Escalate with a reason, and "Show contact details" with a note that asking is recorded), and, for business owners, a **Support**
+  page in the partner area (their requests, a form for a new one about a chosen business, and the thread).
+- **Database.** Migration `AddSupportTickets`: `support_tickets` (checks for status, topic, subject length, about-a-booking-or-an-order-not-both, resolved-means-a-time-and-a-person, assigned and escalated
+  columns agreeing) and `support_messages` (cascade with the request). No triggers.
+- **Tests.** Server: 43 new unit tests (the request's own rules, the service for requesters and agents, the audit entries, the targets, the Worker's escalation, deletion with the account) and six against
+  PostgreSQL (the full HTTP flow with real roles, the business owner's request, every agent list on PostgreSQL, the Worker's escalation of an old request, the public grievance page, the database's checks).
+  Customer app 428 (38 new). Console 224 (61 new).
+- **Found in the real run and fixed:** the customer app kept `support` at "coming soon" even when the server said available, because the module was not on the app's list of what it can open. It is now.
+- **Not in 10.3, and known gaps:** a push notification when support answers (notifications are about bookings only; the customer sees the answer when they open the request, which refreshes itself, or
+  from Help); attachments or photos; internal notes between agents; assigning to a named colleague (an agent takes a request for themselves); a business owner linking a booking or order from the console
+  (the API supports it); a customer rating the answer; and the legal review of the grievance officer's wording and the 48-hour and one-month promises.

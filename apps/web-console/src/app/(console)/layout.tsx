@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/Button';
-import { canEditContent, isAdministrator, roleLabels } from '@/lib/roles';
+import { canEditContent, canWorkSupport, isAdministrator, roleLabels } from '@/lib/roles';
 import { requireUser } from '@/lib/session';
 
 import { signOut } from './actions';
@@ -15,6 +15,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
     { href: '/', label: 'Dashboard' },
     { href: '/places', label: 'Places' },
     ...(canEditContent(user.role) ? [{ href: '/reviews', label: 'Reviews' }] : []),
+    ...(canWorkSupport(user.role) ? [{ href: '/support', label: 'Support' }] : []),
     { href: '/configuration', label: 'Configuration' },
     ...(isAdministrator(user.role)
       ? [

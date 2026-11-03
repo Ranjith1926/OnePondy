@@ -6,7 +6,10 @@ import { getPartnerUser } from '@/lib/session';
 
 import { signOutPartner } from './actions';
 
-const items: NavItem[] = [{ href: '/partner', label: 'My businesses' }];
+const items: NavItem[] = [
+  { href: '/partner', label: 'My businesses' },
+  { href: '/partner/support', label: 'Support' },
+];
 
 export default async function PartnerLayout({ children }: { children: ReactNode }) {
   // The sign-in page lives inside this layout, so a signed-out visitor must be allowed to see it: sending them to sign-in from here

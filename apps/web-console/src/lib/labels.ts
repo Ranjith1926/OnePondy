@@ -20,6 +20,8 @@ import type {
   ReconciliationStatus,
   ReviewKind,
   ReviewStatus,
+  SupportStatus,
+  SupportTopic,
   RefundReason,
   RefundStatus,
   SettlementStatus,
@@ -349,4 +351,21 @@ export const reviewFlagLabels: Record<string, string> = {
   email: 'Contains an e-mail address',
   link: 'Contains a link',
   blocked_word: 'Contains a word on the blocked list',
+};
+
+// --- Support (Phase 10) ---
+
+export const supportStatusLabels: Record<SupportStatus, string> = {
+  open: 'Waiting for support',
+  waitingForRequester: 'Waiting for the person',
+  resolved: 'Resolved',
+};
+
+export const supportTopicLabels: Record<SupportTopic, string> = {
+  booking: 'A booking',
+  foodOrder: 'A food order',
+  payment: 'A payment or refund',
+  account: 'An account',
+  business: 'A business',
+  other: 'Something else',
 };

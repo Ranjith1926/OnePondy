@@ -78,6 +78,15 @@ The public page never reveals whether an account exists for a phone number or em
 | Payments, refunds and ledger lines for orders | No end date decided | The same Phase 7 records and rules as for bookings (see below); a food order's refund is always in full. |
 | What a restaurant sees of an order | Not stored separately | The restaurant's views leave out the customer's address and phone, in the API and in the console. Only OnePondy's drivers (after they take a delivery) and administrators see them. |
 
+## Support requests (Phase 10, step 10.3)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| A request and its messages (subject, the words of the person and of support, what it was about) | Until the person deletes their account | Deleting an account deletes all of the person's requests and messages. No end date has been decided for a resolved request. |
+| Which booking or order a request is about | With the request | A reference only; support sees a short summary of that one booking or order while handling it. |
+| Who looked at a request, asked for the person's contact details, took, released, resolved or escalated it | With the audit log | Audit entries carry the request's id and the agent, never the words of the request or the person's contact details. |
+| The grievance officer's name and contact details | In settings, not in the database | Published on purpose, on the public grievance page and in the app. |
+
 ## Reviews (Phase 10, step 10.1)
 
 | Data | Kept for | Notes |

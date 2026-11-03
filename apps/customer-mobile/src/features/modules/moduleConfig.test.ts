@@ -33,6 +33,12 @@ describe('effectiveModuleStatus', () => {
     expect(effectiveModuleStatus({ food: 'hidden' }).food).toBe('hidden');
   });
 
+  it('opens support requests now that they exist, but only when the server says so', () => {
+    expect(effectiveModuleStatus({ support: 'available' }).support).toBe('available');
+    expect(effectiveModuleStatus({ support: 'comingSoon' }).support).toBe('comingSoon');
+    expect(effectiveModuleStatus({ support: 'hidden' }).support).toBe('hidden');
+  });
+
   it('ignores unknown values', () => {
     expect(effectiveModuleStatus({ food: 'live', casino: 'available' }).food).toBe('comingSoon');
   });

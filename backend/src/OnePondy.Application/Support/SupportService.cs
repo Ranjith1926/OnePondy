@@ -27,6 +27,8 @@ public sealed class SupportService(
 
     private const string AnonymousOwner = "A business owner";
 
+    private const string AnonymousStaff = "A staff member";
+
     private static readonly JsonNamingPolicy Camel = JsonNamingPolicy.CamelCase;
 
     // --- The person asking for help ---
@@ -480,7 +482,7 @@ public sealed class SupportService(
         {
             if (!names.TryGetValue(message.AuthorUserId, out var name))
             {
-                name = await FirstNameAsync(message.AuthorUserId, message.AuthorKind == SupportAuthorKind.Staff ? "Support" : AnonymousCustomer, cancellationToken);
+                name = await FirstNameAsync(message.AuthorUserId, message.AuthorKind == SupportAuthorKind.Staff ? AnonymousStaff : AnonymousCustomer, cancellationToken);
                 names[message.AuthorUserId] = name;
             }
 

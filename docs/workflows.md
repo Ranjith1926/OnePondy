@@ -35,7 +35,8 @@ Related documents: [backend-architecture.md](backend-architecture.md),
 24. [Partner statements and payouts](#24-partner-statements-and-payouts)
 25. [Food orders (Phase 8)](#25-food-orders-phase-8-steps-81-to-85)
 26. [Reviews (Phase 10)](#26-reviews-phase-10-step-101)
-27. [Not built](#27-not-built)
+27. [Support requests (Phase 10)](#27-support-requests-phase-10-step-103)
+28. [Not built](#28-not-built)
 
 ---
 
@@ -1055,7 +1056,27 @@ Built on the server (step 10.1) and in the customer app and the console (step 10
     automatic check found; Publish, Reject and Take down (the last two ask for the reason the author is shown). A business owner reads its published reviews on the business's
     **Reviews** page and answers each once.
 
-## 27. Not built
+## 27. Support requests (Phase 10, step 10.3)
+
+Built on the server, in the customer app and in the console. Decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md) §8.
+
+1. **Asking.** A signed-in customer (Profile, Help and support, New request; or "Get help with this booking/order" on that screen) or a business owner (Support in the partner area) picks what it is about,
+   writes a subject and a message, and may tie it to one booking or order of their own. It needs the support module to be on. A booking or order that is not theirs answers "not found". Each person can
+   have five unresolved requests at once.
+2. **The queue.** Administrators and support agents see the requests in the console's **Support** page: needs a reply, waiting for the person, mine, unassigned, escalated, overdue, resolved, all. An agent
+   sees the person's first name, the request and the one booking or order it is about, not their other history or their phone number. **Opening a request is recorded** each time.
+3. **Answering.** The agent writes a reply (the person sees "OnePondy support", never the agent's name); the request now waits for the person and, if it had no one, is taken by the agent. An agent can take
+   or release a request, escalate it with a reason, or resolve it. Each change carries the version the agent was looking at, so a request that moved on is refused.
+4. **Contact details.** If a request cannot be settled in the conversation, the agent can ask to see the person's phone number or e-mail address. That is a separate step and is recorded.
+5. **The person's side.** The request is a thread in the app (or the partner area), refreshing by itself; the person can reply at any time. A resolved request can be reopened by replying for 14 days;
+   after that the person starts a new one.
+6. **Nothing waits unseen.** A request with no first answer within 24 hours, or still unresolved after 5 days, is flagged in the queue and escalated by the Worker once, with the reason recorded; escalated
+   requests sort first and an administrator sees them in the "Escalated" list.
+7. **The grievance officer.** The customer app's Help screen and the public page `/grievance` name the grievance officer and how to reach them, and promise an acknowledgement within 48 hours and a
+   resolution within a month. Until an officer is appointed they say that no one has been.
+8. **Account deletion** removes the person's requests and messages (section 4).
+
+## 28. Not built
 
 | Area | Status |
 |---|---|
@@ -1063,7 +1084,7 @@ Built on the server (step 10.1) and in the customer app and the console (step 10
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Rides; the review and support screens; support tickets; rate limits on all endpoints; monitoring | Later phases (reviews are built: section 26). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
+| Rides; rate limits on all endpoints; monitoring; a notification when support answers | Later phases (reviews and support requests are built: sections 26 and 27). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
 | Notifications about orders and deliveries; a daily cash report; driver document upload | Not built (Phase 8 gaps: see section 25.12 and phase-8-plan.md §4). Cash on delivery is built (section 25.11) but needs the legal and tax review before real use. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |
