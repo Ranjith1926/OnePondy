@@ -10,5 +10,5 @@ export const requestTimeoutMs = 15_000;
 
 /** Where a shared trip is opened by the person it is shared with: a public web page, not the API. */
 export const shareBaseUrl = (
-  process.env.EXPO_PUBLIC_SHARE_BASE_URL ?? 'http://localhost:3000'
+  process.env.EXPO_PUBLIC_SHARE_BASE_URL ?? 'http://localhost:3100'
 ).replace(/\/+$/, '');
