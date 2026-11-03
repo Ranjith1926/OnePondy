@@ -6,9 +6,8 @@ import { formatDateTime, rideVehicleClassLabels } from '@/lib/labels';
 
 export const metadata: Metadata = {
   title: 'Shared trip',
-  // A private link: it must never be found by a search engine, and the page refreshes itself so the position stays current.
+  // A private link: it must never be found by a search engine.
   robots: { index: false, follow: false },
-  other: { refresh: '15' },
 };
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +35,8 @@ export default async function SharedTripPage({ params }: { params: Promise<{ tok
 
   return (
     <main className="mx-auto max-w-xl p-6 md:p-10">
+      {/* Refreshes the page by itself so the position stays current. It has to be http-equiv: a plain name="refresh" is ignored by browsers. */}
+      <meta httpEquiv="refresh" content="15" />
       <p className="text-xs font-bold tracking-wide text-brand uppercase">OnePondy</p>
       <h1 className="mt-1 text-2xl font-bold">Shared trip</h1>
 

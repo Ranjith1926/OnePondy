@@ -61,6 +61,15 @@ describe('<SharedTripPage />', () => {
     );
   });
 
+  it('refreshes itself, the way browsers understand (http-equiv, not name)', async () => {
+    read.mockResolvedValue(trip());
+
+    render(await SharedTripPage(params('a-secret')));
+
+    expect(document.querySelector('meta[http-equiv="refresh"]')).toHaveAttribute('content', '15');
+    expect(document.querySelector('meta[name="refresh"]')).toBeNull();
+  });
+
   it('shows only that the trip ended once it has', async () => {
     read.mockResolvedValue(
       trip({
