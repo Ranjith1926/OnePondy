@@ -1,6 +1,6 @@
 # Phase 10 plan: reviews, support and trust hardening
 
-Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; steps 10.2 to 10.5 are planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
+Status: **step 10.1 (reviews: rules, moderation, replies and ratings, on the server) built 2026-11-02; step 10.2 (reviews in the customer app and the console) built 2026-11-03; steps 10.3 to 10.5 are planned, not started.** Anything below that is not marked built is still a plan. Spec: Phase 10 (§10), the Reviews workflow (§7), the
 Consumer Protection (E-Commerce) Rules row in §21 ("no manipulated reviews", a grievance officer) and the abuse-protection items in
 §12. The spec says Phase 10 can run alongside Phases 8 and 9 once Phase 7 is complete; Phase 7 and Phase 8 are built, so it can start.
 Rides (Phase 9) are not built, so reviews cover bookings and food orders only; rides join when Phase 9 exists.
@@ -47,7 +47,7 @@ These are the proposed defaults: what gets built unless the owner says otherwise
 | Step | Deliverable | Proof |
 |---|---|---|
 | 10.1 | Reviews domain and API: the review model and states (`pending`, `published`, `rejected`, `removed`), eligibility (R1, R2), one per transaction, the automatic check (R5), the moderator queue API, partner reply API, rating summary on listings and restaurants. Migration. | Only the owner of an eligible, completed transaction can review it, once, inside the window; a published review shows in the summary and a pending one does not; a partner cannot change a review. **Built (2026-11-02).** |
-| 10.2 | Reviews in the apps and console: customer app write and read screens and the history entry point; ratings on listing and restaurant pages; console moderation queue and partner replies. | Component and screen tests; a real run of write, moderate, publish, reply |
+| 10.2 | Reviews in the apps and console: customer app write and read screens and the history entry point; ratings on listing and restaurant pages; console moderation queue and partner replies. | Component and screen tests; a real run of write, moderate, publish, reply. **Built (2026-11-03).** |
 | 10.3 | Support tickets: ticket and message model, customer and partner creation and reading, agent queue and answer screens in the console, assignment, status, response-time targets and escalation (R9, R10), audited access, grievance officer page (R11). Migration. | An agent sees only what a ticket needs; every record view is in the audit log; a ticket past its target is flagged and escalated |
 | 10.4 | Abuse prevention: rate-limit policies for every endpoint group (R12) with settings, per-user partitions, tests that a limit refuses and recovers, and a review of which endpoints are public. | Tests per group; the existing auth limits unchanged |
 | 10.5 | Monitoring and alerts (R13): an operations page in the console (limits hit, OTP abuse, moderation backlog, overdue tickets, payment and order attention counts), audit log review filters, and the documentation pass for the phase. | Counts match the data; documents updated |
@@ -101,6 +101,36 @@ questions in section 5 yet; each is a setting or a small change if the answer di
 - **Tests.** 62 new unit tests (the text check, the review's own rules, the service for bookings and food orders, moderation, replies, ratings), one for
   account deletion, and four against PostgreSQL (the full HTTP flow, a rating from three reviews and a takedown, six simultaneous reviews of one order
   producing one, and the database refusing rows the service would never write). The earlier suites are unchanged and pass.
-- **Not in 10.1:** screens in the customer app and console (10.2); a "can I review this?" marker on the history view (10.2); telling the author or the
+- **Not in 10.1:** screens in the customer app and console (built in 10.2, section 7); a "can I review this?" marker on the history view (not built: the review is offered on the booking's or order's own screen); telling the author or the
   business when a review is published or answered (the notifications gap from Phase 8); readers reporting a review (a takedown is a moderator's decision
   for now); rate limits specific to writing reviews (10.4); photos; reviews of drivers and rides.
+
+## 7. As built: step 10.2
+
+Flow in [workflows.md](workflows.md) §26. No server change: everything below uses the 10.1 API.
+
+- **Customer app** (`features/reviews`: API client, hooks, error messages, `StarRating`, `RatingLine`, `PublicReviews`, `MyReviewSection`, `ReviewFormSheet`).
+  - A **completed booking's** screen and a **delivered order's** screen offer "Write a review". Nothing is shown, and the server is not asked, while the booking is not
+    completed or the order not delivered.
+  - Once written, the same place shows the review with its stars and words, what happens next (waiting to be checked; published; not published, with the moderator's
+    reason; taken down), the business's reply, "Change review" while the author still has their one change (the server says so with `canEdit`; the app does not guess the
+    time limit) and "Delete review" (with a confirmation) while it is waiting or published.
+  - A **listing's** page (bookable listings only) and a **restaurant's** page show the rating under the name, once there are three published reviews (the server leaves it out
+    until then), and the published reviews with the business's reply under each (the first page of 25). If the reviews cannot be loaded the section is simply not there.
+  - Errors are answered in words (`review_window_closed`, `review_already_exists`, and so on), in English only like the rest of the app until translations are reviewed.
+- **A fault found on the emulator and fixed:** the shared bottom sheet did not move up when the keyboard opened, so the review's text box and Submit button were hidden behind it.
+  `ModalSheet` now lifts itself above the keyboard (`KeyboardAvoidingView`), which helps every sheet with a field.
+- **Console.** A **Reviews** page for administrators and content editors (a new link in the menu for those roles): tabs for waiting, published, rejected and taken-down reviews,
+  each review with its stars, business, listing or "Food order", the author's first name, the automatic check's findings as labels ("Contains a phone number"), the words, the
+  business's reply, and Publish, Reject and Take down (the last two ask for the reason the author is shown). Each decision carries the version the moderator was looking at,
+  so a review that changed meanwhile is refused instead of decided on words not read. A business owner's **Reviews** page (a new button on an approved business) lists its published
+  reviews and gives each one reply form, which says it is sent once and cannot be changed. A shared `lib/ids.ts` reads ids and versions from forms (a GUID or a whole number,
+  never an empty value turned into 0).
+- **Tests.** Customer app 390 (43 new: star rating, the author's section in every state, the public list and rating line, error messages, and the review parts of the booking,
+  order and restaurant screens); console 163 (51 new: the moderation and reply actions, the buttons, the helpers). Typecheck, lint and prettier clean.
+- **Real run** against the API and PostgreSQL: a customer on the Android emulator opened a delivered order, wrote a five-star review with a phone number in it, and saw it waiting;
+  in the browser a moderator saw it flagged "Contains a phone number" and published it, and the business owner replied; the restaurant's page in the app then showed the review with
+  the business's reply under it.
+- **Not in 10.2, and known gaps:** a list of "my reviews" (a review is found on its own booking or order); paging through more than 25 reviews; a marker on the history list for orders
+  and bookings that can be reviewed; telling the author or the business when something happens to a review (the notifications gap); photos. A moderator can still publish a review the
+  automatic check flagged: the flag is information, and the decision is theirs.

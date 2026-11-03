@@ -768,3 +768,50 @@ export interface DriverCashRow {
   lastCollectedAt: string | null;
   lastDepositAt: string | null;
 }
+
+// --- Reviews (Phase 10, step 10.1) ---
+
+export type ReviewStatus = 'pending' | 'published' | 'rejected' | 'removed';
+
+/** What a review is about: a booking of a listing, or a delivered food order. */
+export type ReviewKind = 'booking' | 'food_order';
+
+export interface ReviewReply {
+  text: string;
+  repliedAt: string;
+}
+
+/** A review in the moderators' queue. It carries the author's first name and what the automatic check found, not their account. */
+export interface AdminReview {
+  id: string;
+  kind: ReviewKind;
+  businessId: string;
+  businessName: string;
+  listingId: string | null;
+  listingTitle: string | null;
+  rating: number;
+  text: string | null;
+  authorName: string;
+  status: ReviewStatus;
+  /** Codes from the automatic check: `phone_number`, `email`, `link`, `blocked_word`. */
+  flags: string[];
+  moderationReason: string | null;
+  createdAt: string;
+  editedAt: string | null;
+  reply: ReviewReply | null;
+  version: number;
+}
+
+/** A published review as the business sees it. */
+export interface PartnerReview {
+  id: string;
+  kind: ReviewKind;
+  listingId: string | null;
+  listingTitle: string | null;
+  rating: number;
+  text: string | null;
+  authorName: string;
+  publishedAt: string;
+  reply: ReviewReply | null;
+  version: number;
+}

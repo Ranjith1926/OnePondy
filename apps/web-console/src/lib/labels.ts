@@ -18,6 +18,8 @@ import type {
   PaymentAttemptStatus,
   ReconciliationKind,
   ReconciliationStatus,
+  ReviewKind,
+  ReviewStatus,
   RefundReason,
   RefundStatus,
   SettlementStatus,
@@ -325,4 +327,26 @@ export const orderActorLabels: Record<OrderActor, string> = {
   admin: 'OnePondy',
   system: 'System',
   driver: 'Driver',
+};
+
+// --- Reviews (Phase 10) ---
+
+export const reviewStatusLabels: Record<ReviewStatus, string> = {
+  pending: 'Waiting for a moderator',
+  published: 'Published',
+  rejected: 'Rejected',
+  removed: 'Taken down',
+};
+
+export const reviewKindLabels: Record<ReviewKind, string> = {
+  booking: 'Booking',
+  food_order: 'Food order',
+};
+
+/** What the automatic check found, in words a moderator can act on. A code the console does not know is shown as it came. */
+export const reviewFlagLabels: Record<string, string> = {
+  phone_number: 'Contains a phone number',
+  email: 'Contains an e-mail address',
+  link: 'Contains a link',
+  blocked_word: 'Contains a word on the blocked list',
 };

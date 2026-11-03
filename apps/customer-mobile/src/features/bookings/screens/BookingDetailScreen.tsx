@@ -18,6 +18,7 @@ import {
 import { formatMoney } from '../../payments/formatMoney';
 import { PaymentCard } from '../../payments/components/PaymentCard';
 import { ReceiptSection } from '../../payments/components/ReceiptSection';
+import { MyReviewSection } from '../../reviews/components/MyReviewSection';
 import { bookingErrorMessageKey } from '../bookingErrors';
 import { formatDateTime } from '../formatDateTime';
 import { useBooking, useCancelBooking } from '../hooks/useBookings';
@@ -101,6 +102,11 @@ export function BookingDetailScreen({ route }: Props) {
         ) : null}
 
         <ReceiptSection booking={data} />
+
+        <MyReviewSection
+          transaction={{ kind: 'booking', id: data.id }}
+          eligible={data.status === 'completed'}
+        />
 
         <View style={styles.section}>
           <OPText variant="label">{t('bookings.detail.cancellationPolicy')}</OPText>

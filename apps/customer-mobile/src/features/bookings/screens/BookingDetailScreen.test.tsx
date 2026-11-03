@@ -4,6 +4,7 @@ import { screen } from '@testing-library/react-native';
 import { aBooking, bookingId } from '../../../test-utils/bookingFixture';
 import { renderWithProviders } from '../../../test-utils/render';
 import { signedInState } from '../../../test-utils/signedIn';
+import { reviewsApi } from '../../reviews/api/reviewsApi';
 import { bookingsApi } from '../api/bookingsApi';
 import { BookingDetailScreen } from './BookingDetailScreen';
 
@@ -16,11 +17,13 @@ jest.mock('@react-navigation/native', () => {
   };
 });
 jest.mock('../api/bookingsApi', () => ({ bookingsApi: { get: jest.fn(), cancel: jest.fn() } }));
+jest.mock('../../reviews/api/reviewsApi', () => ({ reviewsApi: { mine: jest.fn() } }));
 jest.mock('../../payments/api/paymentsApi', () => ({
   paymentsApi: { start: jest.fn(), refresh: jest.fn() },
 }));
 
 const get = bookingsApi.get as jest.Mock;
+const mine = reviewsApi.mine as jest.Mock;
 
 async function renderScreen() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,7 +37,10 @@ async function renderScreen() {
 }
 
 describe('<BookingDetailScreen /> and payment', () => {
-  beforeEach(() => get.mockReset());
+  beforeEach(() => {
+    get.mockReset();
+    mine.mockReset();
+  });
 
   it('asks the customer to pay while the booking waits for payment, and lets them cancel', async () => {
     get.mockResolvedValue(
@@ -93,5 +99,24 @@ describe('<BookingDetailScreen /> and payment', () => {
 
     expect(await screen.findByTestId('refund')).toBeOnTheScreen();
     expect(screen.queryByRole('button', { name: 'Cancel booking' })).not.toBeOnTheScreen();
+  });
+
+  it('invites a review once the booking is completed', async () => {
+    get.mockResolvedValue(aBooking({ status: 'completed' }));
+    mine.mockResolvedValue([]);
+
+    await renderScreen();
+
+    expect(await screen.findByRole('button', { name: 'Write a review' })).toBeOnTheScreen();
+  });
+
+  it('offers no review, and does not ask for any, while the booking is not completed', async () => {
+    get.mockResolvedValue(aBooking({ status: 'confirmed' }));
+
+    await renderScreen();
+
+    expect(await screen.findByRole('button', { name: 'Cancel booking' })).toBeOnTheScreen();
+    expect(screen.queryByTestId('write-review')).not.toBeOnTheScreen();
+    expect(mine).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,5 @@
 import { apiRequest } from '../../../api/apiClient';
+import type { RatingSummary } from '../../reviews/api/reviewsApi';
 
 // Shapes returned by GET /api/v1/listings (spec §10, Phase 6). Enums arrive in camelCase.
 
@@ -18,6 +19,8 @@ export interface ListingSummary {
   isBookable: boolean;
   basePrice: number | null;
   currency: string;
+  /** Left out until the listing has enough published reviews. */
+  rating?: RatingSummary | null;
 }
 
 export interface ListingDetail {
@@ -32,6 +35,7 @@ export interface ListingDetail {
   basePrice: number | null;
   currency: string;
   cancellationPolicy: CancellationPolicy | null;
+  rating?: RatingSummary | null;
 }
 
 export interface AvailabilitySlot {

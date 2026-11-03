@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Animated, KeyboardAvoidingView, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { OPIconButton } from '../atoms/OPIconButton';
@@ -48,7 +48,8 @@ export function ModalSheet({ visible, onClose, title, closeLabel, children }: Mo
       navigationBarTranslucent
       onRequestClose={onClose}
     >
-      <View style={styles.root}>
+      {/* The window is edge to edge, so the keyboard would cover a field near the bottom of the sheet; this lifts the sheet above it. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.root}>
         <Pressable
           style={[StyleSheet.absoluteFill, { backgroundColor: theme.colors.scrim }]}
           onPress={onClose}
@@ -76,7 +77,7 @@ export function ModalSheet({ visible, onClose, title, closeLabel, children }: Mo
           </View>
           {children}
         </Animated.View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

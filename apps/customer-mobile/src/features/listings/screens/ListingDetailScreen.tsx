@@ -15,6 +15,8 @@ import {
   type Theme,
 } from '../../../design-system';
 import { useAppState } from '../../../state';
+import { PublicReviews } from '../../reviews/components/PublicReviews';
+import { RatingLine } from '../../reviews/components/RatingLine';
 import { BookSlotSheet } from '../components/BookSlotSheet';
 import { useListing } from '../hooks/useListings';
 import { useIsListingSaved, useToggleSavedListing } from '../hooks/useSavedListings';
@@ -104,6 +106,7 @@ export function ListingDetailScreen({ route }: Props) {
           {data.title}
         </OPText>
         <OPText tone="secondary">{data.businessName}</OPText>
+        <RatingLine rating={data.rating} />
         {data.basePrice !== null ? (
           <OPText variant="label">
             {t('listings.from', { currency: data.currency, price: data.basePrice })}
@@ -148,6 +151,8 @@ export function ListingDetailScreen({ route }: Props) {
         ) : null}
 
         {!data.isBookable ? <OPText tone="secondary">{t('listings.discoveryOnly')}</OPText> : null}
+
+        {data.isBookable ? <PublicReviews subject={{ listingId: data.id }} /> : null}
       </ScrollView>
 
       {data.isBookable ? (

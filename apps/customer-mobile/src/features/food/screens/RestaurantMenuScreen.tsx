@@ -15,6 +15,8 @@ import {
   type Theme,
 } from '../../../design-system';
 import { formatMoney } from '../../payments/formatMoney';
+import { PublicReviews } from '../../reviews/components/PublicReviews';
+import { RatingLine } from '../../reviews/components/RatingLine';
 import type { MenuItem, PublicRestaurant } from '../api/foodApi';
 import { quantityOf, wouldReplaceCart, type CartRestaurant } from '../cart/cart';
 import { useCart } from '../cart/CartContext';
@@ -118,6 +120,7 @@ export function RestaurantMenuScreen({ route }: Props) {
           {restaurant.name}
         </OPText>
         {restaurant.description ? <OPText tone="secondary">{restaurant.description}</OPText> : null}
+        <RatingLine rating={restaurant.rating} />
         <OPText tone="secondary">
           {t('food.menu.about', {
             minutes: restaurant.prepTimeMinutes,
@@ -150,6 +153,8 @@ export function RestaurantMenuScreen({ route }: Props) {
             </View>
           ))
         )}
+
+        <PublicReviews subject={{ restaurantId: restaurant.businessId }} />
 
         <OPText variant="caption" tone="secondary">
           {t('food.menu.estimateNote')}

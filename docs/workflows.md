@@ -1031,7 +1031,7 @@ Notifications about orders (so a restaurant learns of a new order only by lookin
 
 ## 26. Reviews (Phase 10, step 10.1)
 
-The server side is built; the apps' and console's screens come in step 10.2. Decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md).
+Built on the server (step 10.1) and in the customer app and the console (step 10.2). Decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md).
 
 1. **Who may review.** The customer who made a booking that is `completed`, or a food order that is `delivered`, within 30 days of that moment, and only once. A
    booking or order that is not theirs answers "not found". One that is not finished answers `review_not_eligible`; one already reviewed, `review_already_exists`
@@ -1048,6 +1048,12 @@ The server side is built; the apps' and console's screens come in step 10.2. Dec
    approved again) and any reply to the old words is cleared. The author can delete a review that is waiting or published. A rejected or removed review stays on record.
 8. **Taking down.** A moderator can take down a published review with a reason; it leaves the average at once and the author sees the reason.
 9. **Account deletion** removes all of the person's reviews (section 4).
+10. **In the customer app,** a completed booking's screen and a delivered order's screen offer "Write a review", then show the review with its status, the moderator's reason if
+    it was not published, the business's reply, "Change review" (once) and "Delete review". A listing's and a restaurant's page show the rating (once there are three published
+    reviews) and the published reviews with their replies.
+11. **In the console,** moderators (administrators and content editors) work the **Reviews** page: tabs for waiting, published, rejected and taken-down reviews; each review shows what the
+    automatic check found; Publish, Reject and Take down (the last two ask for the reason the author is shown). A business owner reads its published reviews on the business's
+    **Reviews** page and answers each once.
 
 ## 27. Not built
 
@@ -1057,7 +1063,7 @@ The server side is built; the apps' and console's screens come in step 10.2. Dec
 | Razorpay Route payouts; GST and tax collected at source on commission | Open (D21; legal and tax review). Payouts are recorded by an administrator for now. |
 | Push delivery to real phones | Built but untested on a device: needs an Expo (EAS) project id and a Firebase project. |
 | SMS / e-mail provider for real code delivery | Twilio Verify is wired for development; MSG91 (production SMS) needs DLT registration; e-mail provider undecided (D19). **Launch blocker.** |
-| Rides; the review and support screens; support tickets; rate limits on all endpoints; monitoring | Later phases (reviews are built on the server only: section 26). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
+| Rides; the review and support screens; support tickets; rate limits on all endpoints; monitoring | Later phases (reviews are built: section 26). Food ordering is built end to end (section 25): restaurants, menus, orders, paying for them (sandbox) or in cash on delivery, drivers and deliveries, and administrators' monitoring. |
 | Notifications about orders and deliveries; a daily cash report; driver document upload | Not built (Phase 8 gaps: see section 25.12 and phase-8-plan.md §4). Cash on delivery is built (section 25.11) but needs the legal and tax review before real use. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |

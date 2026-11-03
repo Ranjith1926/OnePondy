@@ -1,5 +1,6 @@
 import { apiRequest } from '../../../api/apiClient';
 import type { PaymentReceipt, RefundInfo } from '../../bookings/api/bookingsApi';
+import type { RatingSummary } from '../../reviews/api/reviewsApi';
 
 // Shapes returned by /api/v1/restaurants and /api/v1/food (spec Phase 8). Enums arrive in camelCase.
 
@@ -13,6 +14,8 @@ export interface PublicRestaurant {
   minOrderAmount: number;
   /** Area codes the restaurant delivers to; `puducherry` means the whole city. */
   deliveryAreas: string[];
+  /** Left out until the restaurant has enough published reviews. */
+  rating?: RatingSummary | null;
 }
 
 export interface MenuItem {

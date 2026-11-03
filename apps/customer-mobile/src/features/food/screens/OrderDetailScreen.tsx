@@ -22,6 +22,7 @@ import { formatMoney } from '../../payments/formatMoney';
 import { PaymentPanel } from '../../payments/components/PaymentPanel';
 import { ReceiptSection } from '../../payments/components/ReceiptSection';
 import { usePayOrder } from '../../payments/hooks/usePayOrder';
+import { MyReviewSection } from '../../reviews/components/MyReviewSection';
 import type { OrderDetail } from '../api/foodApi';
 import { DeliveryLine } from '../components/DeliveryLine';
 import { PriceBreakdown } from '../components/PriceBreakdown';
@@ -151,6 +152,11 @@ export function OrderDetailScreen({ route }: Props) {
         ) : null}
 
         <ReceiptSection booking={data} />
+
+        <MyReviewSection
+          transaction={{ kind: 'foodOrder', id: data.id }}
+          eligible={data.status === 'delivered'}
+        />
 
         <View style={styles.section}>
           <OPText variant="label">{t('food.order.items')}</OPText>

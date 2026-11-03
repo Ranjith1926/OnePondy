@@ -5,6 +5,7 @@ import { ApiError } from '../../../api/apiErrors';
 import { anOrder, orderId } from '../../../test-utils/foodFixture';
 import { renderWithProviders } from '../../../test-utils/render';
 import { signedInState } from '../../../test-utils/signedIn';
+import { reviewsApi } from '../../reviews/api/reviewsApi';
 import { foodApi, type OrderDetail } from '../api/foodApi';
 import { OrderDetailScreen } from './OrderDetailScreen';
 
@@ -27,7 +28,10 @@ jest.mock('../api/foodApi', () => ({
   },
 }));
 
+jest.mock('../../reviews/api/reviewsApi', () => ({ reviewsApi: { mine: jest.fn() } }));
+
 const order = foodApi.order as jest.Mock;
+const mine = reviewsApi.mine as jest.Mock;
 const cancel = foodApi.cancel as jest.Mock;
 
 const receipt = {
@@ -52,6 +56,7 @@ const ordered = (overrides: Partial<OrderDetail>) => order.mockResolvedValue(anO
 
 beforeEach(() => {
   order.mockReset();
+  mine.mockReset();
   cancel.mockReset();
   mockGoBack.mockReset();
 });
@@ -329,6 +334,25 @@ describe('<OrderDetailScreen />', () => {
       await user.press(await screen.findByRole('button', { name: 'Cancel order' }));
 
       expect(screen.queryByText(/full refund/)).not.toBeOnTheScreen();
+    });
+  });
+
+  describe('reviews', () => {
+    it('invites a review once the order is delivered', async () => {
+      ordered({ status: 'delivered', canCancel: false });
+      mine.mockResolvedValue([]);
+      await renderScreen();
+
+      expect(await screen.findByRole('button', { name: 'Write a review' })).toBeOnTheScreen();
+    });
+
+    it('offers no review, and does not ask for any, before the order is delivered', async () => {
+      ordered({ status: 'outForDelivery', canCancel: false });
+      await renderScreen();
+
+      expect(await screen.findByText('Spice Route')).toBeOnTheScreen();
+      expect(screen.queryByTestId('write-review')).not.toBeOnTheScreen();
+      expect(mine).not.toHaveBeenCalled();
     });
   });
 });

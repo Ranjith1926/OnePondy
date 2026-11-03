@@ -4,8 +4,8 @@ Audience: developers and operations. Scope: everything built through Phase 8 (ac
 tourism content, itineraries and AI planner, partner onboarding, listings, availability, the
 booking engine, Phase 7: online payment in **sandbox**, refunds, the ledger, reconciliation,
 push notifications and partner statements, and Phase 8: restaurants, food orders and their payment,
-delivery drivers, deliveries, cash on delivery and administrators' order monitoring) and, from Phase 10, reviews (the server side; their
-screens and the rest of the phase come later). Rides are **not built** and are marked as such. Live payments are switched off by design until the go-live gate in
+delivery drivers, deliveries, cash on delivery and administrators' order monitoring) and, from Phase 10, reviews (the server, the customer app's screens and the
+console's; the rest of the phase comes later). Rides are **not built** and are marked as such. Live payments are switched off by design until the go-live gate in
 [phase-7-plan.md](phase-7-plan.md) §9 is met.
 
 Related documents: [database-architecture.md](database-architecture.md),
@@ -517,7 +517,7 @@ yet).
 - **Live payments and payouts.** Everything above is sandbox. Needs the legal and tax review, sign-off of the commission (D21) and refund rule (D22), partner agreements, Razorpay live KYC and an end-to-end settlement checked against Razorpay's report (go-live gate, phase-7-plan.md §9).
 - Razorpay Route payouts (D21); GST and tax collected at source on commission.
 - Push delivery verified on a real phone (needs an Expo/EAS project id and Firebase).
-- Rides. Reviews are built on the server only (Phase 10, step 10.1); their screens, support tickets, rate limits for all endpoints and monitoring are the rest of Phase 10 ([phase-10-plan.md](phase-10-plan.md)).
+- Rides. Reviews are built (Phase 10, steps 10.1 and 10.2); support tickets, rate limits for all endpoints and monitoring are the rest of Phase 10 ([phase-10-plan.md](phase-10-plan.md)).
 - **Phase 8 gaps:** the legal and tax review of cash on delivery (it is built, off until an administrator switches it on); a daily cash report and alerts for cash held too long; banking the cash; notifications about orders, deliveries and stuck orders; driver document upload; a real delivery operation behind the drivers (F1); reassigning a delivery to a chosen driver; a map for customers (D6). See
   [phase-8-plan.md](phase-8-plan.md) §4 and the Phase 8 verification in the README.
 - A production SMS provider (MSG91, needs DLT registration) and an e-mail provider (D19), an all-bookings admin view, listing photos, PostGIS.

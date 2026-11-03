@@ -15,6 +15,8 @@ import {
 } from '../../../test-utils/foodFixture';
 import { renderWithProviders } from '../../../test-utils/render';
 import { guestState, signedInState } from '../../../test-utils/signedIn';
+import { reviewsApi } from '../../reviews/api/reviewsApi';
+import { aPublicReview, aPublicReviewPage } from '../../../test-utils/reviewFixture';
 import { foodApi } from '../api/foodApi';
 import type { CartState } from '../cart/cart';
 import { useCart } from '../cart/CartContext';
@@ -29,7 +31,10 @@ jest.mock('@react-navigation/native', () => ({
 }));
 jest.mock('../api/foodApi', () => ({ foodApi: { restaurants: jest.fn(), menu: jest.fn() } }));
 
+jest.mock('../../reviews/api/reviewsApi', () => ({ reviewsApi: { listPublic: jest.fn() } }));
+
 const restaurants = foodApi.restaurants as jest.Mock;
+const listReviews = reviewsApi.listPublic as jest.Mock;
 const menu = foodApi.menu as jest.Mock;
 
 /** Shows what is in the cart as plain text, so a test can read the cart the screen is changing. */
@@ -65,6 +70,8 @@ const menuRoute = { key: 'k', name: 'RestaurantMenu', params: { id: restaurantId
 
 beforeEach(() => {
   restaurants.mockReset();
+  listReviews.mockReset();
+  listReviews.mockResolvedValue(aPublicReviewPage({ items: [], totalCount: 0 }));
   menu.mockReset();
   mockNavigate.mockReset();
   mockGoBack.mockReset();
@@ -126,6 +133,34 @@ describe('<RestaurantsScreen />', () => {
 });
 
 describe('<RestaurantMenuScreen />', () => {
+  it('shows the restaurant’s rating and what customers wrote, asking for the reviews of this restaurant', async () => {
+    menu.mockResolvedValue(
+      aMenu({ restaurant: aRestaurant({ rating: { average: 4.5, count: 4 } }) }),
+    );
+    listReviews.mockResolvedValue(
+      aPublicReviewPage({
+        rating: { average: 4.5, count: 4 },
+        items: [aPublicReview({ text: 'Crisp dosas, hot coffee.' })],
+      }),
+    );
+
+    await renderScreen(<RestaurantMenuScreen route={menuRoute} />, guestState);
+
+    expect(await screen.findByText('Crisp dosas, hot coffee.')).toBeOnTheScreen();
+    expect(screen.getAllByText('4.5 · 4 reviews').length).toBeGreaterThan(0);
+    expect(listReviews).toHaveBeenCalledWith({ restaurantId });
+  });
+
+  it('shows no rating while the restaurant has too few reviews', async () => {
+    menu.mockResolvedValue(aMenu());
+
+    await renderScreen(<RestaurantMenuScreen route={menuRoute} />, guestState);
+
+    expect(await screen.findByText('Spice Route')).toBeOnTheScreen();
+    expect(await screen.findByText('No reviews yet.')).toBeOnTheScreen();
+    expect(screen.queryByTestId('rating-line')).not.toBeOnTheScreen();
+  });
+
   it('shows the menu with each dish’s price, whether it is vegetarian, and the licence number', async () => {
     menu.mockResolvedValue(aMenu());
 

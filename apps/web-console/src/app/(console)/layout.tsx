@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 import { Button } from '@/components/Button';
-import { isAdministrator, roleLabels } from '@/lib/roles';
+import { canEditContent, isAdministrator, roleLabels } from '@/lib/roles';
 import { requireUser } from '@/lib/session';
 
 import { signOut } from './actions';
@@ -14,6 +14,7 @@ export default async function ConsoleLayout({ children }: { children: ReactNode 
   const items: NavItem[] = [
     { href: '/', label: 'Dashboard' },
     { href: '/places', label: 'Places' },
+    ...(canEditContent(user.role) ? [{ href: '/reviews', label: 'Reviews' }] : []),
     { href: '/configuration', label: 'Configuration' },
     ...(isAdministrator(user.role)
       ? [
