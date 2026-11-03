@@ -27,3 +27,6 @@ Thumbs.db
 
 # Uploaded media written by a locally running API (spec D8: local folder for now)
 backend/**/App_Data/
+
+# Native build staging folder used by the Windows short-path workaround (see the apps' READMEs)
+/cx/
