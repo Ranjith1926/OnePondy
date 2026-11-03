@@ -20,6 +20,7 @@ using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.Reviews;
+using OnePondy.Domain.Support;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Persistence;
 using OnePondy.Infrastructure.Security;
@@ -98,6 +99,8 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<DriverCashDeposit> DriverCashDeposits => Set<DriverCashDeposit>();
 
     public DbSet<Review> Reviews => Set<Review>();
+
+    public DbSet<SupportTicket> SupportTickets => Set<SupportTicket>();
 
     public DbSet<Settlement> Settlements => Set<Settlement>();
 
@@ -230,6 +233,13 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<DeliveryJob>().HasKey(j => j.Id);
         modelBuilder.Entity<DriverCashDeposit>().HasKey(d => d.Id);
         modelBuilder.Entity<Review>().HasKey(r => r.Id);
+        modelBuilder.Entity<SupportMessage>().HasKey(m => m.Id);
+        modelBuilder.Entity<SupportTicket>(ticket =>
+        {
+            ticket.HasKey(t => t.Id);
+            ticket.HasMany(t => t.Messages).WithOne().HasForeignKey(m => m.TicketId);
+            ticket.Navigation(t => t.Messages).UsePropertyAccessMode(PropertyAccessMode.Field);
+        });
         modelBuilder.Entity<FoodOrderStatusEntry>().HasKey(h => h.Id);
         modelBuilder.Entity<FoodOrder>(order =>
         {

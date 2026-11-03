@@ -13,6 +13,7 @@ using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.Reviews;
+using OnePondy.Domain.Support;
 using OnePondy.Domain.TripPlanner;
 
 namespace OnePondy.Application.Common;
@@ -83,6 +84,8 @@ public interface IOnePondyDbContext
     DbSet<DriverCashDeposit> DriverCashDeposits { get; }
 
     DbSet<Review> Reviews { get; }
+
+    DbSet<SupportTicket> SupportTickets { get; }
 
     DbSet<Settlement> Settlements { get; }
 

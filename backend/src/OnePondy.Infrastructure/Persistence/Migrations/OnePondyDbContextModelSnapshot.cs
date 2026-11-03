@@ -3076,6 +3076,186 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Support.SupportMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AuthorKind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("author_kind");
+
+                    b.Property<Guid>("AuthorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("author_user_id");
+
+                    b.Property<string>("Body")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("body");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_support_messages");
+
+                    b.HasIndex("AuthorUserId")
+                        .HasDatabaseName("ix_support_messages_author_user_id");
+
+                    b.HasIndex("TicketId", "CreatedAt")
+                        .HasDatabaseName("ix_support_messages_ticket_time");
+
+                    b.ToTable("support_messages", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_support_message_author_kind", "author_kind IN ('requester', 'staff')");
+
+                            t.HasCheckConstraint("ck_support_message_body", "char_length(body) BETWEEN 1 AND 2000");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Support.SupportTicket", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<Guid?>("AssignedToUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_to_user_id");
+
+                    b.Property<Guid?>("BookingId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("booking_id");
+
+                    b.Property<Guid?>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("EscalatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("escalated_at");
+
+                    b.Property<string>("EscalationReason")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("escalation_reason");
+
+                    b.Property<DateTimeOffset?>("FirstResponseAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("first_response_at");
+
+                    b.Property<Guid?>("FoodOrderId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("food_order_id");
+
+                    b.Property<DateTimeOffset>("LastRequesterMessageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_requester_message_at");
+
+                    b.Property<DateTimeOffset?>("LastStaffMessageAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_staff_message_at");
+
+                    b.Property<Guid>("RequesterUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requester_user_id");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_user_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("subject");
+
+                    b.Property<string>("Topic")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("topic");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_support_tickets");
+
+                    b.HasIndex("BookingId")
+                        .HasDatabaseName("ix_support_tickets_booking_id");
+
+                    b.HasIndex("BusinessId")
+                        .HasDatabaseName("ix_support_tickets_business_id");
+
+                    b.HasIndex("FoodOrderId")
+                        .HasDatabaseName("ix_support_tickets_food_order_id");
+
+                    b.HasIndex("ResolvedByUserId")
+                        .HasDatabaseName("ix_support_tickets_resolved_by_user_id");
+
+                    b.HasIndex("AssignedToUserId", "Status")
+                        .HasDatabaseName("ix_support_tickets_assigned");
+
+                    b.HasIndex("RequesterUserId", "UpdatedAt")
+                        .HasDatabaseName("ix_support_tickets_requester");
+
+                    b.HasIndex("Status", "LastRequesterMessageAt")
+                        .HasDatabaseName("ix_support_tickets_status_waiting");
+
+                    b.ToTable("support_tickets", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_support_ticket_about", "booking_id IS NULL OR food_order_id IS NULL");
+
+                            t.HasCheckConstraint("ck_support_ticket_assigned", "(assigned_to_user_id IS NULL) = (assigned_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_support_ticket_escalated", "((escalated_at IS NULL) = (escalation_reason IS NULL)) AND (escalation_reason IS NULL OR char_length(escalation_reason) <= 200)");
+
+                            t.HasCheckConstraint("ck_support_ticket_resolved", "((status = 'resolved') = (resolved_at IS NOT NULL)) AND ((resolved_at IS NULL) = (resolved_by_user_id IS NULL))");
+
+                            t.HasCheckConstraint("ck_support_ticket_status", "status IN ('open', 'waiting_for_requester', 'resolved')");
+
+                            t.HasCheckConstraint("ck_support_ticket_subject", "char_length(subject) BETWEEN 1 AND 120");
+
+                            t.HasCheckConstraint("ck_support_ticket_topic", "topic IN ('booking', 'food_order', 'payment', 'account', 'business', 'other')");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.TripPlanner.TripPlannerRequestLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4142,6 +4322,63 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_reviews_app_users_replied_by_user_id");
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Support.SupportMessage", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AuthorUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_support_messages_app_users_author_user_id");
+
+                    b.HasOne("OnePondy.Domain.Support.SupportTicket", null)
+                        .WithMany("Messages")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_support_messages_support_tickets_ticket_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Support.SupportTicket", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("AssignedToUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_support_tickets_app_users_assigned_to_user_id");
+
+                    b.HasOne("OnePondy.Domain.Bookings.Booking", null)
+                        .WithMany()
+                        .HasForeignKey("BookingId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_support_tickets_bookings_booking_id");
+
+                    b.HasOne("OnePondy.Domain.Businesses.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_support_tickets_businesses_business_id");
+
+                    b.HasOne("OnePondy.Domain.Food.FoodOrder", null)
+                        .WithMany()
+                        .HasForeignKey("FoodOrderId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_support_tickets_food_orders_food_order_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RequesterUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_support_tickets_app_users_requester_user_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ResolvedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_support_tickets_app_users_resolved_by_user_id");
+                });
+
             modelBuilder.Entity("OnePondy.Domain.TripPlanner.TripPlannerRequestLog", b =>
                 {
                     b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
@@ -4157,6 +4394,11 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                     b.Navigation("History");
 
                     b.Navigation("Lines");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Support.SupportTicket", b =>
+                {
+                    b.Navigation("Messages");
                 });
 #pragma warning restore 612, 618
         }

@@ -64,6 +64,7 @@ public static class AuditEntityTypes
     public const string FoodOrder = "food_order";
     public const string DriverCash = "driver_cash";
     public const string Review = "review";
+    public const string SupportTicket = "support_ticket";
 }
 
 public static class AuditActions
@@ -124,4 +125,10 @@ public static class AuditActions
     public const string ReviewRejected = "review.rejected";
     public const string ReviewRemoved = "review.removed";
     public const string ReviewReplied = "review.replied";
+    public const string SupportTicketViewed = "support_ticket.viewed";
+    public const string SupportContactViewed = "support_ticket.contact_viewed";
+    public const string SupportTicketAssigned = "support_ticket.assigned";
+    public const string SupportTicketReleased = "support_ticket.released";
+    public const string SupportTicketResolved = "support_ticket.resolved";
+    public const string SupportTicketEscalated = "support_ticket.escalated";
 }

@@ -2,6 +2,7 @@ using OnePondy.Application.Identity;
 using Microsoft.EntityFrameworkCore;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Reviews;
+using OnePondy.Domain.Support;
 
 namespace OnePondy.UnitTests.Identity;
 
@@ -49,6 +50,28 @@ public class AccountServiceTests
         Assert.Null(error);
         var left = await harness.Db.Reviews.AsNoTracking().ToListAsync(None);
         Assert.Equal(someoneElse, Assert.Single(left).CustomerUserId);
+    }
+
+    [Fact]
+    public async Task Deleting_the_account_deletes_the_persons_support_requests_and_messages_and_nobody_elses()
+    {
+        var harness = new AuthHarness();
+        var signedIn = await harness.SignInAsync();
+        var someoneElse = Guid.NewGuid();
+        var now = harness.Time.GetUtcNow();
+        harness.Db.SupportTickets.Add(SupportTicket.Open(signedIn.User.Id, null, SupportTopic.Other, "Mine", "Please help me.", null, null, now));
+        harness.Db.SupportTickets.Add(SupportTicket.Open(someoneElse, null, SupportTopic.Other, "Theirs", "Please help them.", null, null, now));
+        await harness.Db.SaveChangesAsync(None);
+        harness.Time.Advance(TimeSpan.FromMinutes(1));
+
+        var requested = await harness.AccountService.RequestDeletionCodeAsync(signedIn.User.Id, None);
+        var error = await harness.AccountService.DeleteAccountAsync(signedIn.User.Id, requested.Value!.ChallengeId, harness.Sender.LastCodes[Phone], None);
+
+        Assert.Null(error);
+        var left = await harness.Db.SupportTickets.AsNoTracking().Include(t => t.Messages).ToListAsync(None);
+        var theirs = Assert.Single(left);
+        Assert.Equal(someoneElse, theirs.RequesterUserId);
+        Assert.Single(theirs.Messages);
     }
 
     [Fact]

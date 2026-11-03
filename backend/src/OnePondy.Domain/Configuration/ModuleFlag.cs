@@ -23,8 +23,11 @@ public static class ModuleKeys
     /// </summary>
     public const string CashOnDelivery = "cashOnDelivery";
 
+    /// <summary>Support requests. Starting a new one needs it to be available; reading and answering existing ones does not.</summary>
+    public const string Support = "support";
+
     public static readonly IReadOnlyList<string> All =
-        [Food, "rides", "stays", "activities", "tripPlanner", "notifications", "support", Payments, CashOnDelivery];
+        [Food, "rides", "stays", "activities", "tripPlanner", "notifications", Support, Payments, CashOnDelivery];
 
     public static bool IsKnown(string key) => All.Contains(key);
 }

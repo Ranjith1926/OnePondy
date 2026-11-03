@@ -56,7 +56,8 @@ public static class AuthenticationSetup
                 RoleNames.ContentEditor,
                 RoleNames.SupportAgent))
             .AddPolicy(StaffPolicies.ContentWrite, policy => policy.RequireRole(RoleNames.Administrator, RoleNames.ContentEditor))
-            .AddPolicy(StaffPolicies.Administration, policy => policy.RequireRole(RoleNames.Administrator));
+            .AddPolicy(StaffPolicies.Administration, policy => policy.RequireRole(RoleNames.Administrator))
+            .AddPolicy(StaffPolicies.Support, policy => policy.RequireRole(RoleNames.Administrator, RoleNames.SupportAgent));
         return services;
     }
 }
@@ -71,4 +72,7 @@ public static class StaffPolicies
 
     /// <summary>Administrators only: configuration, staff and the audit log.</summary>
     public const string Administration = "administration";
+
+    /// <summary>Administrators and support agents: the support queue. Content editors do not see support requests.</summary>
+    public const string Support = "support";
 }

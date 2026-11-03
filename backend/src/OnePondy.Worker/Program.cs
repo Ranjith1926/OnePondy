@@ -18,6 +18,7 @@ builder.Services.AddHostedService<PendingRefundJob>();
 builder.Services.AddHostedService<PaymentReconciliationJob>();
 builder.Services.AddHostedService<OutboxDispatchJob>();
 builder.Services.AddHostedService<BookingReminderJob>();
+builder.Services.AddHostedService<SupportEscalationJob>();
 
 var host = builder.Build();
 host.Run();
