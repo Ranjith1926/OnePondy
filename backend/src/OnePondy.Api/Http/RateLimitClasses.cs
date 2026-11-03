@@ -42,6 +42,8 @@ public static class RateLimitClassifier
         "/api/v1/support/tickets",
         "/api/v1/bookings",
         "/api/v1/food/orders",
+        "/api/v1/rides",
+        "/api/v1/rides/quotes",
         "/api/v1/trip-planner/plan",
         "/api/v1/partner/businesses",
         "/api/v1/devices",

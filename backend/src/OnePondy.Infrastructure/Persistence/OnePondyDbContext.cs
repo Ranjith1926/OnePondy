@@ -16,6 +16,7 @@ using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.Reviews;
+using OnePondy.Domain.Rides;
 using OnePondy.Domain.Support;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Identity;
@@ -82,6 +83,16 @@ public sealed class OnePondyDbContext(DbContextOptions<OnePondyDbContext> option
     public DbSet<FoodOrderLine> FoodOrderLines => Set<FoodOrderLine>();
 
     public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
+
+    public DbSet<RideDriverProfile> RideDriverProfiles => Set<RideDriverProfile>();
+
+    public DbSet<RideQuote> RideQuotes => Set<RideQuote>();
+
+    public DbSet<Ride> Rides => Set<Ride>();
+
+    public DbSet<RideSafetyEvent> RideSafetyEvents => Set<RideSafetyEvent>();
+
+    public DbSet<RideShare> RideShares => Set<RideShare>();
 
     public DbSet<DeliveryJob> DeliveryJobs => Set<DeliveryJob>();
 

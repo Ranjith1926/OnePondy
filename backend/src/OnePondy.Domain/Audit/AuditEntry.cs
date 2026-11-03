@@ -65,6 +65,8 @@ public static class AuditEntityTypes
     public const string DriverCash = "driver_cash";
     public const string Review = "review";
     public const string SupportTicket = "support_ticket";
+    public const string RideDriver = "ride_driver";
+    public const string RideSafety = "ride_safety";
 }
 
 public static class AuditActions
@@ -131,4 +133,16 @@ public static class AuditActions
     public const string SupportTicketReleased = "support_ticket.released";
     public const string SupportTicketResolved = "support_ticket.resolved";
     public const string SupportTicketEscalated = "support_ticket.escalated";
+    public const string RideDriverApplied = "ride_driver.applied";
+    public const string RideDriverUpdated = "ride_driver.updated";
+    public const string RideDriverApproved = "ride_driver.approved";
+    public const string RideDriverRejected = "ride_driver.rejected";
+    public const string RideDriverSuspended = "ride_driver.suspended";
+    public const string RideDriverReinstated = "ride_driver.reinstated";
+    public const string RideSosRaised = "ride_safety.sos_raised";
+    public const string RideIncidentReported = "ride_safety.incident_reported";
+    public const string RideShareCreated = "ride_safety.share_created";
+    public const string RideSafetyViewed = "ride_safety.viewed";
+    public const string RideSafetyAcknowledged = "ride_safety.acknowledged";
+    public const string RideSafetyResolved = "ride_safety.resolved";
 }

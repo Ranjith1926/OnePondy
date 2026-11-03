@@ -4,6 +4,7 @@ using OnePondy.Application.Common;
 using OnePondy.Application.Food;
 using OnePondy.Application.Notifications;
 using OnePondy.Application.Payments;
+using OnePondy.Application.Rides;
 using OnePondy.Application.Support;
 using OnePondy.Domain.Reviews;
 using OnePondy.Domain.Support;
@@ -57,7 +58,8 @@ public sealed record OperationsSnapshot(
     int OpenReconciliationExceptions,
     NotificationBacklog Notifications,
     SignInActivity SignIn,
-    RateLimitSnapshot RateLimits);
+    RateLimitSnapshot RateLimits,
+    SafetyCounts RideSafety);
 
 /// <summary>
 /// What an administrator should look at, in one place (spec Phase 10, step 10.5). It adds nothing new to the data: it counts what other parts of the
@@ -69,6 +71,7 @@ public sealed class OperationsService(
     SupportService support,
     FoodOrderAdminService orders,
     ReconciliationExceptionService reconciliation,
+    RideSafetyService rideSafety,
     IRateLimitStatistics rateLimits,
     IOptions<OperationsOptions> options,
     IOptions<NotificationOptions> notifications,
@@ -105,9 +108,10 @@ public sealed class OperationsService(
         var attention = await orders.AttentionCountAsync(cancellationToken);
         var exceptions = await reconciliation.OpenCountAsync(cancellationToken);
         var limits = rateLimits.Snapshot();
+        var safety = await rideSafety.CountsAsync(cancellationToken);
 
-        var alerts = Alerts(now, settings, reviews, supportBacklog, attention, exceptions, notificationBacklog, signIn, limits);
-        return new OperationsSnapshot(now, alerts, reviews, supportBacklog, attention, exceptions, notificationBacklog, signIn, limits);
+        var alerts = Alerts(now, settings, reviews, supportBacklog, attention, exceptions, notificationBacklog, signIn, limits, safety);
+        return new OperationsSnapshot(now, alerts, reviews, supportBacklog, attention, exceptions, notificationBacklog, signIn, limits, safety);
     }
 
     /// <summary>The alerts, most serious first. Pure: the same numbers always give the same alerts, which is what makes them testable.</summary>
@@ -120,9 +124,19 @@ public sealed class OperationsService(
         int openReconciliationExceptions,
         NotificationBacklog notifications,
         SignInActivity signIn,
-        RateLimitSnapshot rateLimits)
+        RateLimitSnapshot rateLimits,
+        SafetyCounts? rideSafety = null)
     {
         var alerts = new List<OperationsAlert>();
+
+        if (rideSafety is { OpenSos: > 0 } emergencies)
+        {
+            alerts.Add(new OperationsAlert(
+                "ride_sos",
+                AlertSeverity.Critical,
+                $"{emergencies.OpenSos} emergency {Plural(emergencies.OpenSos, "alert from a ride is", "alerts from rides are")} waiting for someone to deal with {Plural(emergencies.OpenSos, "it", "them")}.",
+                "safety"));
+        }
 
         if (openReconciliationExceptions > 0)
         {
@@ -187,6 +201,15 @@ public sealed class OperationsService(
                 AlertSeverity.Warning,
                 $"{signIn.CodesLastHour} sign-in codes were requested in the last hour: this may be someone abusing sign-in.",
                 "operations"));
+        }
+
+        if (rideSafety is { OpenIncidents: > 0 } incidents)
+        {
+            alerts.Add(new OperationsAlert(
+                "ride_incidents",
+                AlertSeverity.Warning,
+                $"{incidents.OpenIncidents} ride {Plural(incidents.OpenIncidents, "incident report is", "incident reports are")} waiting to be looked at.",
+                "safety"));
         }
 
         foreach (var limited in rateLimits.Classes.Where(c => c.Rejected >= settings.RateLimitRefusalsWarn).OrderByDescending(c => c.Rejected))

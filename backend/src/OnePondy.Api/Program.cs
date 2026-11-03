@@ -20,6 +20,8 @@ builder.Services.AddApplication(builder.Configuration);
 builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
 builder.Services.AddOnePondyAuthentication();
 builder.Services.AddOnePondyRateLimiting(builder.Configuration);
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<OnePondy.Application.Rides.IRideNotifier, SignalRRideNotifier>();
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<OnePondyDbContext>("database", tags: ["ready"]);
 
@@ -76,6 +78,8 @@ app.MapSettlementEndpoints();
 app.MapFoodEndpoints();
 app.MapFoodOrderEndpoints();
 app.MapDriverEndpoints();
+app.MapRideEndpoints();
+app.MapHub<RideHub>(RideHub.Path);
 app.MapFoodOrderAdminEndpoints();
 app.MapReviewEndpoints();
 app.MapSupportEndpoints();

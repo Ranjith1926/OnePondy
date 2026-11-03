@@ -13,6 +13,7 @@ using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.Reviews;
+using OnePondy.Domain.Rides;
 using OnePondy.Domain.Support;
 using OnePondy.Domain.TripPlanner;
 
@@ -78,6 +79,16 @@ public interface IOnePondyDbContext
     DbSet<FoodOrderLine> FoodOrderLines { get; }
 
     DbSet<DriverProfile> DriverProfiles { get; }
+
+    DbSet<RideDriverProfile> RideDriverProfiles { get; }
+
+    DbSet<RideQuote> RideQuotes { get; }
+
+    DbSet<Ride> Rides { get; }
+
+    DbSet<RideSafetyEvent> RideSafetyEvents { get; }
+
+    DbSet<RideShare> RideShares { get; }
 
     DbSet<DeliveryJob> DeliveryJobs { get; }
 

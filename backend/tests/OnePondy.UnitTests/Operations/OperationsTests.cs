@@ -3,6 +3,7 @@ using OnePondy.Application.Food;
 using OnePondy.Application.Notifications;
 using OnePondy.Application.Operations;
 using OnePondy.Application.Payments;
+using OnePondy.Application.Rides;
 using OnePondy.Application.Support;
 using OnePondy.Domain.Identity;
 using OnePondy.Domain.Payments;
@@ -41,6 +42,28 @@ public class OperationsAlertTests
 
     [Fact]
     public void A_quiet_platform_has_no_alerts() => Assert.Empty(Alerts());
+
+    [Fact]
+    public void An_open_ride_emergency_is_critical_and_comes_first_and_incidents_are_a_warning()
+    {
+        var alerts = OperationsService.Alerts(
+            Now,
+            Settings,
+            new ReviewBacklog(0, null),
+            new SupportBacklog(NoSupport, null),
+            2,
+            0,
+            new NotificationBacklog(true, 0, null),
+            new SignInActivity(0, 0),
+            new RateLimitSnapshot(Now.AddHours(-3), []),
+            new OnePondy.Application.Rides.SafetyCounts(OpenSos: 1, OpenIncidents: 3, OldestOpenAt: Now.AddMinutes(-4)));
+
+        Assert.Equal(["ride_sos", "orders_attention", "ride_incidents"], alerts.Select(a => a.Code));
+        Assert.Equal(AlertSeverity.Critical, alerts[0].Severity);
+        Assert.Contains("1 emergency alert from a ride is waiting for someone to deal with it", alerts[0].Message);
+        Assert.Contains("3 ride incident reports are waiting", alerts[2].Message);
+        Assert.All(new[] { alerts[0], alerts[2] }, a => Assert.Equal("safety", a.Area));
+    }
 
     [Fact]
     public void Open_payment_differences_are_critical_and_point_at_payments()
@@ -172,6 +195,7 @@ public class OperationsSnapshotTests
             _supportService,
             orders,
             reconciliation,
+            RideSafety(),
             new FixedStatistics(_limits),
             Options.Create(_settings),
             Options.Create(_notifications),
@@ -179,6 +203,14 @@ public class OperationsSnapshotTests
     }
 
     private DateTimeOffset Now => _h.B.Time.GetUtcNow();
+
+    private RideSafetyService RideSafety() => new(
+        _h.Db,
+        _h.B.Accounts,
+        new OnePondy.Infrastructure.Security.HmacSecretHasher(Options.Create(new OnePondy.Infrastructure.Security.SecretHashingOptions { HashingKey = OnePondy.UnitTests.Identity.TestKeys.Hashing })),
+        _h.B.Audit,
+        Options.Create(new RideOptions()),
+        _h.B.Time);
 
     [Fact]
     public async Task A_new_platform_has_nothing_to_report()
@@ -291,6 +323,7 @@ public class OperationsSnapshotTests
             _supportService,
             new FoodOrderAdminService(_h.Db, _h.Orders, _h.B.Accounts, _h.B.Audit, Options.Create(_h.Food), _h.B.Time),
             new ReconciliationExceptionService(_h.Db, _h.B.Audit, _h.B.Time),
+            RideSafety(),
             new FixedStatistics(limits),
             Options.Create(_settings),
             Options.Create(_notifications),

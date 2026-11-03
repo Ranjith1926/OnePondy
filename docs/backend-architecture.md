@@ -139,6 +139,7 @@ abstractions only, so they run unchanged against the in-memory provider in unit 
 | Bookings | `BookingService`, `BookingHoldExpiry`, `BookingsDeletionGuard` |
 | Reviews | `ReviewService` (customer, public, business and moderator sides), `ReviewChecks` (the automatic text check), `ReviewRatings` (displayed averages), `ReviewOptions` |
 | Support | `SupportService` (requests, the agents' queue, audited access), `SupportEscalation` (the Worker's check), `SupportOptions` |
+| Rides | `RideSafetyService` (SOS, incident reports, trip sharing, the staff queue), `RideHub` and `SignalRRideNotifier` (live updates), `RideDriverService` (apply, shifts, position, administrators' review, eligibility), `RideService` (fare quotes, requests, dispatch, the trip), `RideFare` (the arithmetic), `RideExpiry` (the Worker's check), `RideOptions`, `IRideNotifier` |
 | Operations | `OperationsService` (the administrators' snapshot and its alert rules), `OperationsOptions`, `IRateLimitStatistics` (the limiter's counts, supplied by the API) |
 | Delivery | `DriverService` (apply, edit, shifts, administrators' review), `DeliveryService` (open jobs, accept, release, pickup, deliver, position), `DeliveryProgress` (how a delivery is going, for the order screens), `FoodOrderAdminService` (administrators' list, detail, cancel, re-offer) with `OrderAttentionRules`, `CashService` (the cash a driver holds and recording what they hand in) |
 | Payments | `PaymentService` (start, record capture, "check now", check-before-expiry), `PaymentWebhookService`, `RazorpaySignature`, `RefundService`, `LedgerService` (the only writer of `ledger_entries`), `ReconciliationService`, `ReconciliationExceptionService`, `PaymentAdminService`, `IPaymentGateway` |
@@ -370,6 +371,15 @@ codes in the last hour and day, and the limiter's counts. `OperationsService.Ale
 escalated support requests are critical). Nothing is stored and nothing is sent: the console shows the snapshot when an administrator loads the page. Administrators only.
 Decisions and as-built notes: [phase-10-plan.md](phase-10-plan.md) §10.
 
+### 7.15 Rides (Phase 9, steps 9.1 and 9.2)
+
+A ride driver (`RideDriverService`) is a separate approval from delivering food: vehicle class, registration, licence, permit and insurance with its end date, reviewed by an administrator. `RideDriverProfile.IsEligible`
+is approved and insured on the day, and is the one rule dispatch and accepting use. A rider asks for fares (`RideService.QuoteAsync` stores one quote per offered class, valid five minutes), requests a ride with a quote,
+and the request is offered to eligible drivers on duty with a fresh position near the pickup. The first to accept gets it: the request is a row with a version, a database trigger refuses a second driver, and an index allows
+one active ride per driver and one open ride per rider. The trip moves `requested → accepted → arrived → in_progress → completed` (or is cancelled or expires: `RideExpiryJob` in the Worker). The apps are told a ride changed
+through `IRideNotifier` (no personal data; the apps refetch); the API pushes them over the SignalR hub `/hubs/rides` (a ride id only). Everything that starts a ride needs the `rides` module, which is off.
+Decisions and as-built notes: [phase-9-plan.md](phase-9-plan.md).
+
 ## 8. AI trip planner
 
 `TripPlannerService` is deliberately defensive; the model only ranks and arranges places the
@@ -401,6 +411,7 @@ and runnable as a console app in development. It shares Application and Infrastr
 | `PaymentReconciliationJob` | every 5 minutes | Checks open orders, stuck refunds and unprocessed webhooks, applies what a lost webhook missed, raises exceptions; once a day compares the previous day's payments with Razorpay's. |
 | `OutboxDispatchJob` | every 20 seconds | Sends due notifications through Expo, reads delivery receipts about 15 minutes later, deletes dead phones, and (hourly) removes old log and outbox rows. |
 | `BookingReminderJob` | every 30 minutes | Queues the "booking tomorrow" reminder, once per booking. |
+| `RideExpiryJob` | every 30 seconds | Calls `RideExpiry`: expires ride requests no driver took within the search window, and deletes unused fare quotes a day after they expire. |
 | `SupportEscalationJob` | every 5 minutes (and once at start-up) | Calls `SupportEscalation`: escalates, once, each unresolved support request with no first answer within the first-reply target or still unresolved after the resolution target, recording the reason in the audit log. |
 
 All jobs catch and log exceptions so a bad run never stops the service; the next interval retries.
@@ -422,6 +433,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Auth:Sessions` | `RefreshTokenLifetime` |
 | `RateLimiting:Auth` | `PermitLimit`, `Window` (sign-in and account endpoints, per address) |
 | `RateLimiting:Browse`, `Read`, `Write`, `Create`, `Upload`, `Staff` | `PermitLimit`, `Window` (per signed-in person, or per address; see §5.4 for the defaults) |
+| `Rides` | `EnabledClasses` (auto, cab), `Tariffs` per class (`BaseFare`, `PerKm`, `MinimumFare`), `RoadFactor`, `QuoteValidFor`, `SearchWindow`, `OfferRadiusKm`, `MinTripKm`, `MaxTripKm`, the service centre and radius, `CancellationTerms`, `MaxOffers`, `EmergencyNumber`, `MaxOpenIncidentsPerPerson` |
 | `Operations` | `ReviewBacklogWarnAfter` (2 days), `NotificationBacklogWarnAfter` (15 minutes), `SignInCodesPerHourWarn` (200), `RateLimitRefusalsWarn` (50) |
 | `Content` | `ReviewInterval` (default 180 days) |
 | `Media` | `RootPath`, `MaxUploadBytes`, `MinLongEdge`, `MinShortEdge`, `MaxPixels`, `MaxPerPlace` |
@@ -492,6 +504,12 @@ administrator, **S-P** administrator or support agent.
 | `/admin/businesses` list, get, documents, approve, reject, suspend, reinstate | S-A | Partner review. |
 | `/admin/food-orders` list (`?status=`, `?needsAttention=true`), `/attention-count`, get, `/{id}/cancel`, `/{id}/release-delivery` | S-A | Order monitoring (step 8.9). Get returns the customer's address and phone and, while a delivery is under way, the driver's last position (each look is audited); cancel needs a reason and refunds a paid order in full when refunds are on; release only before the food is collected. |
 | `/admin/support/tickets` list (`?view=`), get, `/{id}/contact`, POST `/{id}/messages`, `/assign`, `/release`, `/resolve`, `/escalate`; GET `/admin/support/counts` | S-P | The support queue. Opening a request, and separately asking for the person's contact details, are audited. |
+| `/rides/quotes` (POST), `/rides` (POST, GET), `/rides/current`, `/rides/{id}`, POST `/rides/{id}/cancel` | U | A rider's fares, request, current ride, history and cancelling (Phase 9; needs the `rides` module to ask). |
+| `/ride-driver/me` (GET, PUT), POST `/duty`, `/location`; GET `/rides`; POST `/rides/{id}/accept`, `/give-up`, `/arrive`, `/start`, `/complete`, `/cancel`, `/location` | U | A driver in ride mode: application, shifts, position, offers and the trip. What a driver may do depends on their own profile and ride. |
+| `/rides/{id}/sos`, `/incidents`, `/share` (POST, DELETE); `/ride-driver/rides/{id}/sos`, `/incidents` | U | Safety (step 9.3): an SOS, an incident report, and a trip-sharing link. |
+| `/shared-rides/{token}` (GET) | P | What someone following a shared trip sees. The secret in the link is the credential; `no-store`. |
+| `/admin/ride-safety` list (`?view=`), `/counts`, get, POST `/{id}/acknowledge`, `/resolve` | S-P | The safety queue. Opening a report is audited. |
+| `/admin/ride-drivers` list (`?status=`), get, POST `/{userId}/approve`, `/reject`, `/suspend`, `/reinstate` | S-A | Review of ride drivers' documents and insurance (Phase 9). |
 | `/admin/operations` | S-A | What needs attention (step 10.5): counts, alerts and the limiter's numbers. Read only. |
 | `/admin/reviews` list (`?status=`, default `pending`), POST `/{id}/publish`, `/reject`, `/remove` | S-W | The moderators' queue for reviews (Phase 10). Reject and remove need a reason. |
 | `/admin/cash/drivers` list (`?onlyHolding=`), POST `/{driverUserId}/deposits` | S-A | The cash drivers hold (step 8.8) and recording cash handed in (never more than held; audited). |

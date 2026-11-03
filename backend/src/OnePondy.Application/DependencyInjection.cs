@@ -73,6 +73,12 @@ public static class DependencyInjection
         services.AddScoped<OnePondy.Application.Food.FoodOrderAdminService>();
         services.AddScoped<OnePondy.Application.Delivery.CashService>();
         services.AddScoped<OnePondy.Application.Reviews.ReviewService>();
+        services.Configure<OnePondy.Application.Rides.RideOptions>(configuration.GetSection(OnePondy.Application.Rides.RideOptions.SectionName));
+        services.AddScoped<OnePondy.Application.Rides.RideDriverService>();
+        services.AddScoped<OnePondy.Application.Rides.RideService>();
+        services.AddScoped<OnePondy.Application.Rides.RideExpiry>();
+        services.AddScoped<OnePondy.Application.Rides.RideSafetyService>();
+        services.TryAddSingleton<OnePondy.Application.Rides.IRideNotifier, OnePondy.Application.Rides.NoRideNotifier>();
         services.AddScoped<OnePondy.Application.Support.SupportService>();
         services.AddScoped<OnePondy.Application.Support.SupportEscalation>();
         services.AddScoped<OnePondy.Application.Operations.OperationsService>();

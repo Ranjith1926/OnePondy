@@ -3076,6 +3076,584 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("OnePondy.Domain.Rides.Ride", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AcceptedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("accepted_at");
+
+                    b.Property<DateTimeOffset?>("ArrivedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("arrived_at");
+
+                    b.Property<string>("CancelReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancel_reason");
+
+                    b.Property<string>("CancellationTerms")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_terms");
+
+                    b.Property<DateTimeOffset?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
+                    b.Property<string>("CancelledBy")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("cancelled_by");
+
+                    b.Property<decimal?>("CashCollected")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("cash_collected");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("DestinationLabel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("destination_label");
+
+                    b.Property<double>("DestinationLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("destination_latitude");
+
+                    b.Property<double>("DestinationLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("destination_longitude");
+
+                    b.Property<decimal>("DistanceKm")
+                        .HasPrecision(8, 1)
+                        .HasColumnType("numeric(8,1)")
+                        .HasColumnName("distance_km");
+
+                    b.Property<double?>("DriverLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("driver_latitude");
+
+                    b.Property<DateTimeOffset?>("DriverLocationAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("driver_location_at");
+
+                    b.Property<double?>("DriverLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("driver_longitude");
+
+                    b.Property<Guid?>("DriverUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("driver_user_id");
+
+                    b.Property<decimal>("Fare")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("fare");
+
+                    b.Property<string>("PickupLabel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("pickup_label");
+
+                    b.Property<double>("PickupLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("pickup_latitude");
+
+                    b.Property<double>("PickupLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("pickup_longitude");
+
+                    b.Property<string>("PickupNote")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("pickup_note");
+
+                    b.Property<Guid>("QuoteId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("quote_id");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at");
+
+                    b.Property<Guid>("RiderUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("rider_user_id");
+
+                    b.Property<DateTimeOffset>("SearchEndsAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("search_ends_at");
+
+                    b.Property<DateTimeOffset?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VehicleClass")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("vehicle_class");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_rides");
+
+                    b.HasIndex("DriverUserId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_rides_one_active_per_driver")
+                        .HasFilter("status IN ('accepted', 'arrived', 'in_progress')");
+
+                    b.HasIndex("QuoteId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_rides_quote");
+
+                    b.HasIndex("RiderUserId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_rides_one_open_per_rider")
+                        .HasFilter("status IN ('requested', 'accepted', 'arrived', 'in_progress')");
+
+                    b.HasIndex("RiderUserId", "RequestedAt")
+                        .HasDatabaseName("ix_rides_rider_requested");
+
+                    b.HasIndex("Status", "VehicleClass", "RequestedAt")
+                        .HasDatabaseName("ix_rides_status_class_requested");
+
+                    b.ToTable("rides", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ride_amounts", "fare > 0 AND distance_km > 0 AND (cash_collected IS NULL OR cash_collected = fare)");
+
+                            t.HasCheckConstraint("ck_ride_cancelled_by", "cancelled_by IS NULL OR cancelled_by IN ('rider', 'driver', 'system')");
+
+                            t.HasCheckConstraint("ck_ride_coordinates", "pickup_latitude BETWEEN -90 AND 90 AND pickup_longitude BETWEEN -180 AND 180 AND destination_latitude BETWEEN -90 AND 90 AND destination_longitude BETWEEN -180 AND 180");
+
+                            t.HasCheckConstraint("ck_ride_driver", "(status = 'requested' AND driver_user_id IS NULL) OR (status IN ('accepted', 'arrived', 'in_progress', 'completed') AND driver_user_id IS NOT NULL) OR status IN ('cancelled', 'expired')");
+
+                            t.HasCheckConstraint("ck_ride_location_complete", "(driver_latitude IS NULL) = (driver_longitude IS NULL) AND (driver_latitude IS NULL) = (driver_location_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_ride_location_only_while_active", "status IN ('accepted', 'arrived', 'in_progress') OR (driver_latitude IS NULL AND driver_longitude IS NULL AND driver_location_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_ride_location_range", "(driver_latitude IS NULL OR driver_latitude BETWEEN -90 AND 90) AND (driver_longitude IS NULL OR driver_longitude BETWEEN -180 AND 180)");
+
+                            t.HasCheckConstraint("ck_ride_status", "status IN ('requested', 'accepted', 'arrived', 'in_progress', 'completed', 'cancelled', 'expired')");
+
+                            t.HasCheckConstraint("ck_ride_times", "(status NOT IN ('accepted', 'arrived', 'in_progress', 'completed') OR accepted_at IS NOT NULL) AND (status NOT IN ('arrived', 'in_progress', 'completed') OR arrived_at IS NOT NULL) AND (status NOT IN ('in_progress', 'completed') OR started_at IS NOT NULL) AND (status <> 'completed' OR (completed_at IS NOT NULL AND cash_collected IS NOT NULL)) AND (status NOT IN ('cancelled', 'expired') OR (cancelled_at IS NOT NULL AND cancelled_by IS NOT NULL)) AND (status IN ('cancelled', 'expired') OR cancelled_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_ride_vehicle_class", "vehicle_class IN ('auto', 'cab', 'bike_taxi')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideDriverProfile", b =>
+                {
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<string>("ApprovalStatus")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("approval_status");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("full_name");
+
+                    b.Property<string>("InsurancePolicyNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("insurance_policy_number");
+
+                    b.Property<DateOnly>("InsuranceValidUntil")
+                        .HasColumnType("date")
+                        .HasColumnName("insurance_valid_until");
+
+                    b.Property<bool>("IsOnDuty")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_on_duty");
+
+                    b.Property<double?>("LastLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("last_latitude");
+
+                    b.Property<DateTimeOffset?>("LastLocationAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_location_at");
+
+                    b.Property<double?>("LastLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("last_longitude");
+
+                    b.Property<string>("LicenceNumber")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("licence_number");
+
+                    b.Property<DateTimeOffset?>("OnDutySince")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("on_duty_since");
+
+                    b.Property<string>("PermitNumber")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("permit_number");
+
+                    b.Property<string>("ReviewNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("review_note");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("VehicleClass")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("vehicle_class");
+
+                    b.Property<string>("VehicleNumber")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("vehicle_number");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("UserId")
+                        .HasName("pk_ride_driver_profiles");
+
+                    b.HasIndex("LicenceNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ux_ride_driver_profiles_licence");
+
+                    b.HasIndex("VehicleNumber")
+                        .IsUnique()
+                        .HasDatabaseName("ux_ride_driver_profiles_vehicle");
+
+                    b.HasIndex("ApprovalStatus", "IsOnDuty")
+                        .HasDatabaseName("ix_ride_driver_profiles_status_duty");
+
+                    b.ToTable("ride_driver_profiles", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ride_driver_approval_status", "approval_status IN ('pending', 'approved', 'rejected', 'suspended')");
+
+                            t.HasCheckConstraint("ck_ride_driver_duty_requires_approval", "NOT is_on_duty OR approval_status = 'approved'");
+
+                            t.HasCheckConstraint("ck_ride_driver_duty_since", "is_on_duty = (on_duty_since IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_ride_driver_location_complete", "(last_latitude IS NULL) = (last_longitude IS NULL) AND (last_latitude IS NULL) = (last_location_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_ride_driver_location_only_on_duty", "is_on_duty OR (last_latitude IS NULL AND last_longitude IS NULL AND last_location_at IS NULL)");
+
+                            t.HasCheckConstraint("ck_ride_driver_location_range", "(last_latitude IS NULL OR last_latitude BETWEEN -90 AND 90) AND (last_longitude IS NULL OR last_longitude BETWEEN -180 AND 180)");
+
+                            t.HasCheckConstraint("ck_ride_driver_review_note", "approval_status NOT IN ('rejected', 'suspended') OR review_note IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_ride_driver_vehicle_class", "vehicle_class IN ('auto', 'cab', 'bike_taxi')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideQuote", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("CancellationTerms")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("cancellation_terms");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("currency");
+
+                    b.Property<string>("DestinationLabel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("destination_label");
+
+                    b.Property<double>("DestinationLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("destination_latitude");
+
+                    b.Property<double>("DestinationLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("destination_longitude");
+
+                    b.Property<decimal>("DistanceKm")
+                        .HasPrecision(8, 1)
+                        .HasColumnType("numeric(8,1)")
+                        .HasColumnName("distance_km");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<decimal>("Fare")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("fare");
+
+                    b.Property<string>("PickupLabel")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("pickup_label");
+
+                    b.Property<double>("PickupLatitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("pickup_latitude");
+
+                    b.Property<double>("PickupLongitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("pickup_longitude");
+
+                    b.Property<Guid>("RiderUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("rider_user_id");
+
+                    b.Property<string>("VehicleClass")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("vehicle_class");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ride_quotes");
+
+                    b.HasIndex("RiderUserId", "CreatedAt")
+                        .HasDatabaseName("ix_ride_quotes_rider_created");
+
+                    b.ToTable("ride_quotes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ride_quote_amounts", "fare > 0 AND distance_km > 0");
+
+                            t.HasCheckConstraint("ck_ride_quote_coordinates", "pickup_latitude BETWEEN -90 AND 90 AND pickup_longitude BETWEEN -180 AND 180 AND destination_latitude BETWEEN -90 AND 90 AND destination_longitude BETWEEN -180 AND 180");
+
+                            t.HasCheckConstraint("ck_ride_quote_expiry", "expires_at > created_at");
+
+                            t.HasCheckConstraint("ck_ride_quote_vehicle_class", "vehicle_class IN ('auto', 'cab', 'bike_taxi')");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideSafetyEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset?>("AcknowledgedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("acknowledged_at");
+
+                    b.Property<Guid?>("AcknowledgedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("acknowledged_by_user_id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)")
+                        .HasColumnName("category");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("details");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("kind");
+
+                    b.Property<double?>("Latitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitude");
+
+                    b.Property<double?>("Longitude")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitude");
+
+                    b.Property<string>("ReportedBy")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("reported_by");
+
+                    b.Property<Guid>("ReportedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reported_by_user_id");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<DateTimeOffset?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resolved_at");
+
+                    b.Property<Guid?>("ResolvedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_user_id");
+
+                    b.Property<Guid>("RideId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ride_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("status");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ride_safety_events");
+
+                    b.HasIndex("ReportedByUserId")
+                        .HasDatabaseName("ix_ride_safety_events_reported_by_user_id");
+
+                    b.HasIndex("RideId")
+                        .HasDatabaseName("ix_ride_safety_events_ride");
+
+                    b.HasIndex("RideId", "ReportedByUserId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_ride_safety_events_open_sos")
+                        .HasFilter("kind = 'sos' AND status <> 'resolved'");
+
+                    b.HasIndex("Status", "Kind", "CreatedAt")
+                        .HasDatabaseName("ix_ride_safety_events_queue");
+
+                    b.ToTable("ride_safety_events", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ride_safety_category", "category IN ('emergency', 'unsafe_driving', 'harassment', 'accident', 'vehicle_problem', 'overcharge', 'other')");
+
+                            t.HasCheckConstraint("ck_ride_safety_kind", "kind IN ('sos', 'incident')");
+
+                            t.HasCheckConstraint("ck_ride_safety_location", "(latitude IS NULL) = (longitude IS NULL) AND (latitude IS NULL OR latitude BETWEEN -90 AND 90) AND (longitude IS NULL OR longitude BETWEEN -180 AND 180)");
+
+                            t.HasCheckConstraint("ck_ride_safety_reported_by", "reported_by IN ('rider', 'driver')");
+
+                            t.HasCheckConstraint("ck_ride_safety_shape", "(kind = 'sos' AND category = 'emergency' AND details IS NULL) OR (kind = 'incident' AND category <> 'emergency' AND details IS NOT NULL AND latitude IS NULL AND longitude IS NULL)");
+
+                            t.HasCheckConstraint("ck_ride_safety_status", "status IN ('open', 'acknowledged', 'resolved')");
+
+                            t.HasCheckConstraint("ck_ride_safety_steps", "((acknowledged_by_user_id IS NULL) = (acknowledged_at IS NULL)) AND ((resolved_by_user_id IS NULL) = (resolved_at IS NULL)) AND (status <> 'resolved' OR (resolved_at IS NOT NULL AND resolution_note IS NOT NULL)) AND (status = 'resolved' OR resolved_at IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideShare", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<DateTimeOffset?>("RevokedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at");
+
+                    b.Property<Guid>("RideId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ride_id");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ride_shares");
+
+                    b.HasIndex("RideId")
+                        .HasDatabaseName("ix_ride_shares_ride");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ux_ride_shares_token");
+
+                    b.ToTable("ride_shares", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_ride_share_expiry", "expires_at > created_at");
+                        });
+                });
+
             modelBuilder.Entity("OnePondy.Domain.Support.SupportMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -4320,6 +4898,76 @@ namespace OnePondy.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RepliedByUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_reviews_app_users_replied_by_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.Ride", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("DriverUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_rides_app_users_driver_user_id");
+
+                    b.HasOne("OnePondy.Domain.Rides.RideQuote", null)
+                        .WithMany()
+                        .HasForeignKey("QuoteId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_rides_ride_quotes_quote_id");
+
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RiderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_rides_app_users_rider_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideDriverProfile", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithOne()
+                        .HasForeignKey("OnePondy.Domain.Rides.RideDriverProfile", "UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ride_driver_profiles_app_users_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideQuote", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("RiderUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ride_quotes_app_users_rider_user_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideSafetyEvent", b =>
+                {
+                    b.HasOne("OnePondy.Infrastructure.Identity.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("ReportedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ride_safety_events_app_users_reported_by_user_id");
+
+                    b.HasOne("OnePondy.Domain.Rides.Ride", null)
+                        .WithMany()
+                        .HasForeignKey("RideId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ride_safety_events_rides_ride_id");
+                });
+
+            modelBuilder.Entity("OnePondy.Domain.Rides.RideShare", b =>
+                {
+                    b.HasOne("OnePondy.Domain.Rides.Ride", null)
+                        .WithMany()
+                        .HasForeignKey("RideId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ride_shares_rides_ride_id");
                 });
 
             modelBuilder.Entity("OnePondy.Domain.Support.SupportMessage", b =>

@@ -73,6 +73,8 @@ public static class DependencyInjection
         PaymentsGuard.EnsureSafe(configuration.GetSection(PaymentsOptions.SectionName).Get<PaymentsOptions>() ?? new PaymentsOptions());
         OnePondy.Application.Food.FoodOptionsGuard.EnsureSafe(
             configuration.GetSection(OnePondy.Application.Food.FoodOptions.SectionName).Get<OnePondy.Application.Food.FoodOptions>() ?? new OnePondy.Application.Food.FoodOptions());
+        OnePondy.Application.Rides.RideOptionsGuard.EnsureSafe(
+            configuration.GetSection(OnePondy.Application.Rides.RideOptions.SectionName).Get<OnePondy.Application.Rides.RideOptions>() ?? new OnePondy.Application.Rides.RideOptions());
         AddOtpDelivery(services, configuration, environment);
         AddPaymentGateway(services, configuration);
         AddPushSender(services, configuration);

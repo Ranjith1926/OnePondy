@@ -172,13 +172,13 @@ public sealed class ContentApiTests : IAsyncLifetime
         using var client = Factory.CreateClient();
         var admin = await SignInStaffAsync(client, Founder);
 
-        await SendAsync(client, HttpMethod.Put, "/api/v1/admin/config/modules/rides", admin, new { status = "hidden" });
+        await SendAsync(client, HttpMethod.Put, "/api/v1/admin/config/modules/stays", admin, new { status = "hidden" });
         var config = await ReadAsync(await client.GetAsync("/api/v1/config"));
-        Assert.Equal("hidden", config.GetProperty("modules").GetProperty("rides").GetString());
+        Assert.Equal("hidden", config.GetProperty("modules").GetProperty("stays").GetString());
 
-        await SendAsync(client, HttpMethod.Put, "/api/v1/admin/config/modules/rides", admin, new { status = "comingSoon" });
+        await SendAsync(client, HttpMethod.Put, "/api/v1/admin/config/modules/stays", admin, new { status = "comingSoon" });
         config = await ReadAsync(await client.GetAsync("/api/v1/config"));
-        Assert.Equal("comingSoon", config.GetProperty("modules").GetProperty("rides").GetString());
+        Assert.Equal("comingSoon", config.GetProperty("modules").GetProperty("stays").GetString());
 
         var badVersion = await SendAsync(client, HttpMethod.Put, "/api/v1/admin/config/min-app-version", admin, new { minSupportedAppVersion = "latest" });
         Assert.Equal(HttpStatusCode.BadRequest, badVersion.StatusCode);

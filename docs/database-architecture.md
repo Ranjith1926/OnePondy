@@ -420,6 +420,22 @@ five lines: `gateway_clearing` (the total), `platform_commission` (on the dishes
 - **Indexes** for the public pages and ratings (`ix_reviews_listing_status`, `ix_reviews_business_status_published`), the moderators' queue (`ix_reviews_status_created`)
   and a customer's own reviews (`ix_reviews_customer`). There is no trigger: who may change what is decided in `ReviewService` (a business has no endpoint that changes a review).
 
+**Rides (Phase 9, steps 9.1 and 9.2, migration 23, `AddRides`).**
+
+- **`ride_driver_profiles`** – a driver in ride mode, keyed by the account: `full_name`, `vehicle_class` (`auto`, `cab`, `bike_taxi`), `vehicle_number`, `licence_number`, `permit_number`, `insurance_policy_number`,
+  `insurance_valid_until` (date), `approval_status`, `review_note`, `is_on_duty`, `on_duty_since`, the latest position (`last_latitude`, `last_longitude`, `last_location_at`), timestamps and the `xmin` version. Unique
+  licence and unique vehicle number. Checks: only an approved driver is on duty; "on duty since" exists exactly while on duty; **the position exists only while on duty**, is complete and on Earth; a rejection or
+  suspension has a reason.
+- **`ride_quotes`** – a fare the server worked out: the rider, class, pickup and destination (coordinates and the name the rider gave), `distance_km`, `fare`, `currency`, `cancellation_terms`, `created_at`, `expires_at`.
+- **`rides`** – one ride: the rider, `quote_id` (unique: a quote becomes one ride), the snapshot of class, places, note, distance, fare and terms, `status` (`requested`, `accepted`, `arrived`, `in_progress`,
+  `completed`, `cancelled`, `expired`), `driver_user_id`, a time for each step, `cancelled_by` and `cancel_reason`, `cash_collected`, the driver's latest position (`driver_latitude`, `driver_longitude`,
+  `driver_location_at`), `search_ends_at`, and the `xmin` version.
+- **Rules the database enforces:** checks for the status, who holds the ride in each status, a time for every step, **the driver's position only while accepted, arrived or in progress**, complete and on Earth,
+  `cash_collected = fare`; a **unique index of one open ride per rider** and **one active ride per driver**; and a **trigger** (`ride_follows_the_rules`) that allows only the legal moves, never changes a finished
+  ride, never changes the rider, quote or fare, never gives an active ride to a second driver, and refuses delete and truncate (rides are kept).
+- **`ride_safety_events`** (migration 24, `AddRideSafety`) – an SOS or an incident: the ride, `kind`, `category`, who and which side, `details` (incidents), the position (SOS), `status` (`open`, `acknowledged`, `resolved`), who and when for each step, `resolution_note`, version. A unique index allows one open SOS per person per ride; a trigger keeps reports forever and freezes a resolved one. **`ride_shares`** – a hashed secret, an expiry and a revocation time per ride.
+- **`customer_history`** gains a branch for rides (`kind = 'ride'`, the title is "pickup to destination", the amount is the fare).
+
 **Support requests (Phase 10, step 10.3, migration 22, `AddSupportTickets`).**
 
 - **`support_tickets`** – one request for help: `requester_user_id`; `business_id` (set when a business owner wrote about a business); `topic` (`booking`, `food_order`, `payment`, `account`, `business`, `other`);
@@ -502,6 +518,8 @@ Applied in this order (folder `Persistence/Migrations`):
 | 19 | `20261030112541_ExtendCustomerHistoryAndAdminRefundReason` | The `customer_history` view now also lists food orders (kind `food_order`); `ck_refund_reason` allows `admin_cancelled`. |
 | 20 | `20261102044345_AddCashOnDelivery` | `food_orders.payment_method` (`online` for every existing row), `cash_collected`, `cash_collected_at`, `cash_collected_by`; `restaurant_profiles.accepts_cash_on_delivery`; `driver_cash_deposits`; the ledger accounts `driver_cash:{driver}` and `cash_received`; the `cashOnDelivery` module flag (off); triggers that keep deposits immutable and a driver's cash account from going below nothing. |
 | 21 | `20261102130258_AddReviews` | `reviews`: one review per completed booking or delivered food order, with unique indexes, checks and the moderation and reply columns. No triggers. |
+| 24 | `20261103050729_AddRideSafety` | `ride_safety_events` (with checks, the one-open-SOS index and the keep-forever trigger) and `ride_shares`. |
+| 23 | `20261103044905_AddRides` | `ride_driver_profiles`, `ride_quotes` and `rides` with their checks, the one-open-ride and one-active-ride indexes, the `ride_follows_the_rules` trigger, and the `ride` branch of `customer_history`. |
 | 22 | `20261103033839_AddSupportTickets` | `support_tickets` and `support_messages`: a request and its conversation, with checks that keep a ticket's columns consistent with its status. No triggers. |
 
 Rules for new migrations:

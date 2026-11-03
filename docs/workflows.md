@@ -1088,3 +1088,22 @@ Built on the server, in the customer app and in the console. Decisions and as-bu
 | Notifications about orders and deliveries; a daily cash report; driver document upload | Not built (Phase 8 gaps: see section 25.12 and phase-8-plan.md §4). Cash on delivery is built (section 25.11) but needs the legal and tax review before real use. |
 | Admin view of all bookings; listing photos | Known gaps. |
 | PostGIS-based nearby search | Deferred; in-memory distance sort for now. |
+
+## 29. Rides (Phase 9, steps 9.1 and 9.2)
+
+Switched off: the `rides` module is off until the owner has the licence, insurance and verified drivers (spec section 21). When it is on:
+
+1. **A driver applies** in ride mode with vehicle class, registration, licence, permit and insurance (and the date it ends). An administrator checks the documents and approves, or rejects with a reason. A driver can
+   start a shift only while approved and insured; changing a document sends them back to review. A lapsed policy takes them off duty.
+2. **On duty, the driver shares their position** (the latest only) so requests can be offered to those nearby. Going off duty erases it.
+3. **A rider chooses a pickup and a destination** (named, inside the service area), and the server returns a fare for each kind of vehicle, valid five minutes, with the cancellation terms and whether a driver is near.
+4. **The rider requests a ride** with one of those fares. The fare is fixed. If no eligible driver is near, or the rider already has an open ride, it is refused.
+5. **Drivers nearby are offered it,** showing the pickup's name, the distance, the destination's name, the trip distance and the fare. The first to accept gets it; the others are told it was taken.
+6. **The driver goes to the pickup** (the exact point, the note and the rider's first name are shown now), and the rider sees the driver's first name, vehicle and live position. The driver can give the ride up before
+   arriving; it goes back to the others. The driver taps *arrived*, then *start*.
+7. **At the end** the driver confirms the exact cash taken (the fare). Cash is the only payment for now.
+8. **Safety:** during a ride, either person can press the emergency button (it records where they were, tells them to call 112, and appears at once on the operations page), and either can report an incident during
+   the ride or for 30 days after. Staff take a report, call the people involved if needed, and close it with a note. A rider can share a link so someone they trust can follow the trip; it shows only first names,
+   the vehicle, the place names and the live position, and stops when the ride ends.
+9. **Live updates:** the apps are told when a ride changes (a ride id, nothing else) and refetch; after a lost connection they refetch and poll until it is back.
+10. **Cancelling:** the rider can cancel until the trip starts; a driver who has arrived and cannot go on cancels with a reason. A request nobody takes in ten minutes expires.

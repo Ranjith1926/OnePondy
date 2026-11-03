@@ -4,13 +4,14 @@ using OnePondy.Application.Identity;
 using OnePondy.Domain.Bookings;
 using OnePondy.Domain.Food;
 using OnePondy.Domain.Payments;
+using OnePondy.Domain.Rides;
 
 namespace OnePondy.Application.Bookings;
 
 /// <summary>
 /// Refuses account deletion while a booking or a food order is still in progress (including one waiting for its refund), for the
 /// customer who made it and for the partner who owns the business it is with (spec §7, Account deletion workflow). It is the one
-/// deletion guard registered, so food orders are checked here rather than by a second guard. Rides add their own checks later.
+/// deletion guard registered, so food orders and rides are checked here rather than by a second guard.
 /// </summary>
 public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDeletionGuard
 {
@@ -18,6 +19,7 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
     public const string PartnerBookingsInProgress = "partner_bookings_in_progress";
     public const string CustomerFoodOrdersInProgress = "food_orders_in_progress";
     public const string PartnerFoodOrdersInProgress = "partner_food_orders_in_progress";
+    public const string RideInProgress = "ride_in_progress";
     public const string DriverOnDuty = "driver_on_duty";
     public const string DriverHoldsCash = "driver_holds_cash";
 
@@ -54,6 +56,15 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
             blockers.Add(CustomerFoodOrdersInProgress);
         }
 
+        // A rider with a ride that has not ended, or a driver holding one, finishes it first.
+        if (await db.Rides.AsNoTracking().AnyAsync(
+                r => (r.RiderUserId == userId || r.DriverUserId == userId)
+                    && (r.Status == RideStatus.Requested || r.Status == RideStatus.Accepted || r.Status == RideStatus.Arrived || r.Status == RideStatus.InProgress),
+                cancellationToken))
+        {
+            blockers.Add(RideInProgress);
+        }
+
         var ownedBusinessIds = await db.Businesses.AsNoTracking()
             .Where(b => b.OwnerUserId == userId)
             .Select(b => b.Id)
@@ -71,7 +82,8 @@ public sealed class BookingsDeletionGuard(IOnePondyDbContext db) : IAccountDelet
         }
 
         // A driver on duty may be offered a job at any moment, so they go off duty first (jobs in progress add their own check in step 8.7).
-        if (await db.DriverProfiles.AsNoTracking().AnyAsync(p => p.UserId == userId && p.IsOnDuty, cancellationToken))
+        if (await db.DriverProfiles.AsNoTracking().AnyAsync(p => p.UserId == userId && p.IsOnDuty, cancellationToken)
+            || await db.RideDriverProfiles.AsNoTracking().AnyAsync(p => p.UserId == userId && p.IsOnDuty, cancellationToken))
         {
             blockers.Add(DriverOnDuty);
         }

@@ -35,6 +35,18 @@ public static class AuthenticationSetup
                 };
                 bearer.Events = new JwtBearerEvents
                 {
+                    // Browsers and phones cannot put a header on a WebSocket, so a live-updates connection sends its token as a query value.
+                    OnMessageReceived = context =>
+                    {
+                        if (context.HttpContext.Request.Path.StartsWithSegments(RideHub.Path)
+                            && context.Request.Query["access_token"].ToString() is { Length: > 0 } token)
+                        {
+                            context.Token = token;
+                        }
+
+                        return Task.CompletedTask;
+                    },
+
                     // Sign-out and account deletion take effect immediately, not when the token expires.
                     OnTokenValidated = async context =>
                     {

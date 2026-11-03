@@ -26,8 +26,14 @@ public static class ModuleKeys
     /// <summary>Support requests. Starting a new one needs it to be available; reading and answering existing ones does not.</summary>
     public const string Support = "support";
 
+    /// <summary>
+    /// Rides. Off until the owner has the transport licence, insurance and verified drivers (spec Phase 9 and section 21). Asking for a fare or
+    /// a ride needs it to be available; nothing else about rides does.
+    /// </summary>
+    public const string Rides = "rides";
+
     public static readonly IReadOnlyList<string> All =
-        [Food, "rides", "stays", "activities", "tripPlanner", "notifications", Support, Payments, CashOnDelivery];
+        [Food, Rides, "stays", "activities", "tripPlanner", "notifications", Support, Payments, CashOnDelivery];
 
     public static bool IsKnown(string key) => All.Contains(key);
 }

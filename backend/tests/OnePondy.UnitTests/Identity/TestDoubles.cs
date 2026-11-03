@@ -20,6 +20,7 @@ using OnePondy.Domain.Notifications;
 using OnePondy.Domain.Payments;
 using OnePondy.Domain.Places;
 using OnePondy.Domain.Reviews;
+using OnePondy.Domain.Rides;
 using OnePondy.Domain.Support;
 using OnePondy.Domain.TripPlanner;
 using OnePondy.Infrastructure.Persistence;
@@ -93,6 +94,16 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
     public DbSet<FoodOrderLine> FoodOrderLines => Set<FoodOrderLine>();
 
     public DbSet<DriverProfile> DriverProfiles => Set<DriverProfile>();
+
+    public DbSet<RideDriverProfile> RideDriverProfiles => Set<RideDriverProfile>();
+
+    public DbSet<RideQuote> RideQuotes => Set<RideQuote>();
+
+    public DbSet<Ride> Rides => Set<Ride>();
+
+    public DbSet<RideSafetyEvent> RideSafetyEvents => Set<RideSafetyEvent>();
+
+    public DbSet<RideShare> RideShares => Set<RideShare>();
 
     public DbSet<DeliveryJob> DeliveryJobs => Set<DeliveryJob>();
 
@@ -230,6 +241,11 @@ public sealed class TestDbContext(DbContextOptions<TestDbContext> options) : DbC
         modelBuilder.Entity<MenuItem>().HasKey(i => i.Id);
         modelBuilder.Entity<FoodOrderLine>().HasKey(l => l.Id);
         modelBuilder.Entity<DriverProfile>().HasKey(p => p.UserId);
+        modelBuilder.Entity<RideDriverProfile>().HasKey(p => p.UserId);
+        modelBuilder.Entity<RideQuote>().HasKey(q => q.Id);
+        modelBuilder.Entity<Ride>().HasKey(r => r.Id);
+        modelBuilder.Entity<RideSafetyEvent>().HasKey(e => e.Id);
+        modelBuilder.Entity<RideShare>().HasKey(s => s.Id);
         modelBuilder.Entity<DeliveryJob>().HasKey(j => j.Id);
         modelBuilder.Entity<DriverCashDeposit>().HasKey(d => d.Id);
         modelBuilder.Entity<Review>().HasKey(r => r.Id);

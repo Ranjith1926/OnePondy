@@ -175,6 +175,7 @@ public sealed class AccountService(
         db.SupportTickets.RemoveRange(await db.SupportTickets.Include(t => t.Messages).Where(t => t.RequesterUserId == userId).ToListAsync(cancellationToken));
         // A driver's name, licence and vehicle go with the account: nothing needs them once the person has left.
         db.DriverProfiles.RemoveRange(await db.DriverProfiles.Where(p => p.UserId == userId).ToListAsync(cancellationToken));
+        db.RideDriverProfiles.RemoveRange(await db.RideDriverProfiles.Where(p => p.UserId == userId).ToListAsync(cancellationToken));
 
         await db.SaveChangesAsync(cancellationToken);
         await accounts.AnonymizeAsync(userId, now, cancellationToken);

@@ -78,6 +78,19 @@ The public page never reveals whether an account exists for a phone number or em
 | Payments, refunds and ledger lines for orders | No end date decided | The same Phase 7 records and rules as for bookings (see below); a food order's refund is always in full. |
 | What a restaurant sees of an order | Not stored separately | The restaurant's views leave out the customer's address and phone, in the API and in the console. Only OnePondy's drivers (after they take a delivery) and administrators see them. |
 
+## Rides (Phase 9, steps 9.1 and 9.2)
+
+| Data | Kept for | Notes |
+|---|---|---|
+| A ride driver's name, vehicle, licence, permit and insurance | Until the driver deletes their account | Deletion is refused while the driver is on duty or holds a ride; it then removes the profile. |
+| A driver's position for dispatch | Only while on duty; the latest only | Erased when the shift ends or the driver is suspended; the database refuses to keep one off duty. A position older than two minutes is ignored. |
+| A driver's position during a ride | Only while the ride is active; the latest only | Shown to that ride's rider only; erased when the ride ends (the database refuses to keep it). No history of positions is stored. |
+| Fare quotes | A day after they expire, if no ride used them | Removed by the Worker. |
+| A finished ride (the pickup and destination names and points, the fare, who drove, when) | **Open question for the owner.** For now, kept after the rider deletes their account | A ride is the record of a trip, needed for safety reports, disputes and tax, and the database refuses to change or delete one. Deciding how long to keep it, and whether to blank the places once that is over, needs the owner and legal advice, and a migration. |
+| An SOS or incident report, and what staff wrote when closing it | **Open question for the owner.** For now, kept | A record of a safety matter, which the database refuses to delete or change once closed. Its length and what to blank afterwards needs legal advice. An SOS keeps where the person was. |
+| A trip-sharing link | Until it is turned off or 24 hours pass; the row stays | Only a keyed hash of the secret is stored. The link shows nothing once the ride ends. |
+| The rider's phone number | Not shown to drivers, ever | A driver sees the rider's first name, and the pickup point and note only after accepting. |
+
 ## Support requests (Phase 10, step 10.3)
 
 | Data | Kept for | Notes |
