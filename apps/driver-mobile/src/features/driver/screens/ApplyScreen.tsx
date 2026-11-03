@@ -65,6 +65,15 @@ export function ApplyScreen() {
       onBack={editing ? () => navigation.goBack() : undefined}
     >
       {editing ? null : <OPText tone="secondary">{t('driver.applyIntro')}</OPText>}
+      {editing ? null : (
+        <OPButton
+          label={t('driver.orDrivePassengers')}
+          onPress={() => navigation.navigate('RideHome')}
+          variant="tertiary"
+          fullWidth
+          testID="open-ride-mode"
+        />
+      )}
 
       <Controller
         control={form.control}

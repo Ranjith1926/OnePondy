@@ -146,6 +146,13 @@ export function HomeScreen() {
           fullWidth
         />
       ) : null}
+      <OPButton
+        label={t('home.rideMode')}
+        onPress={() => navigation.navigate('RideHome')}
+        variant="secondary"
+        fullWidth
+        testID="open-ride-mode"
+      />
       <OPButton label={t('home.signOut')} onPress={() => void signOut()} variant="tertiary" />
     </Screen>
   );
