@@ -45,6 +45,8 @@ The task runs as the user who creates it, so that user needs the pgpass file abo
 
 Copy the backup folder off the machine (another disk, another host). A backup on the same disk does not survive the disk.
 
+**On the development PC (set up 2026-11-05).** Task `OnePondy database backup` runs daily at 02:00 as the logged-on Windows user, and catches up at the next logon if the PC was off at that time. It backs up `onepondy_dev` into `C:\OnePondyBackups` and keeps 14. The login is in `%APPDATA%\postgresql\pgpass.conf`, readable only by that user. It was started once through Task Scheduler with no password in the environment: result 0, one dump and one roles file written. This PC has a single disk, so the backups are not yet anywhere that survives losing it. To stop the backups: `Unregister-ScheduledTask -TaskName 'OnePondy database backup' -Confirm:$false`.
+
 ## 4. Restoring on a clean server
 
 The restore never touches the original database. Do it on a new server, or into a new, differently named database.
