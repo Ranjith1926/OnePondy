@@ -133,6 +133,7 @@
     "bagTitle": "In the bag",
     "bagLine": "{{quantity}} × {{name}}",
     "deliverTo": "Deliver to",
+    "openInMaps": "Open in Maps",
     "customerPhone": "Customer phone: {{phone}}",
     "note": "Note: {{note}}",
     "pickedUp": "I've collected the order",

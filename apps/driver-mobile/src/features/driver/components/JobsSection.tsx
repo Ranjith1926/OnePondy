@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, View } from 'react-native';
+import { Linking, StyleSheet, View } from 'react-native';
 
 import {
   EmptyState,
@@ -132,6 +132,13 @@ function CashHeld() {
   );
 }
 
+/** Opens a place, given as words, in the driver's Maps app. Only the driver's own tap sends the address anywhere. */
+function openInMaps(place: string): void {
+  void Linking.openURL(
+    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(place)}`,
+  );
+}
+
 function ActiveJob({ job }: { job: JobDetail }) {
   const { t } = useTranslation();
   const styles = useThemedStyles(createStyles);
@@ -141,6 +148,9 @@ function ActiveJob({ job }: { job: JobDetail }) {
   const { denied } = useShareLocation(job.id);
 
   const collecting = job.status === 'accepted';
+  const deliveryAreaName = isAreaId(job.deliveryArea)
+    ? t(`areas.${job.deliveryArea}`)
+    : job.deliveryArea;
   const cashToCollect = job.cashToCollect;
   const error = pickUp.error ?? deliver.error ?? release.error;
   const busy = pickUp.isPending || deliver.isPending || release.isPending;
@@ -168,6 +178,13 @@ function ActiveJob({ job }: { job: JobDetail }) {
           {job.restaurantAddress ? (
             <OPText>{t('jobs.restaurantAddress', { address: job.restaurantAddress })}</OPText>
           ) : null}
+          <OPButton
+            label={t('jobs.openInMaps')}
+            variant="secondary"
+            onPress={() =>
+              openInMaps([job.restaurantName, job.restaurantAddress].filter(Boolean).join(', '))
+            }
+          />
           {job.restaurantPhone ? (
             <OPText>{t('jobs.restaurantPhone', { phone: job.restaurantPhone })}</OPText>
           ) : null}
@@ -182,9 +199,12 @@ function ActiveJob({ job }: { job: JobDetail }) {
         <>
           <OPText variant="label">{t('jobs.deliverTo')}</OPText>
           <OPText variant="subheading">{job.deliveryAddress}</OPText>
-          <OPText tone="secondary">
-            {isAreaId(job.deliveryArea) ? t(`areas.${job.deliveryArea}`) : job.deliveryArea}
-          </OPText>
+          <OPText tone="secondary">{deliveryAreaName}</OPText>
+          <OPButton
+            label={t('jobs.openInMaps')}
+            variant="secondary"
+            onPress={() => openInMaps(`${job.deliveryAddress}, ${deliveryAreaName}`)}
+          />
           {job.deliveryNote ? <OPText>{t('jobs.note', { note: job.deliveryNote })}</OPText> : null}
           <OPText>{t('jobs.customerPhone', { phone: job.contactPhone })}</OPText>
           {cashToCollect !== null ? (

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 import * as Location from 'expo-location';
 
 import type {
@@ -594,6 +595,36 @@ describe('the driver app', () => {
       expect(requestsTo('POST /api/v1/driver/jobs/job-1/accept')).toHaveLength(1);
       expect(requestsTo('POST /api/v1/driver/jobs/job-1/pickup')).toHaveLength(1);
       expect(requestsTo('POST /api/v1/driver/jobs/job-1/deliver')).toHaveLength(1);
+    });
+
+    it('opens the restaurant, then the customers address, in Maps', async () => {
+      const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
+      const user = userEvent.setup();
+      await launchSignedIn(onDuty);
+      routes['POST /api/v1/driver/jobs/job-1/accept'] = () => {
+        jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+        return { status: 200, body: held('accepted') };
+      };
+      routes['POST /api/v1/driver/jobs/job-1/pickup'] = () => {
+        jobs = { current: held('pickedUp'), open: [], canAcceptJobs: true };
+        return { status: 200, body: held('pickedUp') };
+      };
+
+      await user.press(await screen.findByRole('button', { name: 'Take this delivery' }));
+      await user.press(await screen.findByRole('button', { name: 'Open in Maps' }));
+
+      expect(openURL).toHaveBeenLastCalledWith(
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('Spice Route, 4 Rue Mahe, White Town')}`,
+      );
+
+      await user.press(screen.getByRole('button', { name: "I've collected the order" }));
+      await screen.findByText('12 Rue Suffren, White Town');
+      await user.press(screen.getByRole('button', { name: 'Open in Maps' }));
+
+      expect(openURL).toHaveBeenLastCalledWith(
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent('12 Rue Suffren, White Town, White Town')}`,
+      );
+      openURL.mockRestore();
     });
 
     it('says so and shows what is true now when another driver was faster', async () => {
