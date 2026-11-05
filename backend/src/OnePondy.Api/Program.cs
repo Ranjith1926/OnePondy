@@ -8,10 +8,11 @@ using OnePondy.Application;
 using OnePondy.Infrastructure;
 using OnePondy.Infrastructure.Media;
 using OnePondy.Infrastructure.Persistence;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options => options.AddBearerScheme());
 builder.Services.AddProblemDetails();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase)));
@@ -30,9 +31,20 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
+// The API description and a page to try it from, for development only: the IIS test site and production do not serve them.
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference("/scalar", options => options
+        .WithTitle("OnePondy API")
+        // The page handles access tokens, so it talks to nothing outside: no web fonts, no usage reporting, and none of
+        // Scalar's cloud features (Ask AI, MCP, Share, Deploy, Generate SDK), which would send the API description to its servers.
+        .DisableDefaultFonts()
+        .DisableTelemetry()
+        .DisableAgent()
+        .DisableMcp()
+        .HideDeveloperTools()
+        .AddPreferredSecuritySchemes(OpenApiBearerScheme.Name));
 }
 
 // Serves the public account deletion page at /account/delete/.

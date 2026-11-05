@@ -401,7 +401,8 @@ where each secret lives and who holds it.
 | API (local) | <http://localhost:5080> | `dotnet run --project backend/src/OnePondy.Api` |
 | API liveness | <http://localhost:5080/health/live> | Answers 200 while the process is up |
 | API readiness | <http://localhost:5080/health/ready> | Also checks the database |
-| API description (OpenAPI) | <http://localhost:5080/openapi/v1.json> | Development environment only |
+| API reference page (Scalar) | <http://localhost:5080/scalar> | Browse every endpoint and try it from the page. Development environment only (not on the IIS site). Sign in through the API first (`POST /api/v1/auth/otp/request`, then `/otp/verify`; staff use `/api/v1/admin/auth/...`), then paste the returned `accessToken` into the page's **Authentication > Bearer Token** box. Endpoints that need a signed-in person are the ones with a lock in the description. The page loads nothing from outside the PC |
+| API description (OpenAPI) | <http://localhost:5080/openapi/v1.json> | The machine-readable form of the same; import it into Postman or Insomnia. Development environment only |
 | Staff console | <http://localhost:3100/sign-in> | `npm run dev --workspace apps/web-console`; needs `ONEPONDY_API_URL` (default `http://localhost:5080`) |
 | Partner portal | <http://localhost:3100/partner/sign-in> | Business owners (a customer account with a business); separate session from staff |
 | Grievance officer page | <http://localhost:3100/grievance> | Public, no sign-in |
