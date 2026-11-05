@@ -31,8 +31,9 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 
-// The API description and a page to try it from, for development only: the IIS test site and production do not serve them.
-if (app.Environment.IsDevelopment())
+// The API description and a page to try it from: always in development, on a test site only when ApiDocs:Enabled is set, and never in
+// production (see ApiDocs).
+if (ApiDocs.IsEnabled(app.Environment, app.Configuration))
 {
     app.MapOpenApi();
     app.MapScalarApiReference("/scalar", options => options

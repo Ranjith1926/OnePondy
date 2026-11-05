@@ -438,6 +438,7 @@ Bound from `appsettings*.json`, environment variables and (in production) secret
 | `Content` | `ReviewInterval` (default 180 days) |
 | `Media` | `RootPath`, `MaxUploadBytes`, `MinLongEdge`, `MinShortEdge`, `MaxPixels`, `MaxPerPlace` |
 | `BusinessDocuments` | `RootPath` (private) |
+| `ApiDocs` | `Enabled` (false): serves the API reference page `/scalar` and the description `/openapi/v1.json` on a non-Development site, for a shared test site only. Always on in Development; **ignored in Production**, where neither page is ever served, because they list every endpoint including the staff ones. The page loads nothing from outside (no fonts, usage reporting or Scalar cloud features). |
 | `Console` | `BootstrapAdministrators` |
 | `TripPlanner` | Daily limit, cost cap, cost per request, candidate limit |
 | `Ai:Gemini` | `ApiKey`, `Model`, `BaseUrl`, `Timeout` |
