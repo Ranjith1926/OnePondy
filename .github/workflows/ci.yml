@@ -42,5 +42,37 @@ jobs:
           global-json-file: backend/global.json
       - run: dotnet restore OnePondy.sln
       - run: dotnet build OnePondy.sln --no-restore --configuration Release
-      # Database tests skip themselves unless ONEPONDY_TEST_DATABASE is set.
+      # Database tests skip themselves unless ONEPONDY_TEST_DATABASE is set; the next job runs them.
       - run: dotnet test OnePondy.sln --no-build --configuration Release
+
+  database:
+    name: Backend — database tests (PostgreSQL 18)
+    # Service containers need Linux. Nothing in the API or its tests is Windows-specific.
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: onepondy_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # A throwaway database in a throwaway container: the suite migrates it and fills it, and a full run expects it empty.
+      ONEPONDY_TEST_DATABASE: Host=localhost;Port=5432;Database=onepondy_test;Username=postgres;Password=postgres
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: backend/global.json
+      - run: dotnet restore OnePondy.sln
+      - run: dotnet build OnePondy.sln --no-restore --configuration Release
+      - run: dotnet test tests/OnePondy.IntegrationTests --no-build --configuration Release

@@ -349,7 +349,8 @@ Six tests stay skipped on purpose because they call outside services: two call E
 token (set `ONEPONDY_EXPO_LIVE_CHECK=1`), and four call Razorpay's test API (set `ONEPONDY_RAZORPAY_TEST_KEY_ID` and
 `ONEPONDY_RAZORPAY_TEST_KEY_SECRET` to a **test** key pair, `rzp_test_...`).
 
-CI (`.github/workflows/ci.yml`) runs the same checks on every pull request.
+CI (`.github/workflows/ci.yml`) runs the same checks on every pull request, in three jobs: the apps (format, lint, types, tests),
+the backend build and unit tests on Windows, and the database tests against a PostgreSQL 18 container on Linux.
 
 ## Troubleshooting
 
