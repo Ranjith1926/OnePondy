@@ -1,6 +1,6 @@
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
-import { StyleSheet, Switch, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { Screen } from '../../../components/Screen';
 import {
@@ -8,13 +8,13 @@ import {
   OPBadge,
   OPButton,
   OPText,
-  useTheme,
   useThemedStyles,
   type BadgeTone,
   type Theme,
 } from '../../../design-system';
 import { useSession } from '../../../session/SessionProvider';
 import type { DriverApprovalStatus, DriverProfile } from '../api/driverApi';
+import { DutyPill } from '../components/DutyPill';
 import { JobsSection } from '../components/JobsSection';
 import { useDriverProfile, useSetDuty } from '../hooks/useDriver';
 import { useJobs } from '../hooks/useJobs';
@@ -39,7 +39,6 @@ export function HomeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const styles = useThemedStyles(createStyles);
-  const theme = useTheme();
   const { user, signOut } = useSession();
   const query = useDriverProfile();
   const setDuty = useSetDuty();
@@ -105,25 +104,17 @@ export function HomeScreen() {
 
       {status === 'approved' ? (
         <>
-          <View style={styles.card}>
-            <View style={styles.dutyRow}>
-              <View style={styles.dutyText}>
-                <OPText variant="subheading">{t('home.dutyTitle')}</OPText>
-                <OPText tone="secondary">
-                  {profile.isOnDuty && profile.onDutySince
-                    ? t('home.dutyOn', { time: formatTime(profile.onDutySince) })
-                    : t('home.dutyOff')}
-                </OPText>
-              </View>
-              <Switch
-                value={profile.isOnDuty}
-                onValueChange={(onDuty) => setDuty.mutate({ onDuty, version: profile.version })}
-                disabled={dutyLocked}
-                accessibilityState={{ disabled: dutyLocked }}
-                accessibilityLabel={t('home.dutyLabel')}
-                trackColor={{ true: theme.colors.brand.primary, false: theme.colors.borderStrong }}
-              />
-            </View>
+          <DutyPill
+            onDuty={profile.isOnDuty}
+            locked={dutyLocked}
+            onChange={(onDuty) => setDuty.mutate({ onDuty, version: profile.version })}
+          />
+          <View style={styles.dutyNotes}>
+            <OPText tone="secondary">
+              {profile.isOnDuty && profile.onDutySince
+                ? t('home.dutyOn', { time: formatTime(profile.onDutySince) })
+                : t('home.dutyOff')}
+            </OPText>
             <OPText variant="caption" tone="secondary">
               {t('home.dutyExplainer')}
             </OPText>
@@ -192,12 +183,8 @@ const createStyles = (theme: Theme) =>
       borderColor: theme.colors.border,
       backgroundColor: theme.colors.surface,
     },
-    dutyRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: theme.spacing.md,
-    },
-    dutyText: {
-      flex: 1,
+    dutyNotes: {
+      gap: theme.spacing.xxs,
+      paddingHorizontal: theme.spacing.xs,
     },
   });
