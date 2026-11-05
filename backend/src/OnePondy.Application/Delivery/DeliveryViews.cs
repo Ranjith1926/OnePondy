@@ -48,16 +48,21 @@ public sealed record DriverJobsView(JobDetailView? Current, IReadOnlyList<JobOff
 
 public sealed record LocationInput(double? Latitude, double? Longitude);
 
+/// <summary>Where the driver last reported being: plain coordinates, for the customer's own order only.</summary>
+public sealed record DeliveryPosition(double Latitude, double Longitude);
+
 /// <summary>
 /// How a delivery is going, for the customer who ordered and the restaurant who cooked. It names the driver by first name and
-/// vehicle only, and carries no position: the driver's coordinates are used by OnePondy to run the delivery and are not shared.
-/// <c>LocationUpdatedAt</c> only says how fresh the driver's last report is.
+/// vehicle only. The driver's coordinates are used by OnePondy to run the delivery and are shared only with the customer whose food
+/// the driver is carrying, and only from the moment the driver has collected it until the hand-over (<c>Position</c>); the restaurant
+/// never gets them. <c>LocationUpdatedAt</c> says how fresh the driver's last report is.
 /// </summary>
 public sealed record DeliveryProgressView(
     DeliveryJobStatus Status,
     string? DriverFirstName,
     VehicleType? VehicleType,
-    DateTimeOffset? LocationUpdatedAt);
+    DateTimeOffset? LocationUpdatedAt,
+    DeliveryPosition? Position = null);
 
 public static class DeliveryErrors
 {

@@ -245,10 +245,12 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
   are frozen and nothing is deleted. (3) A unique index allows one live job per driver, so one driver pressing "accept" on two jobs at once gets exactly one (the other is told `driver_has_active_job`).
   Proven by integration tests that fire four drivers at one job five times and one driver at two jobs three times.
 - **Privacy.** An offer shows the restaurant and its address, the area and the number of items, never the customer's address or phone: those arrive only after accepting. The customer and the restaurant
-  see the driver's **first name and vehicle** and how far the delivery has got, never coordinates.
+  see the driver's **first name and vehicle** and how far the delivery has got. *Changed 2026-11-05, on the owner's request after a real-phone test:* the customer who ordered (never the restaurant, never a
+  list) is also given the driver's latest position, but only from the moment the driver has collected the food until the hand-over (`DeliveryProgressView.Position`, set only for the customer's own order). The
+  app shows it as a "See where your order is" button that opens that spot in the phone's Maps app, with the time it was reported; there is still no map inside the app.
 - **Location.** Collected by the driver app only while it holds a delivery (foreground, every 15 seconds or 25 metres), sent to `POST /driver/jobs/{id}/location`, and kept as the **latest position only** on the
-  job row. The database refuses to keep a position on a job that is not accepted or picked up, so it is erased when the job is delivered, released or cancelled. The customer is not shown it (there is no map
-  provider, decision D6), and there is no admin view of it yet (8.9). If the driver refuses location permission the delivery goes on without it.
+  job row. The database refuses to keep a position on a job that is not accepted or picked up, so it is erased when the job is delivered, released or cancelled. The customer is shown it only while the driver
+  carries their order (see Privacy above); there is no map inside the app (no map provider, decision D6), and administrators have their own view of it (8.9). If the driver refuses location permission the delivery goes on without it.
 - **Driver account rules added:** a driver holding a delivery cannot go off duty or change their details (they give the delivery up first, which is allowed only before collecting); suspending a driver
   returns a delivery they have not collected to the pool, and leaves a collected one with them for an administrator.
 - **Pickup and drop-off** move the order (`ready_for_pickup → out_for_delivery → delivered`, recorded in its history as the driver) and the job together in one save. A delivered order goes on its restaurant's

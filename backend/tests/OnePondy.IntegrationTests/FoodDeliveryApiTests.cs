@@ -93,22 +93,31 @@ public sealed partial class FoodOrderApiTests
         Assert.Equal("bicycle", row.GetProperty("delivery").GetProperty("vehicleType").GetString());
         Assert.DoesNotContain("Suffren", row.GetRawText());
 
-        // The driver reports their position while heading out; the customer sees only how fresh it is, never the coordinates.
+        // The driver reports their position while heading out to the restaurant; the customer sees only how fresh it is, not the coordinates.
         Assert.Equal(HttpStatusCode.NoContent, (await SendAsync(client, HttpMethod.Post, JobPath(jobId, "location"), courier.Token, new { latitude = 11.93, longitude = 79.83 })).StatusCode);
         var held = await JobRowAsync(jobId);
         Assert.Equal(11.93, held.Latitude);
+        var heading = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/food/orders/{orderId}", customer));
+        Assert.DoesNotContain("11.93", heading.GetRawText());
+        Assert.DoesNotContain("79.83", heading.GetRawText());
 
         var picked = await ReadAsync(await SendAsync(client, HttpMethod.Post, JobPath(jobId, "pickup"), courier.Token));
         Assert.Equal("pickedUp", picked.GetProperty("status").GetString());
 
+        // Once the driver is carrying the food, the customer who ordered (and only they) can see where the driver is.
         var onTheWay = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/food/orders/{orderId}", customer));
         Assert.Equal("outForDelivery", onTheWay.GetProperty("status").GetString());
         var delivery = onTheWay.GetProperty("delivery");
         Assert.Equal("pickedUp", delivery.GetProperty("status").GetString());
         Assert.Equal("Ravi", delivery.GetProperty("driverFirstName").GetString());
         Assert.NotEqual(JsonValueKind.Null, delivery.GetProperty("locationUpdatedAt").ValueKind);
-        Assert.DoesNotContain("11.93", onTheWay.GetRawText());
-        Assert.DoesNotContain("79.83", onTheWay.GetRawText());
+        Assert.Equal(11.93, delivery.GetProperty("position").GetProperty("latitude").GetDouble());
+        Assert.Equal(79.83, delivery.GetProperty("position").GetProperty("longitude").GetDouble());
+
+        // The restaurant never gets the coordinates, even now.
+        var restaurantView = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{shop.BusinessId}/orders/{orderId}", shop.Owner));
+        Assert.DoesNotContain("11.93", restaurantView.GetRawText());
+        Assert.DoesNotContain("79.83", restaurantView.GetRawText());
 
         var delivered = await ReadAsync(await SendAsync(client, HttpMethod.Post, JobPath(jobId, "deliver"), courier.Token));
         Assert.Equal("delivered", delivered.GetProperty("status").GetString());
@@ -116,6 +125,7 @@ public sealed partial class FoodOrderApiTests
         var done = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/food/orders/{orderId}", customer));
         Assert.Equal("delivered", done.GetProperty("status").GetString());
         Assert.Equal("driver", done.GetProperty("history").EnumerateArray().Last().GetProperty("actorType").GetString());
+        Assert.True(!done.GetProperty("delivery").TryGetProperty("position", out var gone) || gone.ValueKind == JsonValueKind.Null);
 
         // Nothing about where the driver was is kept once the delivery is over.
         var finished = await JobRowAsync(jobId);

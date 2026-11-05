@@ -337,11 +337,16 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time, Le
 /// <summary>Reads how deliveries are going, for the order screens of the customer and the restaurant.</summary>
 public static class DeliveryProgress
 {
-    /// <summary>The progress of each given order's delivery. An order with no delivery, or whose delivery was cancelled, has no entry.</summary>
+    /// <summary>
+    /// The progress of each given order's delivery. An order with no delivery, or whose delivery was cancelled, has no entry.
+    /// <paramref name="forCustomer"/> is true only when the caller is the customer who placed the orders: then, while the driver is
+    /// carrying the food, the driver's last reported position is included. It is never included for the restaurant.
+    /// </summary>
     public static async Task<Dictionary<Guid, DeliveryProgressView>> ForOrdersAsync(
         IOnePondyDbContext db,
         IReadOnlyCollection<Guid> orderIds,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool forCustomer = false)
     {
         if (orderIds.Count == 0)
         {
@@ -360,7 +365,13 @@ public static class DeliveryProgress
             {
                 var driver = j.DriverUserId is { } id ? drivers.GetValueOrDefault(id) : null;
                 var first = driver?.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                return new DeliveryProgressView(j.Status, first, driver?.VehicleType, j.LastLocationAt);
+                var position = forCustomer
+                    && j.Status == DeliveryJobStatus.PickedUp
+                    && j.LastLatitude is { } latitude
+                    && j.LastLongitude is { } longitude
+                    ? new DeliveryPosition(latitude, longitude)
+                    : null;
+                return new DeliveryProgressView(j.Status, first, driver?.VehicleType, j.LastLocationAt, position);
             });
     }
 }

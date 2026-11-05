@@ -313,7 +313,7 @@ public sealed partial class OrderService(
     public async Task<Result<OrderDetail>> GetForAdminAsync(Guid id, CancellationToken cancellationToken)
     {
         var order = await Orders().AsNoTracking().SingleOrDefaultAsync(o => o.Id == id, cancellationToken);
-        return order is null ? OrderErrors.NotFound : await ToDetailAsync(order, cancellationToken);
+        return order is null ? OrderErrors.NotFound : await ToDetailAsync(order, cancellationToken, forCustomer: false);
     }
 
     /// <summary>
@@ -349,7 +349,7 @@ public sealed partial class OrderService(
             cancellationToken,
             RefundReason.AdminCancelled,
             beforeSave);
-        return failure is null ? await ToDetailAsync(order, cancellationToken) : failure;
+        return failure is null ? await ToDetailAsync(order, cancellationToken, forCustomer: false) : failure;
     }
 
     // --- Worker ---
@@ -647,7 +647,8 @@ public sealed partial class OrderService(
         return await db.Businesses.AsNoTracking().Where(b => ids.Contains(b.Id)).ToDictionaryAsync(b => b.Id, b => b.Name, cancellationToken);
     }
 
-    private async Task<OrderDetail> ToDetailAsync(FoodOrder order, CancellationToken cancellationToken)
+    /// <param name="forCustomer">True for the customer who placed the order, who may see where the driver is while carrying the food; false for staff paths, which are unchanged.</param>
+    private async Task<OrderDetail> ToDetailAsync(FoodOrder order, CancellationToken cancellationToken, bool forCustomer = true)
     {
         var business = await db.Businesses.AsNoTracking().SingleAsync(b => b.Id == order.BusinessId, cancellationToken);
 
@@ -657,7 +658,7 @@ public sealed partial class OrderService(
             .OrderBy(a => a.UpdatedAt)
             .FirstOrDefaultAsync(cancellationToken);
         var orderRefunds = await db.Refunds.AsNoTracking().Where(r => r.FoodOrderId == order.Id).OrderBy(r => r.RequestedAt).ToListAsync(cancellationToken);
-        var delivery = (await DeliveryProgress.ForOrdersAsync(db, [order.Id], cancellationToken)).GetValueOrDefault(order.Id);
+        var delivery = (await DeliveryProgress.ForOrdersAsync(db, [order.Id], cancellationToken, forCustomer)).GetValueOrDefault(order.Id);
         return new OrderDetail(
             order.Id,
             order.Version,

@@ -355,6 +355,51 @@ public class DeliveryTests
     }
 
     [Fact]
+    public async Task The_customer_sees_where_the_driver_is_only_while_the_driver_is_carrying_the_food()
+    {
+        var order = await ReadyOrderAsync();
+        var driver = await DriverOnDutyAsync();
+        var job = await TakenAsync(driver, order);
+        await _delivery.RecordLocationAsync(driver, job, new LocationInput(11.93, 79.83), None);
+
+        // On the way to the restaurant: the customer is told who is coming, but not where they are.
+        var beforePickup = (await _h.Orders.GetMineAsync(order, _h.Buyer, None)).Value!;
+        Assert.Null(beforePickup.Delivery!.Position);
+
+        await _delivery.PickUpAsync(driver, job, None);
+        await _delivery.RecordLocationAsync(driver, job, new LocationInput(11.94, 79.84), None);
+
+        var carrying = (await _h.Orders.GetMineAsync(order, _h.Buyer, None)).Value!;
+        Assert.Equal(new DeliveryPosition(11.94, 79.84), carrying.Delivery!.Position);
+        Assert.Equal(_h.B.Time.GetUtcNow(), carrying.Delivery.LocationUpdatedAt);
+
+        await _delivery.DeliverAsync(driver, job, null, None);
+
+        var delivered = (await _h.Orders.GetMineAsync(order, _h.Buyer, None)).Value!;
+        Assert.Null(delivered.Delivery!.Position);
+    }
+
+    [Fact]
+    public async Task The_restaurant_and_staff_never_get_the_drivers_position_through_the_order()
+    {
+        var order = await ReadyOrderAsync();
+        var driver = await DriverOnDutyAsync();
+        var job = await TakenAsync(driver, order);
+        await _delivery.PickUpAsync(driver, job, None);
+        await _delivery.RecordLocationAsync(driver, job, new LocationInput(11.94, 79.84), None);
+
+        var customer = (await _h.Orders.GetMineAsync(order, _h.Buyer, None)).Value!;
+        var inbox = (await _h.Orders.ListForBusinessAsync(_h.BusinessId, _h.Owner, null, None)).Value!.Single();
+        var restaurant = (await _h.Orders.GetForBusinessAsync(_h.BusinessId, order, _h.Owner, None)).Value!;
+        var admin = (await _h.Orders.GetForAdminAsync(order, None)).Value!;
+
+        Assert.NotNull(customer.Delivery!.Position);
+        Assert.Null(inbox.Delivery!.Position);
+        Assert.Null(restaurant.Delivery!.Position);
+        Assert.Null(admin.Delivery!.Position);
+    }
+
+    [Fact]
     public async Task Giving_the_job_up_erases_the_position()
     {
         var order = await ReadyOrderAsync();
