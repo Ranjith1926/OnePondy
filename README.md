@@ -316,6 +316,7 @@ see two new sections, Partners and Listings.
 - [Workflows](docs/workflows.md): sign-in, content verification, partner onboarding, listings, the booking lifecycle and hold expiry, step by step.
 - [Phase 7 plan](docs/phase-7-plan.md): the payments, ledger and notifications plan and the decisions it depends on.
 - [Data retention](docs/data-retention.md): how long authentication data and deleted-account data are kept.
+- [Backup and restore](docs/backup-and-restore.md): the backup script (`scripts/backup-database.ps1`), scheduling it, restoring on a clean server, and the drill log.
 
 ## Checks
 
