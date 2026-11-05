@@ -93,6 +93,7 @@ As the migration role (not `onepondy_app`): everything up to and including `2026
 - The operations page is a snapshot, with no history, graphs or outbound alerts.
 - The rate limiter's counts live in one process; with more than one API server each has its own.
 - How long finished rides, safety reports and support requests are kept is an open question for the owner (`docs/data-retention.md`).
+- **Dependency audit (2026-11-05).** The .NET packages have no known vulnerabilities. `npm audit --omit=dev` reports 10 findings, none critical, after a patch update of `node-forge`. The two high ones left: `zod` 3.x (memory use when validating oversized lists with size limits; the apps only validate their own short forms, so it is not reachable in practice, but moving to zod 4 is a major upgrade to plan, with `@hookform/resolvers` already accepting it), and Expo's command-line toolchain (`@expo/cli`, `glob`, `minimatch`: build-time tools that are not shipped in the apps; `npm audit` suggests an old Expo version as the fix, which is wrong for this project). Run the audit again before each release.
 
 ## 8. What has been run by hand so far
 
