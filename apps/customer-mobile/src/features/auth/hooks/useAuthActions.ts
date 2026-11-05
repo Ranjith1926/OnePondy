@@ -9,6 +9,7 @@ import {
   type BannerMessageKey,
   type SessionUser,
 } from '../../../state';
+import { clearDeliveryDetails } from '../../../storage/deliveryDetailsStorage';
 import { forgetPushRegistration } from '../../notifications/hooks/usePushSetup';
 import { authApi } from '../api/authApi';
 import { sessionManager } from '../services/sessionManager';
@@ -24,6 +25,8 @@ export function useAuthActions() {
   const endSession = useCallback(
     async (messageKey: BannerMessageKey, kind: 'info' | 'success') => {
       await sessionManager.clear();
+      // The delivery address and phone saved for quick checkout go with the session.
+      await clearDeliveryDetails().catch(() => undefined);
       queryClient.clear();
       dispatch(sessionCleared());
       dispatch(showBanner({ kind, messageKey }));

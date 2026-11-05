@@ -3,6 +3,7 @@ import { render, screen, userEvent, waitFor } from '@testing-library/react-nativ
 
 import { sessionManager } from '../features/auth/services/sessionManager';
 import type { SessionTokens } from '../features/auth/api/authApi';
+import { loadDeliveryDetails, saveDeliveryDetails } from '../storage/deliveryDetailsStorage';
 import { loadSession } from '../storage/sessionStorage';
 import App from './App';
 
@@ -255,9 +256,10 @@ describe('accounts and guest access', () => {
       expect(screen.getByText('Paradise Beach')).toBeOnTheScreen();
     });
 
-    it('signs out, clears the stored session and returns to guest views', async () => {
+    it('signs out, clears the stored session and the saved delivery details, and returns to guest views', async () => {
       const user = userEvent.setup();
       await launch();
+      await saveDeliveryDetails('u1', { address: '12 Rue Suffren', phone: '+919876543210' });
 
       await user.press(tab('Profile'));
       await user.press(await screen.findByRole('button', { name: 'Sign out' }));
@@ -265,6 +267,7 @@ describe('accounts and guest access', () => {
       expect(await screen.findByText("You're signed out.")).toBeOnTheScreen();
       expect(await screen.findByText('Guest')).toBeOnTheScreen();
       expect(await loadSession()).toBeNull();
+      expect(await loadDeliveryDetails('u1')).toBeNull();
       expect(requests.some((request) => request.route === 'POST /api/v1/auth/logout')).toBe(true);
     });
 

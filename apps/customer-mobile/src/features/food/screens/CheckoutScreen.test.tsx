@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { screen, userEvent } from '@testing-library/react-native';
+import { screen, userEvent, waitFor } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 import { ApiError } from '../../../api/apiErrors';
@@ -15,6 +15,12 @@ import {
 } from '../../../test-utils/foodFixture';
 import { renderWithProviders } from '../../../test-utils/render';
 import { guestState, signedInState } from '../../../test-utils/signedIn';
+import {
+  clearDeliveryDetails,
+  loadDeliveryDetails,
+  saveDeliveryDetails,
+} from '../../../storage/deliveryDetailsStorage';
+import { authApi } from '../../auth/api/authApi';
 import { foodApi } from '../api/foodApi';
 import { useCart } from '../cart/CartContext';
 import { CheckoutScreen } from './CheckoutScreen';
@@ -30,9 +36,11 @@ jest.mock('@react-navigation/native', () => ({
   },
 }));
 jest.mock('../api/foodApi', () => ({ foodApi: { quote: jest.fn(), place: jest.fn() } }));
+jest.mock('../../auth/api/authApi', () => ({ authApi: { getProfile: jest.fn() } }));
 
 const quote = foodApi.quote as jest.Mock;
 const place = foodApi.place as jest.Mock;
+const getProfile = authApi.getProfile as jest.Mock;
 
 function CartSize() {
   const { cart } = useCart();
@@ -55,13 +63,16 @@ async function fillIn(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText('Phone number'), '+919876500001');
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   quote.mockReset();
   place.mockReset();
+  getProfile.mockReset();
   mockNavigate.mockReset();
   mockGoBack.mockReset();
   mockDispatch.mockReset();
   quote.mockResolvedValue(aQuote());
+  getProfile.mockRejectedValue(new ApiError(404, 'http_404'));
+  await clearDeliveryDetails();
 });
 
 describe('<CheckoutScreen />', () => {
@@ -130,6 +141,106 @@ describe('<CheckoutScreen />', () => {
       payload: { name: 'OrderDetail', params: { id: orderId } },
     });
     expect(screen.getByTestId('cart-size')).toHaveTextContent('0');
+  });
+
+  describe('remembering where to deliver', () => {
+    const saved = {
+      address: '4 Rue Romain Rolland near the library',
+      phone: '+919876500001',
+      area: 'tamilQuarter',
+    };
+
+    it('saves the address, phone and area once an order is placed', async () => {
+      place.mockResolvedValue(anOrder({ status: 'placed' }));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      await user.press(screen.getByTestId('place-order'));
+
+      await waitFor(async () => {
+        await expect(loadDeliveryDetails('user-1')).resolves.toEqual({
+          address: '12 Rue Suffren, White Town',
+          phone: '+919876500001',
+          area: 'whiteTown',
+        });
+      });
+    });
+
+    it('does not save anything when the order could not be placed', async () => {
+      place.mockRejectedValue(new ApiError(503, 'http_503'));
+      const user = userEvent.setup();
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+      await fillIn(user);
+
+      await user.press(screen.getByTestId('place-order'));
+      await screen.findByText('Something went wrong. Please try again.');
+
+      await expect(loadDeliveryDetails('user-1')).resolves.toBeNull();
+    });
+
+    it('fills the form in from the last order, so the next one can be placed without typing', async () => {
+      await saveDeliveryDetails('user-1', saved);
+      await renderScreen();
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Delivery address')).toHaveDisplayValue(saved.address),
+      );
+      expect(screen.getByLabelText('Phone number')).toHaveDisplayValue(saved.phone);
+      await screen.findByTestId('price-breakdown');
+      expect(screen.getByTestId('place-order')).toBeEnabled();
+      expect(quote).toHaveBeenLastCalledWith(expect.objectContaining({ area: 'tamilQuarter' }));
+    });
+
+    it('lets the customer type over what was filled in, and places the order with what they typed', async () => {
+      place.mockResolvedValue(anOrder({ status: 'placed' }));
+      await saveDeliveryDetails('user-1', saved);
+      const user = userEvent.setup();
+      await renderScreen();
+      await waitFor(() =>
+        expect(screen.getByLabelText('Delivery address')).toHaveDisplayValue(saved.address),
+      );
+      await screen.findByTestId('price-breakdown');
+
+      await user.clear(screen.getByLabelText('Delivery address'));
+      await user.type(screen.getByLabelText('Delivery address'), '9 Rue Dumas');
+      await user.press(screen.getByTestId('place-order'));
+
+      expect(place.mock.calls[0][0]).toMatchObject({
+        address: '9 Rue Dumas',
+        contactPhone: saved.phone,
+        area: 'tamilQuarter',
+      });
+    });
+
+    it('never fills in the details of a different user', async () => {
+      await saveDeliveryDetails('someone-else', saved);
+      await renderScreen();
+      await screen.findByTestId('price-breakdown');
+
+      expect(screen.getByLabelText('Delivery address')).toHaveDisplayValue('');
+      expect(screen.getByLabelText('Phone number')).toHaveDisplayValue('');
+      expect(screen.getByTestId('place-order')).toBeDisabled();
+    });
+
+    it('offers the phone number they signed in with when nothing has been saved yet', async () => {
+      getProfile.mockResolvedValue({
+        id: 'user-1',
+        displayName: 'Asha',
+        phoneNumber: '+919876543210',
+        email: null,
+        preferredLanguage: 'en',
+        createdAt: '2026-10-26T04:00:00Z',
+      });
+      await renderScreen();
+
+      await waitFor(() =>
+        expect(screen.getByLabelText('Phone number')).toHaveDisplayValue('+919876543210'),
+      );
+      expect(screen.getByLabelText('Delivery address')).toHaveDisplayValue('');
+    });
   });
 
   it('uses the same idempotency key when the same order is tried again after a failure', async () => {

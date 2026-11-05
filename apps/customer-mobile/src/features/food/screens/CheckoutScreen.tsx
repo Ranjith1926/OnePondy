@@ -18,7 +18,9 @@ import {
   type Theme,
 } from '../../../design-system';
 import { useAppState } from '../../../state';
+import { saveDeliveryDetails } from '../../../storage/deliveryDetailsStorage';
 import { SignInPrompt } from '../../auth/components/SignInPrompt';
+import { useProfile } from '../../auth/hooks/useProfile';
 import { newIdempotencyKey } from '../../bookings/idempotencyKey';
 import { formatMoney } from '../../payments/formatMoney';
 import { cartLineInputs } from '../cart/cart';
@@ -28,6 +30,7 @@ import { servedAreas, startingArea } from '../deliveryAreas';
 import type { PaymentMethod } from '../api/foodApi';
 import { fieldError, foodErrorMessageKey } from '../foodErrors';
 import { usePlaceOrder, useQuote } from '../hooks/useFood';
+import { useSavedDelivery } from '../hooks/useSavedDelivery';
 
 const MAX_ADDRESS = 300;
 const MAX_NOTE = 200;
@@ -48,15 +51,23 @@ export function CheckoutScreen() {
     () => (restaurant ? servedAreas(restaurant.deliveryAreas) : []),
     [restaurant],
   );
+  // What the customer gave for their last order fills the form in; anything they type replaces it. Until they give one, the phone they
+  // signed in with is offered.
+  const userId = auth.user?.id;
+  const saved = useSavedDelivery(userId);
+  const profile = useProfile();
   const [chosenArea, setChosenArea] = useState<string | null>(null);
+  const wantedArea = chosenArea ?? saved?.area ?? null;
   const area =
-    chosenArea !== null && (served as string[]).includes(chosenArea)
-      ? chosenArea
+    wantedArea !== null && (served as string[]).includes(wantedArea)
+      ? wantedArea
       : startingArea(location.selectedAreaId, served);
-  const [address, setAddress] = useState('');
+  const [typedAddress, setAddress] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [phone, setPhone] = useState('');
+  const [typedPhone, setPhone] = useState<string | null>(null);
   const [chosenMethod, setChosenMethod] = useState<PaymentMethod | null>(null);
+  const address = typedAddress ?? saved?.address ?? '';
+  const phone = typedPhone ?? saved?.phone ?? profile.data?.phoneNumber ?? '';
 
   const lines = cartLineInputs(cart);
   const quote = useQuote(restaurant?.businessId, area, lines);
@@ -155,6 +166,15 @@ export function CheckoutScreen() {
       },
       {
         onSuccess: (order) => {
+          if (userId !== undefined) {
+            saveDeliveryDetails(userId, {
+              address: address.trim(),
+              phone: phone.trim(),
+              area: area ?? undefined,
+            }).catch(() => {
+              // Storage unavailable: the next order simply asks again.
+            });
+          }
           dispatch({ type: 'clear' });
           // Replace checkout, so back from the order goes to where the customer came from, not to an empty cart.
           navigation.dispatch(StackActions.replace('OrderDetail', { id: order.id }));
