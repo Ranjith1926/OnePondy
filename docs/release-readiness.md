@@ -93,3 +93,11 @@ As the migration role (not `onepondy_app`): everything up to and including `2026
 - The operations page is a snapshot, with no history, graphs or outbound alerts.
 - The rate limiter's counts live in one process; with more than one API server each has its own.
 - How long finished rides, safety reports and support requests are kept is an open question for the owner (`docs/data-retention.md`).
+
+## 8. What has been run by hand so far
+
+Automated tests are listed in section 2. These were also run by hand, against the development database (2026-11-05), so they are known to work outside the test suites:
+
+- **On a real phone (OnePlus 11R, Android), customer and driver apps against the IIS site:** sign-in, rides (request, accept, trip, share, SOS), activity and stay bookings (request, accept, cancel), food ordering with cash on delivery (order, kitchen steps, delivery with the driver app, cancel), the customer seeing and opening the driver's position, reviews, support requests and replies, places, search, saving, trips and sharing a trip, and the offline notice. Not run: online payment, deleting an account, a low-end phone, a driver actually moving, push notifications.
+- **The web console in a real browser (Microsoft Edge, driven by a script), as an administrator:** staff sign-in with an e-mailed code; publishing and taking down a review; approving and suspending a business application, a listing and a delivery driver; taking, answering and resolving a support request. Each action showed its confirmation, was saved, and has its audit entry (a support reply is stored as a message with its author, not as an audit entry, as planned). Not run: rejecting or sending back with a reason, escalating a request, the safety queue, payments and settlements screens, staff management, and a support agent or content editor signing in with a role other than administrator.
+- This found one fault in the console (the Partners pages were sent to the partner sign-in), now fixed and tested.
