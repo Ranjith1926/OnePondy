@@ -12,16 +12,16 @@ Windows without Docker; production runs on IIS (spec §13).
 OnePondy/
 ├── apps/
 │   ├── customer-mobile/      # React Native + Expo customer app
-│   └── web-console/          # Next.js staff console: content, configuration, staff, audit log
+│   ├── driver-mobile/        # React Native + Expo driver app: deliveries, and ride mode
+│   └── web-console/          # Next.js: staff console (content, support, approvals, audit log) and partner portal
 ├── backend/                  # ASP.NET Core solution: Api, Domain, Application, Infrastructure, Worker
 ├── database/scripts/         # DBA-run SQL scripts (database creation, PostGIS)
-├── docs/                     # Policies code comments point to (retention, ...)
+├── docs/                     # Architecture, plans, retention, backup and release readiness
+├── scripts/                  # backup-database.ps1 (see docs/backup-and-restore.md)
 ├── .config/dotnet-tools.json # pinned dotnet-ef
-├── .github/workflows/ci.yml  # CI: mobile checks + backend build and tests
+├── .github/workflows/ci.yml  # CI: app checks, backend build and tests, database tests
 └── package.json              # npm workspaces
 ```
-
-`apps/driver-mobile` (Phase 8) is added when that phase starts.
 
 ## Prerequisites
 
@@ -388,11 +388,94 @@ it after `npx expo prebuild --clean`), with your user name:
 cmake.dir=C\:/Users/<you>/AppData/Local/Android/Sdk/cmake/3.31.6
 ```
 
+## Environments, URLs and sign-in
+
+Every address the project uses, and how to get in. **Secret values are deliberately not in this file**: this
+repository is pushed to GitHub, and anything committed stays in its history even after it is deleted. The tables say
+where each secret lives and who holds it.
+
+### Web addresses
+
+| What | Address | Notes |
+|---|---|---|
+| API (local) | <http://localhost:5080> | `dotnet run --project backend/src/OnePondy.Api` |
+| API liveness | <http://localhost:5080/health/live> | Answers 200 while the process is up |
+| API readiness | <http://localhost:5080/health/ready> | Also checks the database |
+| API description (OpenAPI) | <http://localhost:5080/openapi/v1.json> | Development environment only |
+| Staff console | <http://localhost:3100/sign-in> | `npm run dev --workspace apps/web-console`; needs `ONEPONDY_API_URL` (default `http://localhost:5080`) |
+| Partner portal | <http://localhost:3100/partner/sign-in> | Business owners (a customer account with a business); separate session from staff |
+| Grievance officer page | <http://localhost:3100/grievance> | Public, no sign-in |
+| Shared trip page | `http://localhost:3100/trip/<token>` | Public; the link a rider shares; stops working when the trip ends or sharing is turned off |
+| Shared itinerary | `http://localhost:5080/api/v1/itineraries/shared/<token>` | Public, read-only |
+| Test site on IIS | <http://192.168.0.195:8081> | The dev PC's LAN address; it changes if the router hands out a new one. Folder `C:\IIS\Publish OnePondy`, environment `Testing`, real SMS through Twilio Verify |
+| IIS liveness and app settings | <http://192.168.0.195:8081/health/live> and <http://192.168.0.195:8081/api/v1/config> | `config` lists which modules are on |
+| Customer app (Metro bundler) | port 8081 by default (`npm start`); 8083 when the IIS site already holds 8081 | The dev client app opens `onepondy://expo-development-client/?url=http://localhost:<port>` after `adb reverse tcp:<port> tcp:<port>` |
+| Driver app (Metro bundler) | port 8082 | `onepondy-driver://expo-development-client/?url=http://localhost:8082` |
+| PostgreSQL | `localhost:5432`, database `onepondy_dev` | Windows service `postgresql-x64-18` |
+| Repository | <https://github.com/Ranjith1926/OnePondy> | Branch `phase-4-tourism` |
+
+The apps find the API through `EXPO_PUBLIC_API_BASE_URL` (a phone cannot use `localhost`; use the PC's LAN address, for
+example `http://192.168.0.195:8081`, or `adb reverse tcp:5080 tcp:5080` with `http://localhost:5080`) and the customer app
+builds shared-trip links from `EXPO_PUBLIC_SHARE_BASE_URL` (default `http://localhost:3100`). The console reaches the API
+from its own server, so `ONEPONDY_API_URL` is never sent to a browser.
+
+### Who signs in, and with what
+
+There are **no passwords for people**: customers, drivers, partners and staff all sign in with a one-time code.
+
+| Who | Where | How | What they can reach |
+|---|---|---|---|
+| Customer | Customer app | Mobile number, then the 6-digit SMS code (Indian +91 numbers; other countries use e-mail) | Browse, save, book, order, ride, review, support |
+| Delivery driver | Driver app | Mobile number and SMS code, then applies; an administrator approves in the console | Deliveries, duty, cash held; ride mode once approved as a ride driver |
+| Partner (business owner) | Partner portal and the apps | The same mobile sign-in as a customer; then applies with a business; an administrator approves | Their own businesses, menus, listings, bookings and orders only |
+| Administrator | Staff console | E-mail address, then a code sent to that e-mail | Everything, including staff, configuration and the audit log |
+| Support agent | Staff console | E-mail and code; role given by an administrator | Support queue and the ride safety queue |
+| Content editor | Staff console | E-mail and code; role given by an administrator | Places, reviews and read-only configuration |
+
+**The first administrator.** Put an e-mail address in the API's `Console:BootstrapAdministrators:0` setting (user
+secrets, below). The first time that address signs in it becomes an administrator; remove the setting afterwards. Further
+staff are added on the console's **Staff** page.
+
+**Where the one-time code goes** depends on `Auth:Otp:Delivery`:
+
+| Value | Used for | Where to read the code |
+|---|---|---|
+| `Log` | Development, tests and the local stack | The API's log line `... <number or e-mail> is <code>` (never use this in production) |
+| `TwilioVerify` | The IIS test site | Real SMS. Twilio's trial account sends only to **verified numbers**, listed in the Twilio console under Verified Caller IDs; at most 3 codes per number per 10 minutes and one every 30 seconds |
+| A production provider (Twilio or MSG91, with TRAI DLT registration) | Production | Not set up; see `docs/release-readiness.md` |
+
+The console limits staff sign-in the same way, and says nothing about whether an e-mail address has access.
+
+### Secrets: where each lives
+
+| Secret | Who holds it | Where it is stored |
+|---|---|---|
+| PostgreSQL `postgres` login | The owner (chosen when PostgreSQL was installed) | Not in the repository. On the dev PC the nightly backup reads it from `%APPDATA%\postgresql\pgpass.conf` (readable only by that Windows user) |
+| PostgreSQL `onepondy_app` login (the application's role: can read and write data, cannot change the database structure) | The owner (chosen in First-time setup) | .NET user secrets `ConnectionStrings:OnePondy`; on the IIS site, `appsettings.Testing.json` in the publish folder |
+| Signing and hashing keys | Generated per environment | `Auth:Jwt:SigningKey` and `Auth:HashingKey`: user secrets, or the publish folder's settings. Never reuse one environment's keys in another |
+| Twilio account | The owner | `Twilio:AccountSid`, `Twilio:AuthToken`, `Twilio:VerifyServiceSid` in user secrets or the publish folder's settings. Rotate the auth token in the Twilio console if it is ever exposed |
+| Razorpay | The owner | `Payments:Razorpay:KeyId` and `Payments:Razorpay:KeySecret` (test keys only, `rzp_test_...`) |
+| Gemini (trip planner) | The owner | `Ai:Gemini:ApiKey` |
+| Expo push and Firebase | The owner | Not set up yet; they belong on the Worker only |
+| Backups | The owner | `C:\OnePondyBackups` on the dev PC (a database dump and a roles file per run); the roles file contains password hashes, so keep it out of shared folders. See `docs/backup-and-restore.md` |
+
+To see which secrets this machine has (names only, no values): `dotnet user-secrets list --project backend/src/OnePondy.Api`
+and look at the key names. To start a fresh environment, follow First-time setup and `docs/release-readiness.md` section 3.
+
+### Sample data on the development database
+
+`onepondy_dev` holds a small amount of test content so the apps are not empty: three sample places (Promenade Beach,
+Matrimandir, French Quarter lanes, marked in the database as sample data, not verified on the ground), a restaurant
+(Spice Route, with cash on delivery), a stay (Garden room, White Town) and an activity (Sunset Kayak Tour), plus the
+orders, bookings, one review and one support ticket made while testing. The module switches `food`, `rides`, `stays`,
+`activities`, `support` and `cashOnDelivery` are on in that database and `payments`, `tripPlanner` and `notifications`
+are off. No staff account is active there; add one with the bootstrap setting above.
+
 ## Secrets
 
 Never commit secrets (spec §12). Local secrets live in .NET user secrets and in
 `apps/customer-mobile/.env` (git-ignored). Anything in `.env` prefixed `EXPO_PUBLIC_` ships inside
-the app, so it must never be secret.
+the app, so it must never be secret. The tables above say which secret lives where.
 
 ## Phase status
 
