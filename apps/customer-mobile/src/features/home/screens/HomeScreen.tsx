@@ -3,9 +3,19 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { StyleSheet, View } from 'react-native';
 
-import { MainTabTemplate, SearchBar, useThemedStyles, type Theme } from '../../../design-system';
+import {
+  InlineBanner,
+  MainTabTemplate,
+  SearchBar,
+  useThemedStyles,
+  type Theme,
+} from '../../../design-system';
 import { ComingSoonSheet } from '../../modules/components/ComingSoonSheet';
-import { useModuleStatus } from '../../modules/hooks/useAppConfig';
+import {
+  useAppConfig,
+  useConfigUnreachable,
+  useModuleStatus,
+} from '../../modules/hooks/useAppConfig';
 import type { ModuleKey } from '../../modules/moduleConfig';
 import { CuratedCollectionsSection } from '../components/CuratedCollectionsSection';
 import { HomeHeader } from '../components/HomeHeader';
@@ -21,9 +31,16 @@ export function HomeScreen() {
   const styles = useThemedStyles(createStyles);
   const [comingSoon, setComingSoon] = useState<ModuleKey | null>(null);
   const modules = useModuleStatus();
+  const unreachable = useConfigUnreachable();
+  const { refetch } = useAppConfig();
   const openExplore = () => navigation.navigate('Main', { screen: 'Explore' });
 
   const onServicePress = (module: ModuleKey) => {
+    // Without an answer from the server nothing is known to be "coming soon": try again instead of saying so.
+    if (unreachable) {
+      void refetch();
+      return;
+    }
     if (module === 'food' && modules.food === 'available') {
       navigation.navigate('Restaurants');
       return;
@@ -61,6 +78,11 @@ export function HomeScreen() {
             onPress={() => navigation.navigate('Search')}
           />
         </View>
+        {unreachable ? (
+          <View style={styles.search}>
+            <InlineBanner kind="warning" message={t('home.unreachable')} />
+          </View>
+        ) : null}
         <ServiceGrid onServicePress={onServicePress} />
         <HomeHero onExplore={openExplore} />
         <PopularPlacesSection onSeeAll={openExplore} />

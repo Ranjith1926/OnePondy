@@ -44,6 +44,7 @@
   "home": {
     "searchPlaceholder": "Where do you want to go?",
     "searchHint": "Opens search",
+    "unreachable": "Can't reach OnePondy right now. We'll keep trying; tap a service to try again.",
     "notifications": "Notifications",
     "servicesLabel": "Services",
     "hero": {
