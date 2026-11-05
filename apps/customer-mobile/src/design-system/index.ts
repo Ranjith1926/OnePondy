@@ -2,6 +2,7 @@ export * from './atoms';
 export * from './molecules';
 export * from './organisms';
 export * from './templates';
+export { ConnectivityProvider, useConnectivity, type Connectivity } from './hooks/useConnectivity';
 export { useLargeText } from './hooks/useLargeText';
 export { useReducedMotion } from './hooks/useReducedMotion';
 export { ThemeProvider, useTheme, useThemedStyles } from './theme/ThemeProvider';

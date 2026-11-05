@@ -4,6 +4,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { CartProvider } from '../../features/food/cart/CartContext';
 import { AppStateProvider, type AppState } from '../../state';
 import { AppThemeProvider } from './AppThemeProvider';
+import { ConnectivityBridge } from './ConnectivityBridge';
 import { LanguageSync } from './LanguageSync';
 import { PreferencesBootstrap } from './PreferencesBootstrap';
 import { QueryProvider } from './QueryProvider';
@@ -24,10 +25,12 @@ export function AppProviders({ children, initialState }: AppProvidersProps) {
           <PreferencesBootstrap>
             <LanguageSync />
             <AppThemeProvider>
-              <SessionBootstrap>
-                <SessionSync />
-                <CartProvider>{children}</CartProvider>
-              </SessionBootstrap>
+              <ConnectivityBridge>
+                <SessionBootstrap>
+                  <SessionSync />
+                  <CartProvider>{children}</CartProvider>
+                </SessionBootstrap>
+              </ConnectivityBridge>
             </AppThemeProvider>
           </PreferencesBootstrap>
         </AppStateProvider>

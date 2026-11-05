@@ -1,6 +1,7 @@
 import { screen, userEvent } from '@testing-library/react-native';
 
 import { renderWithProviders } from '../../test-utils/render';
+import { ConnectivityProvider } from '../hooks/useConnectivity';
 import { EmptyState } from './EmptyState';
 import { ErrorState } from './ErrorState';
 import { FormField } from './FormField';
@@ -77,6 +78,23 @@ describe('<LoadingState />', () => {
 
     const progress = screen.getByRole('progressbar', { name: 'Loading places' });
     expect(progress).toBeBusy();
+  });
+
+  it('says nothing about connectivity while the phone is online', async () => {
+    await renderWithProviders(<LoadingState accessibilityLabel="Loading places" />);
+
+    expect(screen.queryByText(/offline/i)).not.toBeOnTheScreen();
+  });
+
+  it('says it is waiting for a connection, in the words the app supplied, while offline', async () => {
+    await renderWithProviders(
+      <ConnectivityProvider value={{ offline: true, offlineMessage: 'Waiting for a connection.' }}>
+        <LoadingState accessibilityLabel="Loading places" />
+      </ConnectivityProvider>,
+    );
+
+    expect(screen.getByText('Waiting for a connection.')).toBeOnTheScreen();
+    expect(screen.getByRole('progressbar', { name: 'Loading places' })).toBeBusy();
   });
 });
 

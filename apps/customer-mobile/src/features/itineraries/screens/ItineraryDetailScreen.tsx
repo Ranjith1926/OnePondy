@@ -348,6 +348,7 @@ const createStyles = (theme: Theme) =>
     centered: {
       flex: 1,
       justifyContent: 'center',
+      paddingHorizontal: theme.layout.screenPadding,
     },
     inset: {
       paddingHorizontal: theme.layout.screenPadding,

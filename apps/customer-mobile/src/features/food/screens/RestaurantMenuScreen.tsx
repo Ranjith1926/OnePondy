@@ -220,6 +220,7 @@ const createStyles = (theme: Theme) =>
       flex: 1,
       alignItems: 'center',
       justifyContent: 'center',
+      paddingHorizontal: theme.layout.screenPadding,
     },
     inset: {
       paddingHorizontal: theme.layout.screenPadding,
