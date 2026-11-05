@@ -21,6 +21,24 @@ describe('<OPIconButton />', () => {
     expect(onPress).toHaveBeenCalledTimes(1);
     expect(button).toHaveStyle({ width: 48, height: 48 });
   });
+
+  it('shows a switched-on toggle in the brand colours and announces it as selected', async () => {
+    await renderWithProviders(
+      <OPIconButton icon="heart" accessibilityLabel="Saved" onPress={() => {}} active />,
+    );
+
+    const button = screen.getByRole('button', { name: 'Saved' });
+    expect(button).toBeSelected();
+    expect(button).toHaveStyle({ backgroundColor: '#D5EEEB' });
+  });
+
+  it('is not selected unless it is switched on', async () => {
+    await renderWithProviders(
+      <OPIconButton icon="heart" accessibilityLabel="Save" onPress={() => {}} />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeSelected();
+  });
 });
 
 describe('<OPSearchField />', () => {

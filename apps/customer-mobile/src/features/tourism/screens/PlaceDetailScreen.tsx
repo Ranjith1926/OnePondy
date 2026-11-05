@@ -65,6 +65,7 @@ export function PlaceDetailScreen({ route }: Props) {
         <OPIconButton
           icon="heart"
           variant={isSaved ? 'tonal' : 'plain'}
+          active={isSaved}
           accessibilityLabel={isSaved ? t('placeDetail.saved') : t('placeDetail.save')}
           disabled={toggleSaved.isPending}
           onPress={() => {

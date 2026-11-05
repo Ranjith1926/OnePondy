@@ -47,6 +47,7 @@ export function ListingDetailScreen({ route }: Props) {
         <OPIconButton
           icon="heart"
           variant={isSaved ? 'tonal' : 'plain'}
+          active={isSaved}
           accessibilityLabel={isSaved ? t('listings.detail.saved') : t('listings.detail.save')}
           disabled={toggleSaved.isPending}
           onPress={() => {
