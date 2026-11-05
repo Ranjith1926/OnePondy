@@ -322,9 +322,9 @@ see two new sections, Partners and Listings.
 
 ```powershell
 npm run format:check    # Prettier, repository-wide
-npm run lint            # ESLint for every workspace (customer-mobile, web-console)
+npm run lint            # ESLint for every workspace (customer-mobile, driver-mobile, web-console)
 npm run typecheck       # TypeScript strict for every workspace
-npm test                # Jest (customer-mobile) and Vitest (web-console) for every workspace
+npm test                # Jest (customer-mobile, driver-mobile) and Vitest (web-console) for every workspace
 
 dotnet build backend/OnePondy.sln
 dotnet test backend/OnePondy.sln
@@ -333,12 +333,21 @@ dotnet test backend/OnePondy.sln
 The root `lint`, `typecheck` and `test` scripts run across every `apps/*` workspace
 (`--workspaces --if-present`); use `--workspace apps/web-console` to target one.
 
-Database integration tests are skipped unless `ONEPONDY_TEST_DATABASE` holds a connection string:
+Database integration tests are skipped unless `ONEPONDY_TEST_DATABASE` holds a connection string. Give them a database of
+their own, never `onepondy_dev`: the suite applies the migrations itself (so the login must be able to change the schema,
+which `onepondy_app` deliberately cannot), it creates businesses, orders and accounts, and a full run expects an **empty**
+database. Drop and recreate it before each full run:
 
 ```powershell
-$env:ONEPONDY_TEST_DATABASE = "Host=localhost;Port=5432;Database=onepondy_dev;Username=onepondy_app;Password=<your-password>"
-dotnet test backend/OnePondy.sln
+psql -h localhost -U postgres -c "drop database if exists onepondy_test with (force)" -c "create database onepondy_test"
+$env:ONEPONDY_TEST_DATABASE = "Host=localhost;Port=5432;Database=onepondy_test;Username=postgres;Password=<your-password>"
+dotnet test backend/tests/OnePondy.IntegrationTests
 ```
+
+`dotnet test` takes one project at a time (or the solution file); the whole database suite takes about 8 to 9 minutes.
+Six tests stay skipped on purpose because they call outside services: two call Expo's real push service with a made-up
+token (set `ONEPONDY_EXPO_LIVE_CHECK=1`), and four call Razorpay's test API (set `ONEPONDY_RAZORPAY_TEST_KEY_ID` and
+`ONEPONDY_RAZORPAY_TEST_KEY_SECRET` to a **test** key pair, `rzp_test_...`).
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every pull request.
 
