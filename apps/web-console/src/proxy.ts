@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 
 import type { SessionTokens } from './lib/apiTypes';
 import { apiBaseUrl, secureCookies } from './lib/config';
+import { isPartnerPortalPath } from './lib/portalPaths';
 import { refreshOnce } from './lib/refresh';
 import {
   cookieOptions,
@@ -105,7 +106,7 @@ async function handleSession(request: NextRequest, cookies: SessionCookies) {
 export async function proxy(request: NextRequest) {
   return handleSession(
     request,
-    request.nextUrl.pathname.startsWith('/partner') ? partnerCookies : staffCookies,
+    isPartnerPortalPath(request.nextUrl.pathname) ? partnerCookies : staffCookies,
   );
 }
 
