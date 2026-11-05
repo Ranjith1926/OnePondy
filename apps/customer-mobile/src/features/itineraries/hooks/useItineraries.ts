@@ -86,12 +86,19 @@ export function useSetItineraryArchived(id: string) {
   });
 }
 
-export function useAddStop(itineraryId: string) {
+/** Adds a place to a trip. The trip is named with each call, because it may have only just been created. */
+export function useAddStop() {
   const { i18n } = useTranslation();
-  const invalidate = useInvalidateItinerary(itineraryId);
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: AddStopInput) => itinerariesApi.addStop(itineraryId, input, i18n.language),
-    onSuccess: invalidate,
+    mutationFn: ({ itineraryId, input }: { itineraryId: string; input: AddStopInput }) =>
+      itinerariesApi.addStop(itineraryId, input, i18n.language),
+    onSuccess: (_added, { itineraryId }) => {
+      void queryClient.invalidateQueries({ queryKey: ['itineraries'] });
+      void queryClient.invalidateQueries({
+        queryKey: itineraryQueryKey(itineraryId, i18n.language),
+      });
+    },
   });
 }
 

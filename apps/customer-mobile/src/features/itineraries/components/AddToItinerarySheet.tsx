@@ -36,7 +36,7 @@ export function AddToItinerarySheet({
   const createItinerary = useCreateItinerary();
   const [creating, setCreating] = useState(false);
   const [newTitle, setNewTitle] = useState('');
-  const addStop = useAddStop(placeId ?? '');
+  const addStop = useAddStop();
 
   const close = () => {
     setCreating(false);
@@ -47,7 +47,7 @@ export function AddToItinerarySheet({
   const addTo = (itineraryId: string, title: string) => {
     if (!placeId) return;
     addStop.mutate(
-      { placeId },
+      { itineraryId, input: { placeId } },
       {
         onSuccess: () => {
           close();
