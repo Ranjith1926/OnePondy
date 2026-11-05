@@ -15,6 +15,7 @@ import {
   useThemedStyles,
   type Theme,
 } from '../../../design-system';
+import { formatMoney } from '../../payments/formatMoney';
 import type { ListingType } from '../api/listingsApi';
 import { useListings } from '../hooks/useListings';
 import { listingTypeIcons, listingTypes } from '../listingTypes';
@@ -84,7 +85,7 @@ export function ListingsScreen({ route }: Props) {
               const price =
                 listing.basePrice === null
                   ? undefined
-                  : t('listings.from', { currency: listing.currency, price: listing.basePrice });
+                  : t('listings.from', { price: formatMoney(listing.basePrice, listing.currency) });
               const subtitle = listing.isBookable
                 ? [listing.businessName, price].filter(Boolean).join(' · ')
                 : `${listing.businessName} · ${t('listings.discoveryOnly')}`;

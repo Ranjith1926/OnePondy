@@ -15,6 +15,7 @@ import {
   type Theme,
 } from '../../../design-system';
 import { useAppState } from '../../../state';
+import { formatMoney } from '../../payments/formatMoney';
 import { PublicReviews } from '../../reviews/components/PublicReviews';
 import { RatingLine } from '../../reviews/components/RatingLine';
 import { BookSlotSheet } from '../components/BookSlotSheet';
@@ -110,7 +111,7 @@ export function ListingDetailScreen({ route }: Props) {
         <RatingLine rating={data.rating} />
         {data.basePrice !== null ? (
           <OPText variant="label">
-            {t('listings.from', { currency: data.currency, price: data.basePrice })}
+            {t('listings.from', { price: formatMoney(data.basePrice, data.currency) })}
           </OPText>
         ) : null}
 

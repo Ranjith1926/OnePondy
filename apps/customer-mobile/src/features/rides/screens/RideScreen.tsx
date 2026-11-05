@@ -472,7 +472,7 @@ function Trip({ ride, connected }: { ride: Ride; connected: boolean }) {
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
     screen: { flex: 1, backgroundColor: theme.colors.background },
-    header: { paddingHorizontal: theme.layout.screenPadding, paddingVertical: theme.spacing.xs },
+    header: { paddingHorizontal: theme.spacing.xxs, paddingVertical: theme.spacing.xs },
     content: { paddingBottom: theme.spacing.xxl },
     inset: { paddingHorizontal: theme.layout.screenPadding, gap: theme.spacing.md },
     field: { gap: theme.spacing.xs },

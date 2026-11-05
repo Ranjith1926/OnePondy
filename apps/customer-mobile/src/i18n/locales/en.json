@@ -356,7 +356,7 @@
       "message": "Check back soon as partners add more."
     },
     "discoveryOnly": "Discovery only — contact the business directly.",
-    "from": "From {{currency}} {{price}}",
+    "from": "From {{price}}",
     "detail": {
       "loading": "Loading listing",
       "error": {
