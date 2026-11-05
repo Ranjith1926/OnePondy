@@ -123,12 +123,16 @@ export interface OrderHistoryEntry {
 
 export type DeliveryStatus = 'open' | 'accepted' | 'pickedUp' | 'delivered';
 
-/** How the delivery is going. It names the driver by first name and vehicle only, and carries no position. */
+/**
+ * How the delivery is going. It names the driver by first name and vehicle. `position` is where the driver last reported being,
+ * and is present only while the driver is carrying this customer's order to them.
+ */
 export interface DeliveryProgress {
   status: DeliveryStatus;
   driverFirstName: string | null;
   vehicleType: 'bicycle' | 'scooter' | 'motorbike' | null;
   locationUpdatedAt: string | null;
+  position?: { latitude: number; longitude: number } | null;
 }
 
 export interface OrderDetail {

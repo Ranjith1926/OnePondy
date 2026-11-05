@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { screen, userEvent } from '@testing-library/react-native';
+import { Linking } from 'react-native';
 
 import { ApiError } from '../../../api/apiErrors';
 import { anOrder, orderId } from '../../../test-utils/foodFixture';
@@ -265,6 +266,72 @@ describe('<OrderDetailScreen />', () => {
         await screen.findByText('Meena has your order and is on the way to you.'),
       ).toBeOnTheScreen();
       expect(screen.getByText('On a bicycle.')).toBeOnTheScreen();
+    });
+
+    it('lets the customer open the drivers position in Maps while the driver is bringing the order', async () => {
+      const openURL = jest.spyOn(Linking, 'openURL').mockResolvedValue();
+      ordered({
+        status: 'outForDelivery',
+        delivery: {
+          status: 'pickedUp',
+          driverFirstName: 'Meena',
+          vehicleType: 'scooter',
+          locationUpdatedAt: '2026-10-30T10:20:00Z',
+          position: { latitude: 11.9341, longitude: 79.8302 },
+        },
+      });
+      await renderScreen();
+
+      await userEvent
+        .setup()
+        .press(await screen.findByRole('button', { name: 'See where your order is' }));
+
+      expect(openURL).toHaveBeenCalledWith(
+        'https://www.google.com/maps/search/?api=1&query=11.9341,79.8302',
+      );
+      expect(screen.getByText(/Driver's position updated at/)).toBeOnTheScreen();
+      openURL.mockRestore();
+    });
+
+    it('offers no map before the driver has collected the order, or when no position was reported', async () => {
+      ordered({
+        status: 'readyForPickup',
+        delivery: {
+          status: 'accepted',
+          driverFirstName: 'Ravi',
+          vehicleType: 'scooter',
+          locationUpdatedAt: '2026-10-30T10:15:00Z',
+          position: { latitude: 11.9, longitude: 79.8 },
+        },
+      });
+      await renderScreen();
+      expect(
+        await screen.findByText('Ravi is on the way to the restaurant to collect your order.'),
+      ).toBeOnTheScreen();
+      expect(
+        screen.queryByRole('button', { name: 'See where your order is' }),
+      ).not.toBeOnTheScreen();
+    });
+
+    it('offers no map when the driver has not reported a position yet', async () => {
+      ordered({
+        status: 'outForDelivery',
+        delivery: {
+          status: 'pickedUp',
+          driverFirstName: 'Meena',
+          vehicleType: 'scooter',
+          locationUpdatedAt: null,
+          position: null,
+        },
+      });
+      await renderScreen();
+
+      expect(
+        await screen.findByText('Meena has your order and is on the way to you.'),
+      ).toBeOnTheScreen();
+      expect(
+        screen.queryByRole('button', { name: 'See where your order is' }),
+      ).not.toBeOnTheScreen();
     });
 
     it('shows nothing about a delivery before the order is ready or after it arrives', async () => {

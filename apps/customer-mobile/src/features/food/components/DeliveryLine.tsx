@@ -1,12 +1,17 @@
 import { useTranslation } from 'react-i18next';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 
-import { OPText } from '../../../design-system';
+import { OPButton, OPText } from '../../../design-system';
 import type { DeliveryProgress } from '../api/foodApi';
 
+/** "10:20 am": when the driver's position was last reported, in the device's language and time zone. */
+function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 /**
- * Who is bringing the order, in plain words. It names the driver by first name and vehicle; where the driver is stays with OnePondy, so
- * there is nothing here to track on a map.
+ * Who is bringing the order, in plain words: the driver's first name and vehicle. Once the driver has collected the order, and
+ * has reported where they are, the customer can open that spot in their Maps app.
  */
 export function DeliveryLine({ delivery }: { delivery: DeliveryProgress }) {
   const { t } = useTranslation();
@@ -29,11 +34,31 @@ export function DeliveryLine({ delivery }: { delivery: DeliveryProgress }) {
     return null;
   }
 
+  const position = delivery.status === 'pickedUp' ? delivery.position : null;
+
   return (
     <View accessibilityLiveRegion="polite">
       <OPText variant="bodyStrong">{text}</OPText>
       {delivery.vehicleType && delivery.status !== 'open' ? (
         <OPText tone="secondary">{t(`food.order.delivery.vehicle.${delivery.vehicleType}`)}</OPText>
+      ) : null}
+      {position ? (
+        <>
+          {delivery.locationUpdatedAt ? (
+            <OPText tone="secondary">
+              {t('food.order.delivery.updated', { time: formatTime(delivery.locationUpdatedAt) })}
+            </OPText>
+          ) : null}
+          <OPButton
+            label={t('food.order.delivery.seeOnMap')}
+            variant="secondary"
+            onPress={() =>
+              void Linking.openURL(
+                `https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}`,
+              )
+            }
+          />
+        </>
       ) : null}
     </View>
   );

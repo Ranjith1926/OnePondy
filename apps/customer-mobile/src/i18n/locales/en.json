@@ -679,6 +679,8 @@
         "acceptedUnnamed": "A driver is on the way to the restaurant to collect your order.",
         "pickedUp": "{{name}} has your order and is on the way to you.",
         "pickedUpUnnamed": "Your driver has your order and is on the way to you.",
+        "seeOnMap": "See where your order is",
+        "updated": "Driver's position updated at {{time}}.",
         "vehicle": {
           "bicycle": "On a bicycle.",
           "scooter": "On a scooter.",
