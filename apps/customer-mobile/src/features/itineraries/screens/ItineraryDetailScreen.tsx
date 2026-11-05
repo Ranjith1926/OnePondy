@@ -196,48 +196,48 @@ export function ItineraryDetailScreen({ route }: Props) {
                   {t('itineraries.dayLabel', { day: dayNumber })}
                 </OPText>
                 {stops.map((stop, index) => (
-                  <ListItem
-                    key={stop.id}
-                    title={stop.place.name}
-                    subtitle={
-                      isKnownCategory(stop.place.categoryCode)
-                        ? t(`categoryNames.${stop.place.categoryCode}`)
-                        : stop.place.categoryCode
-                    }
-                    leadingIcon={
-                      isKnownCategory(stop.place.categoryCode)
-                        ? categoryIcons[stop.place.categoryCode]
-                        : 'map-pin'
-                    }
-                    trailing={{
-                      kind: 'custom',
-                      node: (
-                        <View style={styles.stopActions}>
-                          <OPIconButton
-                            icon="chevron-up"
-                            size="sm"
-                            accessibilityLabel={t('itineraries.moveUp')}
-                            disabled={index === 0 || reorderStops.isPending}
-                            onPress={() => moveStop(dayNumber, index, -1)}
-                          />
-                          <OPIconButton
-                            icon="chevron-down"
-                            size="sm"
-                            accessibilityLabel={t('itineraries.moveDown')}
-                            disabled={index === stops.length - 1 || reorderStops.isPending}
-                            onPress={() => moveStop(dayNumber, index, 1)}
-                          />
-                          <OPIconButton
-                            icon="trash-2"
-                            size="sm"
-                            accessibilityLabel={t('itineraries.removeStop')}
-                            disabled={removeStop.isPending}
-                            onPress={() => removeStop.mutate(stop.id)}
-                          />
-                        </View>
-                      ),
-                    }}
-                  />
+                  <View key={stop.id} style={styles.stop}>
+                    <ListItem
+                      title={stop.place.name}
+                      subtitle={
+                        isKnownCategory(stop.place.categoryCode)
+                          ? t(`categoryNames.${stop.place.categoryCode}`)
+                          : stop.place.categoryCode
+                      }
+                      leadingIcon={
+                        isKnownCategory(stop.place.categoryCode)
+                          ? categoryIcons[stop.place.categoryCode]
+                          : 'map-pin'
+                      }
+                    />
+                    {/* Under the place, not beside it, so a long name keeps the whole row. */}
+                    <View style={styles.stopActions}>
+                      <OPIconButton
+                        icon="chevron-up"
+                        size="sm"
+                        variant="tonal"
+                        accessibilityLabel={t('itineraries.moveUp')}
+                        disabled={index === 0 || reorderStops.isPending}
+                        onPress={() => moveStop(dayNumber, index, -1)}
+                      />
+                      <OPIconButton
+                        icon="chevron-down"
+                        size="sm"
+                        variant="tonal"
+                        accessibilityLabel={t('itineraries.moveDown')}
+                        disabled={index === stops.length - 1 || reorderStops.isPending}
+                        onPress={() => moveStop(dayNumber, index, 1)}
+                      />
+                      <OPIconButton
+                        icon="trash-2"
+                        size="sm"
+                        variant="tonal"
+                        accessibilityLabel={t('itineraries.removeStop')}
+                        disabled={removeStop.isPending}
+                        onPress={() => removeStop.mutate(stop.id)}
+                      />
+                    </View>
+                  </View>
                 ))}
               </View>
             ))
@@ -251,6 +251,7 @@ export function ItineraryDetailScreen({ route }: Props) {
             variant="secondary"
             onPress={() => (data.shareToken ? shareTrip() : sharing.enable.mutate())}
             loading={sharing.enable.isPending}
+            fullWidth
           />
           {data.shareToken ? (
             <OPButton
@@ -258,6 +259,7 @@ export function ItineraryDetailScreen({ route }: Props) {
               variant="tertiary"
               onPress={() => sharing.disable.mutate()}
               loading={sharing.disable.isPending}
+              fullWidth
             />
           ) : null}
           <OPButton
@@ -268,12 +270,14 @@ export function ItineraryDetailScreen({ route }: Props) {
             variant="secondary"
             onPress={() => setArchived.mutate(data.status !== 'archived')}
             loading={setArchived.isPending}
+            fullWidth
           />
           <OPButton
             label={t('itineraries.delete')}
             icon="trash-2"
             variant="danger"
             onPress={() => setConfirmingDelete(true)}
+            fullWidth
           />
         </View>
       </ScrollView>
@@ -377,13 +381,15 @@ const createStyles = (theme: Theme) =>
     day: {
       gap: theme.spacing.xxs,
     },
-    stopActions: {
-      flexDirection: 'row',
+    stop: {
       gap: theme.spacing.xxs,
     },
-    actions: {
+    stopActions: {
       flexDirection: 'row',
-      flexWrap: 'wrap',
+      justifyContent: 'flex-end',
+      gap: theme.spacing.xs,
+    },
+    actions: {
       gap: theme.spacing.sm,
     },
     renameBody: {
