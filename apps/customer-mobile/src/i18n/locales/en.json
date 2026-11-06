@@ -124,8 +124,18 @@
     "museum": "Museum",
     "nature": "Nature"
   },
+  "maps": {
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "attribution": "© OpenStreetMap contributors",
+    "attributionHint": "Opens the map credits"
+  },
   "explore": {
     "title": "Explore",
+    "viewList": "List",
+    "viewMap": "Map",
+    "mapLabel": "Map of places",
+    "mapEmpty": "None of these places has a location on the map yet. Switch to the list to see them.",
     "categoriesLabel": "Categories",
     "sampleNotice": "Sample places are shown while verified listings are prepared.",
     "loading": "Loading places",
@@ -329,6 +339,7 @@
     "alwaysOpen": "Open every day",
     "entryFees": "Entry fees",
     "directions": "Directions",
+    "mapLabel": "Map showing where {{name}} is",
     "noCoordinates": "Location not available yet",
     "save": "Save place",
     "saved": "Saved",
@@ -681,6 +692,8 @@
         "pickedUp": "{{name}} has your order and is on the way to you.",
         "pickedUpUnnamed": "Your driver has your order and is on the way to you.",
         "seeOnMap": "See where your order is",
+        "mapLabel": "Map showing where your order is now",
+        "mapPin": "Your order",
         "updated": "Driver's position updated at {{time}}.",
         "vehicle": {
           "bicycle": "On a bicycle.",

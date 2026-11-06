@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Linking, View } from 'react-native';
 
 import { OPButton, OPText } from '../../../design-system';
+import { AppMap } from '../../maps/components/AppMap';
 import type { DeliveryProgress } from '../api/foodApi';
 
 /** "10:20 am": when the driver's position was last reported, in the device's language and time zone. */
@@ -49,6 +50,21 @@ export function DeliveryLine({ delivery }: { delivery: DeliveryProgress }) {
               {t('food.order.delivery.updated', { time: formatTime(delivery.locationUpdatedAt) })}
             </OPText>
           ) : null}
+          <AppMap
+            markers={[
+              {
+                id: 'driver',
+                latitude: position.latitude,
+                longitude: position.longitude,
+                label: t('food.order.delivery.mapPin'),
+                tone: 'accent',
+              },
+            ]}
+            accessibilityLabel={t('food.order.delivery.mapLabel')}
+            height={220}
+            // Each new report from the driver starts a fresh view centred on them.
+            viewKey={`${position.latitude},${position.longitude}`}
+          />
           <OPButton
             label={t('food.order.delivery.seeOnMap')}
             variant="secondary"

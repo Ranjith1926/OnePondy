@@ -18,6 +18,7 @@ import {
 } from '../../../design-system';
 import { useAppState } from '../../../state';
 import { AddToItinerarySheet } from '../../itineraries/components/AddToItinerarySheet';
+import { AppMap } from '../../maps/components/AppMap';
 import { useIsSaved, useToggleSavedPlace } from '../../saved/hooks/useSavedPlaces';
 import { categoryIcons, isKnownCategory } from '../categories';
 import { resolveMediaUrl, type EntryFee, type OpeningPeriod } from '../api/placesApi';
@@ -187,6 +188,24 @@ export function PlaceDetailScreen({ route }: Props) {
               />
             ) : null}
           </View>
+
+          {data.latitude !== null && data.longitude !== null ? (
+            // A picture of where it is: it sits inside a scrolling page, so it does not take drags. Directions opens the full Maps app.
+            <AppMap
+              markers={[
+                {
+                  id: data.id,
+                  latitude: data.latitude,
+                  longitude: data.longitude,
+                  label: data.name,
+                },
+              ]}
+              accessibilityLabel={t('placeDetail.mapLabel', { name: data.name })}
+              height={200}
+              interactive={false}
+              viewKey={data.id}
+            />
+          ) : null}
 
           {data.description ? (
             <View style={styles.section}>

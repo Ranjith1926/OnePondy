@@ -290,6 +290,8 @@ describe('<OrderDetailScreen />', () => {
         'https://www.google.com/maps/search/?api=1&query=11.9341,79.8302',
       );
       expect(screen.getByText(/Driver's position updated at/)).toBeOnTheScreen();
+      expect(screen.getByLabelText('Map showing where your order is now')).toBeOnTheScreen();
+      expect(screen.getByTestId('map-marker-driver')).toBeOnTheScreen();
       openURL.mockRestore();
     });
 
@@ -311,6 +313,7 @@ describe('<OrderDetailScreen />', () => {
       expect(
         screen.queryByRole('button', { name: 'See where your order is' }),
       ).not.toBeOnTheScreen();
+      expect(screen.queryByTestId('tile-map')).not.toBeOnTheScreen();
     });
 
     it('offers no map when the driver has not reported a position yet', async () => {
@@ -332,6 +335,7 @@ describe('<OrderDetailScreen />', () => {
       expect(
         screen.queryByRole('button', { name: 'See where your order is' }),
       ).not.toBeOnTheScreen();
+      expect(screen.queryByTestId('tile-map')).not.toBeOnTheScreen();
     });
 
     it('shows nothing about a delivery before the order is ready or after it arrives', async () => {
