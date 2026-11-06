@@ -97,7 +97,7 @@ export function useShareLocation(jobId: string | null): {
       setDenied(false);
       const started = await Location.watchPositionAsync(
         {
-          accuracy: Location.Accuracy.Balanced,
+          accuracy: Location.Accuracy.High,
           timeInterval: LOCATION_INTERVAL_MS,
           distanceInterval: LOCATION_DISTANCE_M,
         },

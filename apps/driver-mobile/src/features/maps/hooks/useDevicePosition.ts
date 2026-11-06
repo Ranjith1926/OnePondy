@@ -48,7 +48,7 @@ export function useDevicePosition(): {
     let cancelled = false;
     let subscription: Location.LocationSubscription | null = null;
     void Location.watchPositionAsync(
-      { accuracy: Location.Accuracy.Balanced, timeInterval: 15_000, distanceInterval: 25 },
+      { accuracy: Location.Accuracy.High, timeInterval: 15_000, distanceInterval: 25 },
       (reading) =>
         setPosition({ latitude: reading.coords.latitude, longitude: reading.coords.longitude }),
     )
