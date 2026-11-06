@@ -486,7 +486,7 @@ the app, so it must never be secret. The tables above say which secret lives whe
 | 1 — Design system and app shell | Done — see verification below |
 | 2 — App state, authentication and accounts | Done — see verification below |
 | 3 — Web console and content management | Done — see verification below |
-| 4 — Tourism discovery and itineraries | Done — places, saved places, itineraries, nearby sorting (decision D6: list only, no map SDK) |
+| 4 — Tourism discovery and itineraries | Done — places, saved places, itineraries, nearby sorting; maps from OpenStreetMap pictures, no map SDK (decision D6) |
 | 5 — AI trip planner | Done — behind `IItineraryPlanner`, Gemini implementation (decision D5, owner to confirm) |
 | 6 — Partner listings and booking engine | Done; payment was added in Phase 7 — see verification below |
 | 8 — Food ordering and the driver app | **Built in sandbox (steps 8.1 to 8.10): steps 8.1 (restaurants and menus), 8.2 (orders and server-side pricing), 8.3 (paying for orders, sandbox), 8.4 (the customer app's food screens), 8.5 (the restaurant's order inbox in the console), 8.6 (drivers: applying, review in the console, the new driver app with sign-in, onboarding and duty), 8.7 (delivery: open jobs, one driver accepts, pickup and drop-off, location only during a delivery), 8.8 (cash on delivery, with the cash drivers hold) and 8.9 (administrators watch orders and deliveries; food orders in the customer history view) and the documentation pass 8.10 are done; the `food` flag stays off until the go-live gate** — see `docs/phase-8-plan.md` |
@@ -711,7 +711,7 @@ Known limitations:
   cash held for long, and nothing that records banking it.
 - **No notifications** about orders, deliveries or stuck orders to anyone. Drivers see new deliveries by the app refreshing every 10 seconds; administrators and restaurants learn by opening the console, which does not
   refresh by itself (the restaurant's inbox does).
-- **Drivers' documents are not uploaded:** an administrator compares the licence and registration numbers with the originals by other means. There is no driver earnings or pay rule, no map for the customer (D6), and no
+- **Drivers' documents are not uploaded:** an administrator compares the licence and registration numbers with the originals by other means. There is no driver earnings or pay rule, no map for the customer's own address (D6: delivery addresses are never turned into pins), and no
   reassigning a delivery to a chosen driver.
 - **Personal data stays on an order after its customer deletes their account:** the delivery address, note and contact phone are not scrubbed (the order is a financial record). Needs a decision on blanking
   them, and when; see `docs/data-retention.md`.

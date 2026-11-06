@@ -247,10 +247,10 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 - **Privacy.** An offer shows the restaurant and its address, the area and the number of items, never the customer's address or phone: those arrive only after accepting. The customer and the restaurant
   see the driver's **first name and vehicle** and how far the delivery has got. *Changed 2026-11-05, on the owner's request after a real-phone test:* the customer who ordered (never the restaurant, never a
   list) is also given the driver's latest position, but only from the moment the driver has collected the food until the hand-over (`DeliveryProgressView.Position`, set only for the customer's own order). The
-  app shows it as a "See where your order is" button that opens that spot in the phone's Maps app, with the time it was reported; there is still no map inside the app.
+  app shows it as a "See where your order is" button that opens that spot in the phone's Maps app, with the time it was reported. *Changed 2026-11-06:* the order page also draws a small OpenStreetMap map with a pin at that position (decision D6).
 - **Location.** Collected by the driver app only while it holds a delivery (foreground, every 15 seconds or 25 metres), sent to `POST /driver/jobs/{id}/location`, and kept as the **latest position only** on the
   job row. The database refuses to keep a position on a job that is not accepted or picked up, so it is erased when the job is delivered, released or cancelled. The customer is shown it only while the driver
-  carries their order (see Privacy above); there is no map inside the app (no map provider, decision D6), and administrators have their own view of it (8.9). If the driver refuses location permission the delivery goes on without it.
+  carries their order (see Privacy above); the customer app shows it on an OpenStreetMap map (D6, changed 2026-11-06; the driver's position is never sent to OpenStreetMap, only the map pictures for that area are requested), and administrators have their own view of it (8.9). If the driver refuses location permission the delivery goes on without it.
 - **Driver account rules added:** a driver holding a delivery cannot go off duty or change their details (they give the delivery up first, which is allowed only before collecting); suspending a driver
   returns a delivery they have not collected to the pool, and leaves a collected one with them for an administrator.
 - **Pickup and drop-off** move the order (`ready_for_pickup → out_for_delivery → delivered`, recorded in its history as the driver) and the job together in one save. A delivered order goes on its restaurant's
@@ -283,7 +283,7 @@ until then. Spec: Phase 8 (§10), the Food workflow (§7), §21 (legal) and deci
 - **Two actions on a stuck order,** both audited and both refusing a stale page (the order's version, or the delivery's): **cancel the order** (reason required, the customer sees it; a paid order is refunded in
   full under the same switch as every other cancellation, `Payments:RefundsEnabled`, and refuses clearly while it is off; works for an order already out for delivery, which is what a vanished driver needs; the
   delivery is cancelled with it and the driver is free) and **offer the delivery to the other drivers again** (only while a driver has it but has not collected it; their position is erased).
-- **Seeing where a driver is.** The latest position is shown on an order's page to administrators only, only while the delivery is under way and the driver has reported one, as plain coordinates (no map, D6). **Every
+- **Seeing where a driver is.** The latest position is shown on an order's page to administrators only, only while the delivery is under way and the driver has reported one, as plain coordinates (no map in the console). **Every
   time it is shown an audit entry is written** (`food_order.driver_location_viewed`), as are the two actions (`food_order.cancelled_by_admin`, `food_order.delivery_released_by_admin`). The lists never carry
   an address or a position.
 - **Customer history view:** `customer_history` now lists food orders (`kind = 'food_order'`, the restaurant as `title`, the estimated ready time as `scheduled_at`) as well as bookings, with the same nine columns.

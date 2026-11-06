@@ -87,6 +87,7 @@ As the migration role (not `onepondy_app`): everything up to and including `2026
 ## 7. Known gaps, so nobody is surprised
 
 - Ride requests choose places from a short list of landmarks in the customer app: there is no map picker yet, and the coordinates of those landmarks are approximate and must be checked by someone who knows the town.
+- Maps (Explore, place pages, order tracking, the driver's pickup) use OpenStreetMap's public picture servers, which are for light use only. Before a busy public launch, choose a commercial tile provider or host tiles, and set `EXPO_PUBLIC_MAP_TILE_URL` in both apps' builds; the privacy policy must name OpenStreetMap (or the provider chosen). Map gestures (drag, pinch, buttons) are covered by unit tests with simulated touches and still need checking on a real phone.
 - Ride fares use a straight-line distance and a factor, not a routing provider; there is no online payment, tipping, scheduling or surge pricing for rides.
 - An emergency alert reaches the console and the operations page; nothing rings or messages a person. Somebody must be watching the page, or a paging provider must be chosen.
 - Driver documents are typed in as numbers and checked by a person against the originals; there is no upload.
