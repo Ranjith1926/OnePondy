@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, userEvent, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 import * as Location from 'expo-location';
 
@@ -520,6 +520,8 @@ describe('the driver app', () => {
       restaurantName: 'Spice Route',
       restaurantAddress: '4 Rue Mahe, White Town',
       restaurantPhone: '+914132000111',
+      restaurantLatitude: null,
+      restaurantLongitude: null,
       deliveryArea: 'whiteTown',
       deliveryAddress: '12 Rue Suffren, White Town',
       deliveryNote: 'Ring the bell',
@@ -667,6 +669,37 @@ describe('the driver app', () => {
       await waitFor(() => expect(screen.getByRole('switch', { name: 'On duty' })).toBeDisabled());
     });
 
+    it('shows the restaurant on a map while collecting, then the driver themselves once their position is known', async () => {
+      watch.mockImplementation(() => Promise.resolve({ remove: jest.fn() }));
+      jobs = {
+        current: { ...held('accepted'), restaurantLatitude: 11.9416, restaurantLongitude: 79.8083 },
+        open: [],
+        canAcceptJobs: true,
+      };
+      await launchSignedIn(onDuty);
+
+      expect(
+        await screen.findByLabelText('Map showing the restaurant and where you are'),
+      ).toBeOnTheScreen();
+      expect(screen.getByTestId('map-marker-restaurant')).toBeOnTheScreen();
+      expect(screen.queryByTestId('map-marker-me')).not.toBeOnTheScreen();
+
+      await waitFor(() => expect(watch).toHaveBeenCalledTimes(1));
+      const report = watch.mock.calls[0][1] as (position: unknown) => void;
+      await act(async () => report({ coords: { latitude: 11.93, longitude: 79.83 } }));
+
+      expect(await screen.findByTestId('map-marker-me')).toBeOnTheScreen();
+      expect(screen.getByTestId('map-marker-restaurant')).toBeOnTheScreen();
+    });
+
+    it('shows no map when the restaurant has not told us where it is and the phone has no position yet', async () => {
+      jobs = { current: held('accepted'), open: [], canAcceptJobs: true };
+      await launchSignedIn(onDuty);
+
+      expect(await screen.findByText('Collect from Spice Route')).toBeOnTheScreen();
+      expect(screen.queryByTestId('tile-map')).not.toBeOnTheScreen();
+    });
+
     it('shares the position only while a delivery is held, and stops when it ends', async () => {
       const remove = jest.fn();
       watch.mockImplementation(() => Promise.resolve({ remove }));
@@ -754,6 +787,8 @@ describe('the driver app', () => {
       restaurantName: 'Spice Route',
       restaurantAddress: '4 Rue Mahe, White Town',
       restaurantPhone: '+914132000111',
+      restaurantLatitude: null,
+      restaurantLongitude: null,
       deliveryArea: 'whiteTown',
       deliveryAddress: '12 Rue Suffren, White Town',
       deliveryNote: null,

@@ -9,10 +9,12 @@ import {
   OPButton,
   OPText,
   useThemedStyles,
+  type MapMarker,
   type Theme,
 } from '../../../design-system';
 import type { JobDetail, JobOffer } from '../api/driverApi';
 import { formatMoney } from '../../../format';
+import { AppMap } from '../../maps/components/AppMap';
 import { isAreaId } from '../areas';
 import {
   useAcceptJob,
@@ -145,13 +147,27 @@ function ActiveJob({ job }: { job: JobDetail }) {
   const pickUp = usePickUpJob();
   const deliver = useDeliverJob();
   const release = useReleaseJob();
-  const { denied } = useShareLocation(job.id);
+  const { denied, position } = useShareLocation(job.id);
 
   const collecting = job.status === 'accepted';
   const deliveryAreaName = isAreaId(job.deliveryArea)
     ? t(`areas.${job.deliveryArea}`)
     : job.deliveryArea;
   const cashToCollect = job.cashToCollect;
+  // The pickup map: the restaurant, and where the driver is as soon as the phone knows. The customer's address is never pinned.
+  const pins: MapMarker[] = [];
+  if (job.restaurantLatitude !== null && job.restaurantLongitude !== null) {
+    pins.push({
+      id: 'restaurant',
+      latitude: job.restaurantLatitude,
+      longitude: job.restaurantLongitude,
+      label: t('jobs.mapRestaurant'),
+      tone: 'brand',
+    });
+  }
+  if (position) {
+    pins.push({ id: 'me', ...position, label: t('jobs.mapYou'), tone: 'accent' });
+  }
   const error = pickUp.error ?? deliver.error ?? release.error;
   const busy = pickUp.isPending || deliver.isPending || release.isPending;
 
@@ -177,6 +193,15 @@ function ActiveJob({ job }: { job: JobDetail }) {
           </OPText>
           {job.restaurantAddress ? (
             <OPText>{t('jobs.restaurantAddress', { address: job.restaurantAddress })}</OPText>
+          ) : null}
+          {pins.length > 0 ? (
+            <AppMap
+              markers={pins}
+              accessibilityLabel={t('jobs.mapLabel')}
+              height={240}
+              // The view fits both pins once the driver's own position is known; after that it is left where the driver puts it.
+              viewKey={`${job.id}:${position ? 'both' : 'restaurant'}`}
+            />
           ) : null}
           <OPButton
             label={t('jobs.openInMaps')}

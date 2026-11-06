@@ -54,6 +54,9 @@ export interface JobDetail {
   restaurantName: string;
   restaurantAddress: string | null;
   restaurantPhone: string | null;
+  /** Where the restaurant is, when it has told us. The customer's address is never given a position. */
+  restaurantLatitude: number | null;
+  restaurantLongitude: number | null;
   deliveryArea: string;
   deliveryAddress: string;
   deliveryNote: string | null;

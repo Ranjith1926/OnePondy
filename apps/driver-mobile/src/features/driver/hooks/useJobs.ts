@@ -63,10 +63,15 @@ const LOCATION_DISTANCE_M = 25;
 /**
  * Reports the driver's position to OnePondy for as long as they hold a delivery, and not a moment longer: with no delivery
  * (<paramref name="jobId"/> null) nothing is requested or collected. Only foreground location is used, so nothing is reported while
- * the app is closed. If the driver says no to location, the delivery goes on without it. Returns whether permission was refused.
+ * the app is closed. If the driver says no to location, the delivery goes on without it. Returns whether permission was refused and the latest position, which stays on the phone
+ * unless it is reported to OnePondy as above.
  */
-export function useShareLocation(jobId: string | null): { denied: boolean } {
+export function useShareLocation(jobId: string | null): {
+  denied: boolean;
+  position: { latitude: number; longitude: number } | null;
+} {
   const [denied, setDenied] = useState(false);
+  const [position, setPosition] = useState<{ latitude: number; longitude: number } | null>(null);
 
   useEffect(() => {
     if (!jobId) {
@@ -96,10 +101,11 @@ export function useShareLocation(jobId: string | null): { denied: boolean } {
           timeInterval: LOCATION_INTERVAL_MS,
           distanceInterval: LOCATION_DISTANCE_M,
         },
-        (position) => {
+        (reading) => {
+          setPosition({ latitude: reading.coords.latitude, longitude: reading.coords.longitude });
           // A report that fails is skipped: the next one replaces it.
           driverApi
-            .shareLocation(jobId, position.coords.latitude, position.coords.longitude)
+            .shareLocation(jobId, reading.coords.latitude, reading.coords.longitude)
             .catch(() => undefined);
         },
       );
@@ -120,5 +126,5 @@ export function useShareLocation(jobId: string | null): { denied: boolean } {
     };
   }, [jobId]);
 
-  return { denied: jobId ? denied : false };
+  return { denied: jobId ? denied : false, position: jobId ? position : null };
 }

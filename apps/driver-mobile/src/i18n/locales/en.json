@@ -114,6 +114,12 @@
     "signOut": "Sign out",
     "rideMode": "Ride mode"
   },
+  "maps": {
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "attribution": "© OpenStreetMap contributors",
+    "attributionHint": "Opens the map credits"
+  },
   "jobs": {
     "openTitle": "Open deliveries",
     "offerItems_one": "{{count}} item",
@@ -135,6 +141,9 @@
     "bagLine": "{{quantity}} × {{name}}",
     "deliverTo": "Deliver to",
     "openInMaps": "Open in Maps",
+    "mapLabel": "Map showing the restaurant and where you are",
+    "mapRestaurant": "Restaurant",
+    "mapYou": "You",
     "customerPhone": "Customer phone: {{phone}}",
     "note": "Note: {{note}}",
     "pickedUp": "I've collected the order",
