@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 
 import { Alert, Card } from '@/components/Display';
 import { SelectField, TextArea, TextField } from '@/components/Field';
+import { LocationField } from '@/components/LocationField';
 import { SubmitButton } from '@/components/SubmitButton';
 import type { Category, PlaceDetail } from '@/lib/apiTypes';
 import type { FormState } from '@/lib/formState';
@@ -118,24 +119,15 @@ export function PlaceForm({
       </Card>
 
       <Card title="Location">
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextField
-            id="latitude"
-            label="Latitude"
-            inputMode="decimal"
-            hint="For example 11.9341. In Google Maps, right-click the place to copy its coordinates."
-            defaultValue={place?.latitude ?? ''}
-            errors={errors.latitude}
-          />
-          <TextField
-            id="longitude"
-            label="Longitude"
-            inputMode="decimal"
-            hint="For example 79.8306."
-            defaultValue={place?.longitude ?? ''}
-            errors={errors.longitude}
-          />
-        </div>
+        <LocationField
+          latitudeName="latitude"
+          longitudeName="longitude"
+          defaultLatitude={place?.latitude ?? null}
+          defaultLongitude={place?.longitude ?? null}
+          latitudeErrors={errors.latitude}
+          longitudeErrors={errors.longitude}
+          hint="For example 11.9341. Click the map where the place is, or type the coordinates."
+        />
       </Card>
 
       <Card title="Opening hours">

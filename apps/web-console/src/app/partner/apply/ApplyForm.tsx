@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 
 import { Alert } from '@/components/Display';
 import { SelectField, TextArea, TextField } from '@/components/Field';
+import { LocationField } from '@/components/LocationField';
 import { SubmitButton } from '@/components/SubmitButton';
 import type { BusinessType } from '@/lib/apiTypes';
 import type { FormState } from '@/lib/formState';
@@ -51,15 +52,11 @@ export function ApplyForm() {
         />
       </div>
       <TextField id="address" label="Address" errors={state.fieldErrors?.address} />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          id="lat"
-          label="Latitude"
-          hint="Optional; both latitude and longitude, or neither."
-          errors={state.fieldErrors?.latitude}
-        />
-        <TextField id="lng" label="Longitude" errors={state.fieldErrors?.longitude} />
-      </div>
+      <LocationField
+        latitudeErrors={state.fieldErrors?.latitude}
+        longitudeErrors={state.fieldErrors?.longitude}
+        hint="Optional; both latitude and longitude, or neither. Click the map where you are, or use your current location. Drivers use this to find you."
+      />
       <TextField
         id="gstin"
         label="GSTIN"

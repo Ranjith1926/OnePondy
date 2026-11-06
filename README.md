@@ -592,8 +592,10 @@ Known limitations:
 
 - D11 (content sourcing) is still open; the schema and console support any source, so this does
   not block the phase.
-- No map is shown yet for picking coordinates; latitude and longitude are typed by hand (Phase 4
-  brings the map view and PostGIS-backed nearby search).
+- Latitude and longitude for places and for a business's position are chosen on an OpenStreetMap map in the
+  web console (click the map, drag it, or use the device's current location), and can still be typed by
+  hand. A restaurant's position is what the driver's pickup map shows, so restaurants should set it.
+  The map pictures come from `NEXT_PUBLIC_MAP_TILE_URL` (OpenStreetMap by default, light use only).
 - Media storage is a local folder on the API server (D8); moving to S3-compatible storage needs
   only a new `IMediaStorage` implementation.
 - The console's HTTPS and cookie-security settings were exercised in Development only; `/health`

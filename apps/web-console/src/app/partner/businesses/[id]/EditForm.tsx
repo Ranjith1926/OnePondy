@@ -4,6 +4,7 @@ import { useActionState } from 'react';
 
 import { Alert } from '@/components/Display';
 import { SelectField, TextArea, TextField } from '@/components/Field';
+import { LocationField } from '@/components/LocationField';
 import { SubmitButton } from '@/components/SubmitButton';
 import type { BusinessDetail, BusinessType } from '@/lib/apiTypes';
 import type { FormState } from '@/lib/formState';
@@ -72,20 +73,13 @@ export function EditForm({ business }: { business: BusinessDetail }) {
         defaultValue={business.address ?? ''}
         errors={state.fieldErrors?.address}
       />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TextField
-          id="lat"
-          label="Latitude"
-          defaultValue={business.latitude ?? ''}
-          errors={state.fieldErrors?.latitude}
-        />
-        <TextField
-          id="lng"
-          label="Longitude"
-          defaultValue={business.longitude ?? ''}
-          errors={state.fieldErrors?.longitude}
-        />
-      </div>
+      <LocationField
+        defaultLatitude={business.latitude}
+        defaultLongitude={business.longitude}
+        latitudeErrors={state.fieldErrors?.latitude}
+        longitudeErrors={state.fieldErrors?.longitude}
+        hint="Both latitude and longitude, or neither. Click the map where you are, or use your current location. Drivers use this to find you."
+      />
       <TextField
         id="gstin"
         label="GSTIN"
