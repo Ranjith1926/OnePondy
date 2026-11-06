@@ -15,6 +15,7 @@ import {
 import { useSession } from '../../../session/SessionProvider';
 import type { DriverApprovalStatus, DriverProfile } from '../api/driverApi';
 import { DutyPill } from '../components/DutyPill';
+import { HomeMap } from '../../maps/components/HomeMap';
 import { JobsSection } from '../components/JobsSection';
 import { useDriverProfile, useSetDuty } from '../hooks/useDriver';
 import { useJobs } from '../hooks/useJobs';
@@ -33,7 +34,7 @@ function formatTime(iso: string): string {
 
 /**
  * The driver's home: the state of their application, and once approved the duty switch and where deliveries will appear.
- * Nothing about where the driver is gets collected here; location is for the length of a delivery only.
+ * Where the driver is can be drawn on a map here, on this phone only; it goes to OnePondy only for the length of a delivery.
  */
 export function HomeScreen() {
   const { t } = useTranslation();
@@ -44,7 +45,8 @@ export function HomeScreen() {
   const setDuty = useSetDuty();
   const profile = query.data;
   // The same query the deliveries list uses, so while a delivery is held the duty switch can say why it cannot be turned off.
-  const holdsJob = useJobs(profile?.approvalStatus === 'approved').data?.current != null;
+  const jobs = useJobs(profile?.approvalStatus === 'approved').data;
+  const holdsJob = jobs?.current != null;
 
   if (!profile?.configured || !profile.approvalStatus) {
     return null;
@@ -122,6 +124,9 @@ export function HomeScreen() {
           {setDuty.error ? (
             <InlineBanner kind="error" message={t(driverErrorMessageKey(setDuty.error))} />
           ) : null}
+
+          {/* Once the deliveries are known: a driver holding one has the delivery's own map instead. */}
+          {jobs && !holdsJob ? <HomeMap /> : null}
 
           <JobsSection isOnDuty={profile.isOnDuty} />
         </>

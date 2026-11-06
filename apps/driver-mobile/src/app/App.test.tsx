@@ -555,9 +555,8 @@ describe('the driver app', () => {
       expect(screen.getByText('4 Rue Mahe, White Town')).toBeOnTheScreen();
       expect(screen.getByText('3 items')).toBeOnTheScreen();
       expect(screen.queryByText(/Suffren/)).not.toBeOnTheScreen();
-      // Nothing is collected from a driver who has no delivery.
-      expect(watch).not.toHaveBeenCalled();
-      expect(getPermission).not.toHaveBeenCalled();
+      // The home map may read the phone's position to draw it, but nothing is sent to OnePondy without a delivery.
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/location')).toHaveLength(0);
     });
 
     it('takes a delivery, shows what to collect, then the customer after collecting, then finishes', async () => {
@@ -760,7 +759,7 @@ describe('the driver app', () => {
 
       expect(await screen.findByText("You're off duty")).toBeOnTheScreen();
       expect(screen.getByText('Go on duty to see open deliveries.')).toBeOnTheScreen();
-      expect(watch).not.toHaveBeenCalled();
+      expect(requestsTo('POST /api/v1/driver/jobs/job-1/location')).toHaveLength(0);
     });
   });
 
