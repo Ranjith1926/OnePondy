@@ -1,8 +1,9 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { OPText } from '../atoms/OPText';
+import { LockableScrollView } from '../organisms/tileMap/LockableScrollView';
 import { useThemedStyles } from '../theme/ThemeProvider';
 import type { Theme } from '../theme/theme';
 
@@ -19,7 +20,7 @@ export function MainTabTemplate({ title, header, headerRight, children }: MainTa
   const styles = useThemedStyles(createStyles);
   return (
     <SafeAreaView edges={['top', 'left', 'right']} style={styles.screen}>
-      <ScrollView
+      <LockableScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -34,7 +35,7 @@ export function MainTabTemplate({ title, header, headerRight, children }: MainTa
           </View>
         ) : null}
         {children}
-      </ScrollView>
+      </LockableScrollView>
     </SafeAreaView>
   );
 }

@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { OPIconButton, OPText, useThemedStyles, type Theme } from '../design-system';
+import {
+  LockableScrollView,
+  OPIconButton,
+  OPText,
+  useThemedStyles,
+  type Theme,
+} from '../design-system';
 
 interface ScreenProps {
   title: string;
@@ -30,9 +36,12 @@ export function Screen({ title, backLabel, onBack, children }: ScreenProps) {
           {title}
         </OPText>
       </View>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <LockableScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+      >
         {children}
-      </ScrollView>
+      </LockableScrollView>
     </SafeAreaView>
   );
 }

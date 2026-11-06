@@ -24,6 +24,7 @@ import {
   visibleTiles,
   type LatLng,
 } from './mapMath';
+import { useScrollLock } from './LockableScrollView';
 
 export type { LatLng } from './mapMath';
 
@@ -97,6 +98,7 @@ export function TileMap({
   const styles = useThemedStyles(createStyles);
   const window = useWindowDimensions();
   const maxZoom = tileSource.maxZoom ?? 18;
+  const holdPage = useScrollLock(interactive);
   const [width, setWidth] = useState(window.width);
 
   const initial = useMemo(() => {
@@ -138,6 +140,7 @@ export function TileMap({
   });
 
   const onGrant = (event: GestureResponderEvent) => {
+    holdPage(true);
     const { view: current } = latest.current;
     const touch = event.nativeEvent.touches[0] ?? event.nativeEvent;
     gesture.current = {
@@ -183,6 +186,7 @@ export function TileMap({
 
   // Lifting the fingers settles a pinch on a whole zoom level.
   const onSettle = () => {
+    holdPage(false);
     const state = gesture.current;
     if (state.pinching) {
       const { view: current, maxZoom: max } = latest.current;

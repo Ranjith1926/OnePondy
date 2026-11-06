@@ -1,13 +1,14 @@
 import { useNavigation, type StaticScreenProps } from '@react-navigation/native';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   ErrorState,
   InlineBanner,
   LoadingState,
+  LockableScrollView,
   ModalSheet,
   OPButton,
   OPIconButton,
@@ -117,7 +118,7 @@ export function OrderDetailScreen({ route }: Props) {
   return (
     <SafeAreaView edges={['top', 'left', 'right', 'bottom']} style={styles.screen}>
       {header}
-      <ScrollView contentContainerStyle={[styles.inset, styles.content]}>
+      <LockableScrollView contentContainerStyle={[styles.inset, styles.content]}>
         <OPText variant="title" accessibilityRole="header">
           {data.restaurantName}
         </OPText>
@@ -201,7 +202,7 @@ export function OrderDetailScreen({ route }: Props) {
         </View>
 
         <GetHelpButton about={{ foodOrderId: data.id }} label={t('support.getHelpOrder')} />
-      </ScrollView>
+      </LockableScrollView>
 
       {data.canCancel ? (
         <View style={[styles.inset, styles.footer]}>
