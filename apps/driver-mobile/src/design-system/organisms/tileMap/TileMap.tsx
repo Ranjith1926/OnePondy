@@ -285,10 +285,12 @@ export function TileMap({
               ]}
             />
             {marker.label ? (
-              <View style={styles.pinLabel}>
-                <OPText variant="caption" numberOfLines={1} style={styles.pinLabelText}>
-                  {marker.label}
-                </OPText>
+              <View style={styles.pinLabelRow} pointerEvents="none">
+                <View style={styles.pinLabel}>
+                  <OPText variant="caption" numberOfLines={1} style={styles.pinLabelText}>
+                    {marker.label}
+                  </OPText>
+                </View>
               </View>
             ) : null}
           </Pressable>
@@ -333,6 +335,7 @@ export function TileMap({
 }
 
 const MARKER_BOX = 44;
+const LABEL_WIDTH = 180;
 
 const createStyles = (theme: Theme) =>
   StyleSheet.create({
@@ -379,10 +382,16 @@ const createStyles = (theme: Theme) =>
       borderRadius: 15,
       borderWidth: 4,
     },
-    pinLabel: {
+    // A row wider than the pin, centred on it, so the name is not squeezed into the pin's own width.
+    pinLabelRow: {
       position: 'absolute',
       top: MARKER_BOX - 4,
-      maxWidth: 160,
+      left: (MARKER_BOX - LABEL_WIDTH) / 2,
+      width: LABEL_WIDTH,
+      alignItems: 'center',
+    },
+    pinLabel: {
+      maxWidth: LABEL_WIDTH,
       paddingHorizontal: theme.spacing.xs,
       borderRadius: theme.radii.sm,
       backgroundColor: 'rgba(255,255,255,0.92)',
