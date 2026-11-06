@@ -81,9 +81,18 @@ public sealed partial class FoodOrderApiTests
         var waiting = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/food/orders/{orderId}", customer));
         Assert.Equal("open", waiting.GetProperty("delivery").GetProperty("status").GetString());
 
+        // The restaurant has told us where it is, so the driver gets the pickup point for a map (never the customer's address).
+        await using (var scope = Factory.Services.CreateAsyncScope())
+        {
+            await DbOf(scope).Businesses.Where(b => b.Id == Guid.Parse(shop.BusinessId))
+                .ExecuteUpdateAsync(u => u.SetProperty(b => b.Latitude, 11.9416).SetProperty(b => b.Longitude, 79.8083));
+        }
+
         var accepted = await ReadAsync(await SendAsync(client, HttpMethod.Post, JobPath(jobId, "accept"), courier.Token));
         Assert.Equal("accepted", accepted.GetProperty("status").GetString());
         Assert.Equal("12 Rue Suffren, White Town", accepted.GetProperty("deliveryAddress").GetString());
+        Assert.Equal(11.9416, accepted.GetProperty("restaurantLatitude").GetDouble());
+        Assert.Equal(79.8083, accepted.GetProperty("restaurantLongitude").GetDouble());
         Assert.Equal("+919876500001", accepted.GetProperty("contactPhone").GetString());
 
         var inbox = await ReadAsync(await SendAsync(client, HttpMethod.Get, $"/api/v1/partner/businesses/{shop.BusinessId}/orders?status=readyForPickup", shop.Owner));

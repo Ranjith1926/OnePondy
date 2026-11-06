@@ -322,6 +322,8 @@ public sealed class DeliveryService(IOnePondyDbContext db, TimeProvider time, Le
             business.Name,
             business.Address,
             business.PhoneNumber,
+            business.Latitude,
+            business.Longitude,
             order.DeliveryArea,
             order.DeliveryAddress,
             order.DeliveryNote,

@@ -29,6 +29,9 @@ public sealed record JobDetailView(
     string RestaurantName,
     string? RestaurantAddress,
     string? RestaurantPhone,
+    /// <summary>Where the restaurant is, when it has told us, so the driver can see the pickup on a map. Never the customer's address.</summary>
+    double? RestaurantLatitude,
+    double? RestaurantLongitude,
     string DeliveryArea,
     string DeliveryAddress,
     string? DeliveryNote,
